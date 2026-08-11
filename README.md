@@ -1,5 +1,9 @@
 # ScaleBench
 
+<p align="center">
+  <img src="ScaleBench/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png" alt="ScaleBench app icon" width="120" height="120">
+</p>
+
 ScaleBench is an open iOS Bluetooth scale analyzer for espresso-scale transport quality. It records raw BLE packets, parses supported scale protocols into a canonical sample stream, scores transport/stability/metadata quality, and exports a JSON recording for external analysis.
 
 The main goal is protocol and hardware comparison: WMB vs WMB+, BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
