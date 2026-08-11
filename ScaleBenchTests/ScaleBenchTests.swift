@@ -99,6 +99,16 @@ final class ScaleBenchTests: XCTestCase {
         }
     }
 
+    func testAcaiaPacketHandlesMinimumInt16WeightWithoutOverflow() throws {
+        let frame = Data([0xEF, 0xDD, 0x0C, 0x04, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80])
+        let events = AcaiaParser.Codec().receive(frame, arrivalTime: Date(), monotonicSeconds: 1)
+
+        guard case let .sample(sample) = try XCTUnwrap(events.first) else {
+            return XCTFail("Expected Acaia sample")
+        }
+        XCTAssertEqual(sample.weightGrams, 32_768, accuracy: 0.001)
+    }
+
     func testDecentPacketParse() throws {
         let data = Data([0x03, 0xCE, 0x00, 0x7B, 0x00, 0x01, 0x02, 0x03, 0x00, 0x00])
         let result = DecentEspressiParser.parseWeightPacket(data, kind: .decent, arrivalTime: Date(), monotonicSeconds: 1)
@@ -263,9 +273,96 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(metrics.metadataScore ?? 0, 20)
     }
 
+    func testBatteryOnlyRecordingStillReportsBatteryRange() {
+        var recording = ScaleRecording.empty(mode: .batteryStability)
+        recording.batteryEvents = [
+            ScaleBatteryEvent(arrivalTime: Date(timeIntervalSince1970: 0), monotonicSeconds: 0, scaleKind: .weighMyBru, percent: 91),
+            ScaleBatteryEvent(arrivalTime: Date(timeIntervalSince1970: 1), monotonicSeconds: 1, scaleKind: .weighMyBru, percent: 89)
+        ]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertNil(metrics.overallScore)
+        XCTAssertEqual(metrics.batteryMinPercent, 89)
+        XCTAssertEqual(metrics.batteryMaxPercent, 91)
+    }
+
+    func testDynamicStabilityCountsContiguousBumpFlagsAsOneEvent() {
+        var samples = (0..<5).map { makeSample(seconds: Double($0) * 0.1, weight: Double($0)) }
+        samples[0].diagnosticFlags = ScaleDiagnosticFlags(byte: 0x01)
+        samples[1].diagnosticFlags = ScaleDiagnosticFlags(byte: 0x01)
+        samples[3].diagnosticFlags = ScaleDiagnosticFlags(byte: 0x01)
+        samples[4].diagnosticFlags = ScaleDiagnosticFlags(byte: 0x01)
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = samples
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.firmwareBumpCount, 2)
+        XCTAssertEqual(metrics.stabilityScore, 84)
+    }
+
+    func testDuplicateAndReverseSequenceValuesDoNotInflateMissingCount() {
+        var first = makePlusSample(index: 0)
+        var second = makePlusSample(index: 1)
+        first.sequence = 100
+        second.sequence = 99
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = [first, second]
+        XCTAssertEqual(ScaleQualityAnalyzer.analyze(recording).missingSequenceCount, 0)
+
+        second.sequence = 100
+        recording.samples = [first, second]
+        XCTAssertEqual(ScaleQualityAnalyzer.analyze(recording).missingSequenceCount, 0)
+    }
+
+    func testRejectedPacketPenaltyUsesAllParseAttemptsAsRateDenominator() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = (0..<90).map { makeSample(seconds: Double($0) * 0.1, weight: 0) }
+        recording.rawPackets = (0..<10).map { index in
+            RawScalePacket(
+                arrivalTime: Date(timeIntervalSince1970: Double(index)),
+                monotonicSeconds: Double(index),
+                scaleKind: .weighMyBru,
+                characteristicUUID: WeighMyBruParser.weight20UUID,
+                role: .weight,
+                bytesHex: "00",
+                rejectionReason: .invalidLength
+            )
+        }
+
+        XCTAssertEqual(ScaleQualityAnalyzer.analyze(recording).transportScore, 90)
+    }
+
+    func testFullWidthDeviceTimestampRolloverUsesUInt32Range() throws {
+        var first = makeSample(seconds: 0, weight: 0)
+        first.scaleKind = .difluid
+        first.deviceTimestampMilliseconds = UInt32.max - 49
+        var second = makeSample(seconds: 0.1, weight: 0)
+        second.scaleKind = .difluid
+        second.deviceTimestampMilliseconds = 50
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = [first, second]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(try XCTUnwrap(metrics.packetIntervalP50Milliseconds), 100, accuracy: 0.001)
+        XCTAssertEqual(metrics.duplicateOrOutOfOrderTimestampCount, 0)
+    }
+
     func testStandardScoringProfileUsesStableBenchmarkName() {
         XCTAssertEqual(ScoringProfile.standard.name, "ScaleBench Standard v1")
         XCTAssertEqual(ScoringPreset.standard.displayName, "ScaleBench Standard v1")
+    }
+
+    func testBenchmarkIdentityRequiresStandardParametersNotOnlyName() {
+        var impostor = ScoringProfile.standard
+        impostor.transportWeight = 0.90
+        impostor.stabilityWeight = 0.10
+        impostor.metadataWeight = 0
+
+        XCTAssertTrue(ScoringProfile.standard.isStandardBenchmark)
+        XCTAssertFalse(impostor.isStandardBenchmark)
     }
 
     func testOfficialScorecardRecordingUsesStandardProfile() {
@@ -324,12 +421,31 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(normalized.metadataWeight, ScoringProfile.standard.metadataWeight, accuracy: 0.0001)
     }
 
+    func testCustomScoringProfileClampsNegativeWeightsBeforeNormalizing() {
+        var profile = ScoringProfile.standard
+        profile.name = "Negative input"
+        profile.transportWeight = -1
+        profile.stabilityWeight = 2
+        profile.metadataWeight = 0
+
+        let normalized = profile.normalized
+
+        XCTAssertEqual(normalized.transportWeight, 0, accuracy: 0.0001)
+        XCTAssertEqual(normalized.stabilityWeight, 1, accuracy: 0.0001)
+        XCTAssertEqual(normalized.metadataWeight, 0, accuracy: 0.0001)
+        XCTAssertFalse(normalized.isStandardBenchmark)
+    }
+
     func testSampleRecordingFactoryProvidesBundledExamples() {
         let examples = SampleRecordingFactory.examples
 
         XCTAssertEqual(examples.count, 3)
         XCTAssertEqual(Set(examples.map(\.title)).count, examples.count)
         XCTAssertTrue(examples.allSatisfy { $0.recording.metrics.overallScore != nil })
+        XCTAssertEqual(examples[0].recording.samples.first?.diagnosticFlags?.flowPresent, true)
+        XCTAssertEqual(examples[0].recording.samples.first?.diagnosticFlags?.detected10SPS, true)
+        XCTAssertEqual(examples[0].recording.rawPackets.first?.bytesHex.split(separator: " ").count, 20)
+        XCTAssertEqual(examples[2].recording.rawPackets.first?.bytesHex.split(separator: " ").count, 11)
     }
 
     func testSavedRecordingStoresNotesAndScoreSnapshot() throws {
@@ -382,6 +498,40 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(reloaded.recordings.first?.id, saved.id)
         XCTAssertEqual(reloaded.recordings.first?.notes, "quiet table")
         XCTAssertEqual(reloaded.recordings.first?.scoreSnapshot.overallScore, saved.scoreSnapshot.overallScore)
+    }
+
+    func testSavedRecordingStoreMigratesPreFixScoreSnapshots() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchMigrationTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.schemaVersion = 3
+        recording.samples = [
+            makeSample(seconds: 0, weight: 0),
+            makeSample(seconds: 1, weight: 10)
+        ]
+        recording.metrics = .empty
+        let stale = SavedScaleRecording(
+            savedAt: Date(),
+            title: "Old score",
+            notes: "",
+            recording: recording,
+            scoreSnapshot: .empty
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(stale).write(
+            to: directory.appendingPathComponent("old.json"),
+            options: .atomic
+        )
+
+        let migrated = try XCTUnwrap(SavedRecordingStore(directoryURL: directory).recordings.first)
+
+        XCTAssertEqual(migrated.recording.schemaVersion, ScaleRecording.schemaVersion)
+        XCTAssertEqual(migrated.scoreSnapshot, ScaleQualityAnalyzer.analyze(migrated.recording))
+        XCTAssertNotNil(migrated.scoreSnapshot.overallScore)
     }
 
     func testProtocolComparisonRanksSavedRecordingsByScore() throws {

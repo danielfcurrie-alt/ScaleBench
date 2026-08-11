@@ -27,7 +27,7 @@ Most users should start with **Shot / Pour**.
 | **Transport Stress** | Bluetooth gap/jitter testing | Move the phone, change distance, or add interference while recording. |
 | **Battery Logging** | Battery telemetry capture | Leave the scale running while battery values are reported. |
 
-The modes currently label the recording and make some metrics more meaningful. They do not yet run fully guided test procedures.
+The modes label the recording and select the appropriate stability calculation. Idle Stability scores noise and drift; the dynamic modes avoid treating normal weight movement as drift. They do not yet run fully guided test procedures.
 
 ## What happens when I start recording?
 
@@ -46,7 +46,7 @@ This confirms that the app is actively recording.
 
 ScaleBench shows a results screen with:
 
-- official score
+- score for the selected profile, clearly marked as Standard v1 or custom
 - duration
 - protocol
 - sample and packet counts
@@ -92,7 +92,7 @@ The visualizer includes:
 
 - **Score evidence**: counts of rejected packets, long gaps, missing sequence steps, timestamp issues, bump flags, and near gaps.
 - **Weight stream**: parsed weight over time.
-- **Packet cadence**: interval before each packet, with the long-gap threshold marked.
+- **Packet cadence**: interval before each parsed sample, with the long-gap threshold marked.
 - **Packet timeline**: dense packet raster showing where normal packets, metadata, warnings, and penalties occurred.
 - **Packet inspector**: tap packet chips to inspect raw hex, UUID, interval, and score evidence.
 

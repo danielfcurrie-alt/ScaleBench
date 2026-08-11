@@ -85,6 +85,11 @@ final class CustomScoringProfileStore: ObservableObject {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             profiles = try decoder.decode([CustomScoringProfile].self, from: Data(contentsOf: fileURL))
+                .map { saved in
+                    var migrated = saved
+                    migrated.profile = saved.profile.normalized
+                    return migrated
+                }
                 .sorted { $0.profile.name.localizedCaseInsensitiveCompare($1.profile.name) == .orderedAscending }
             lastErrorMessage = nil
         } catch {

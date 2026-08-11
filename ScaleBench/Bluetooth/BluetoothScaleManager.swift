@@ -36,9 +36,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             statusMessage = "Bluetooth is not powered on"
             return
         }
-        discoveredScales.removeAll()
-        peripheralsByID.removeAll()
-        advertisedServicesByID.removeAll()
+        discoveredScales = connectedDevice.map { [$0] } ?? []
         isScanning = true
         statusMessage = "Scanning for Bluetooth scales"
         centralManager.scanForPeripherals(
@@ -58,7 +56,14 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             statusMessage = "Peripheral no longer available"
             return
         }
+        if isRecording {
+            stopRecording()
+        }
         stopScanning()
+        latestSample = nil
+        latestBatteryPercent = nil
+        writeCharacteristic = nil
+        wmbPlusCapabilities = nil
         connectedDevice = device
         activeProtocol = device.kind
         peripheral.delegate = self
@@ -78,6 +83,15 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             )
         }
         currentRecording.capabilities = wmbPlusCapabilities
+        if let batteryPercent = latestSample?.batteryPercent ?? latestBatteryPercent,
+           (0...100).contains(batteryPercent) {
+            currentRecording.batteryEvents.append(ScaleBatteryEvent(
+                arrivalTime: Date(),
+                monotonicSeconds: CACurrentMediaTime(),
+                scaleKind: activeProtocol,
+                percent: batteryPercent
+            ))
+        }
         currentMetrics = .empty
         lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = "Recording \(mode.displayName)"
@@ -174,6 +188,9 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
 
     private func receiveSample(_ sample: ScaleSample) {
         latestSample = sample
+        if let batteryPercent = sample.batteryPercent, (0...100).contains(batteryPercent) {
+            latestBatteryPercent = batteryPercent
+        }
         if !(activeProtocol == .weighMyBruPlus && sample.scaleKind == .weighMyBru) {
             activeProtocol = sample.scaleKind
         }
@@ -184,6 +201,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     private func receiveBattery(_ percent: Int, arrivalTime: Date = Date(), monotonicSeconds: Double = CACurrentMediaTime()) {
+        guard (0...100).contains(percent) else { return }
         latestBatteryPercent = percent
         guard isRecording else { return }
         currentRecording.batteryEvents.append(ScaleBatteryEvent(
@@ -471,15 +489,29 @@ extension BluetoothScaleManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        guard connectedDevice?.id == peripheral.identifier else { return }
         statusMessage = "Connection failed: \(error?.localizedDescription ?? "unknown error")"
+        connectedDevice = nil
+        activeProtocol = .unknown
+        writeCharacteristic = nil
+        latestSample = nil
+        latestBatteryPercent = nil
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        statusMessage = "Disconnected"
+        guard connectedDevice?.id == peripheral.identifier else { return }
+        if isRecording {
+            stopRecording()
+            statusMessage = "Disconnected; recording stopped"
+        } else {
+            statusMessage = "Disconnected"
+        }
         connectedDevice = nil
         activeProtocol = .unknown
         writeCharacteristic = nil
         wmbPlusCapabilities = nil
+        latestSample = nil
+        latestBatteryPercent = nil
         didSendInitialConfiguration = false
         acaiaCodec = AcaiaParser.Codec()
         timemoreDotCodec = TimemoreDotParser.Codec()
