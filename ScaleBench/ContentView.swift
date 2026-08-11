@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 struct ContentView: View {
@@ -608,13 +609,8 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Saved", value: saved.savedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
-            Section("Stream visualizer") {
-                RecordingStreamChart(recording: recording)
-                    .frame(height: 180)
-                    .padding(.vertical, 8)
-                Text("Weight stream over recording time. This is a compact visual sanity check; packet-level inspection is below.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section("Packet visualizer") {
+                RecordingVisualizerView(recording: recording, metrics: metrics)
             }
 
             Section("Score") {
@@ -624,22 +620,6 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Transport", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
                 MetricRow(title: "Stability", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
                 MetricRow(title: "Metadata", value: metrics.metadataScore.map { "\($0)/100" } ?? "—")
-            }
-
-            Section("Raw packet preview") {
-                if recording.rawPackets.isEmpty {
-                    Text("No raw packets captured.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(recording.rawPackets.prefix(24)) { packet in
-                        RawPacketRow(packet: packet)
-                    }
-                    if recording.rawPackets.count > 24 {
-                        Text("\(recording.rawPackets.count - 24) more packets in JSON export.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
 
             if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -693,6 +673,386 @@ private struct RecordingSummaryRows: View {
         MetricRow(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
         MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
         MetricRow(title: "Rejected packets", value: "\(metrics.rejectedPacketCount)")
+    }
+}
+
+private struct RecordingVisualizerView: View {
+    let recording: ScaleRecording
+    let metrics: ScaleQualityMetrics
+    @State private var selectedPacketID: UUID?
+
+    private var timeline: PacketTimeline {
+        PacketTimeline.make(recording: recording, metrics: metrics)
+    }
+
+    private var selectedEntry: PacketTimelineEntry? {
+        let entries = timeline.entries
+        if let selectedPacketID,
+           let selected = entries.first(where: { $0.id == selectedPacketID }) {
+            return selected
+        }
+        return entries.first(where: { $0.severity == .penalty })
+            ?? entries.first(where: { $0.severity == .warning })
+            ?? entries.first
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            PacketEvidenceSummary(metrics: metrics, timeline: timeline)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Weight stream", systemImage: "waveform.path.ecg")
+                    .font(.headline)
+                WeightStreamChart(recording: recording)
+                    .frame(height: 180)
+                Text("Parsed weight samples over recording time.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Packet cadence", systemImage: "chart.bar.xaxis")
+                    .font(.headline)
+                PacketIntervalChart(timeline: timeline)
+                    .frame(height: 170)
+                Text("Each bar is the interval before a packet. Bars above the threshold line are score-impacting long gaps.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Packet timeline", systemImage: "timeline.selection")
+                    .font(.headline)
+                PacketTimelineCanvas(timeline: timeline)
+                    .frame(height: 116)
+                PacketLegend()
+                Text("Dense packet raster. Loud colors are score evidence: red for direct penalties, orange/yellow for warnings or near-threshold behavior.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !timeline.entries.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Packet inspector", systemImage: "scope")
+                        .font(.headline)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(timeline.entries.prefix(120)) { entry in
+                                PacketChip(
+                                    entry: entry,
+                                    isSelected: selectedEntry?.id == entry.id
+                                ) {
+                                    selectedPacketID = entry.id
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+
+                    if timeline.entries.count > 120 {
+                        Text("\(timeline.entries.count - 120) more packets are included in the JSON export.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let selectedEntry {
+                        RawPacketRow(entry: selectedEntry)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct PacketEvidenceSummary: View {
+    let metrics: ScaleQualityMetrics
+    let timeline: PacketTimeline
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Score evidence", systemImage: "exclamationmark.magnifyingglass")
+                .font(.headline)
+
+            Text(scoreEvidenceSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], alignment: .leading, spacing: 10) {
+                EvidencePill(title: "Rejected", value: "\(metrics.rejectedPacketCount)", severity: metrics.rejectedPacketCount > 0 ? .penalty : .normal)
+                EvidencePill(title: "Long gaps", value: "\(metrics.longGapCount)", severity: metrics.longGapCount > 0 ? .penalty : .normal)
+                EvidencePill(title: "Missing seq", value: "\(metrics.missingSequenceCount)", severity: metrics.missingSequenceCount > 0 ? .penalty : .normal)
+                EvidencePill(title: "Timestamp", value: "\(metrics.duplicateOrOutOfOrderTimestampCount)", severity: metrics.duplicateOrOutOfOrderTimestampCount > 0 ? .warning : .normal)
+                EvidencePill(title: "Bumps", value: "\(metrics.firmwareBumpCount)", severity: metrics.firmwareBumpCount > 0 ? .warning : .normal)
+                EvidencePill(title: "Near gaps", value: "\(timeline.warningIntervalCount)", severity: timeline.warningIntervalCount > 0 ? .warning : .normal)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var scoreEvidenceSummary: String {
+        let directIssues = metrics.rejectedPacketCount + metrics.longGapCount + metrics.missingSequenceCount
+        if directIssues == 0 && metrics.duplicateOrOutOfOrderTimestampCount == 0 && metrics.firmwareBumpCount == 0 {
+            return "No direct transport penalties are visible in this recording. The score is mostly driven by cadence, stability, and metadata coverage."
+        }
+
+        var parts: [String] = []
+        if metrics.longGapCount > 0 {
+            parts.append("\(metrics.longGapCount) long gap\(metrics.longGapCount == 1 ? "" : "s")")
+        }
+        if metrics.rejectedPacketCount > 0 {
+            parts.append("\(metrics.rejectedPacketCount) rejected packet\(metrics.rejectedPacketCount == 1 ? "" : "s")")
+        }
+        if metrics.missingSequenceCount > 0 {
+            parts.append("\(metrics.missingSequenceCount) missing sequence step\(metrics.missingSequenceCount == 1 ? "" : "s")")
+        }
+        if metrics.duplicateOrOutOfOrderTimestampCount > 0 {
+            parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
+        }
+        if metrics.firmwareBumpCount > 0 {
+            parts.append("\(metrics.firmwareBumpCount) bump flag\(metrics.firmwareBumpCount == 1 ? "" : "s")")
+        }
+        return "Score-impacting evidence: \(parts.joined(separator: ", "))."
+    }
+}
+
+private struct EvidencePill: View {
+    let title: String
+    let value: String
+    let severity: PacketSeverity
+
+    var body: some View {
+        HStack {
+            Circle()
+                .fill(severity.color)
+                .frame(width: 9, height: 9)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.headline.monospacedDigit())
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(severity.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private struct WeightStreamChart: View {
+    let recording: ScaleRecording
+
+    var body: some View {
+        if recording.samples.count >= 2, let firstTime = recording.samples.first?.monotonicSeconds {
+            Chart(recording.samples) { sample in
+                LineMark(
+                    x: .value("Seconds", sample.monotonicSeconds - firstTime),
+                    y: .value("Weight", sample.weightGrams)
+                )
+                .interpolationMethod(.linear)
+                .foregroundStyle(.blue)
+
+                if sample.diagnosticFlags?.recentBump == true {
+                    PointMark(
+                        x: .value("Seconds", sample.monotonicSeconds - firstTime),
+                        y: .value("Weight", sample.weightGrams)
+                    )
+                    .foregroundStyle(.yellow)
+                    .symbolSize(45)
+                }
+            }
+            .chartXAxisLabel("seconds")
+            .chartYAxisLabel("grams")
+        } else {
+            EmptyVisualizerChart(message: "No parsed weight stream.")
+        }
+    }
+}
+
+private struct PacketIntervalChart: View {
+    let timeline: PacketTimeline
+
+    var body: some View {
+        let intervalEntries = timeline.entries.filter { $0.intervalMilliseconds != nil }
+        if intervalEntries.isEmpty {
+            EmptyVisualizerChart(message: "No packet intervals.")
+        } else {
+            Chart {
+                ForEach(intervalEntries) { entry in
+                    if let interval = entry.intervalMilliseconds {
+                        BarMark(
+                            x: .value("Seconds", entry.relativeSeconds),
+                            y: .value("Interval", interval)
+                        )
+                        .foregroundStyle(entry.intervalColor)
+                    }
+                }
+
+                RuleMark(y: .value("Long gap threshold", timeline.longGapThresholdMilliseconds))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    .foregroundStyle(.red.opacity(0.65))
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("long gap")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+            }
+            .chartXAxisLabel("seconds")
+            .chartYAxisLabel("ms")
+        }
+    }
+}
+
+private struct EmptyVisualizerChart: View {
+    let message: String
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary.opacity(0.35))
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct PacketTimelineCanvas: View {
+    let timeline: PacketTimeline
+
+    var body: some View {
+        Canvas { context, size in
+            guard !timeline.entries.isEmpty else {
+                drawEmptyTimeline(context: &context, size: size)
+                return
+            }
+
+            let inset: CGFloat = 10
+            let rect = CGRect(
+                x: inset,
+                y: inset,
+                width: max(1, size.width - inset * 2),
+                height: max(1, size.height - inset * 2)
+            )
+            let laneCount = CGFloat(PacketLane.allCases.count)
+            let laneHeight = rect.height / laneCount
+            let duration = max(timeline.durationSeconds, 0.001)
+
+            for lane in PacketLane.allCases {
+                let y = rect.minY + laneHeight * (CGFloat(lane.index) + 0.5)
+                var lanePath = Path()
+                lanePath.move(to: CGPoint(x: rect.minX, y: y))
+                lanePath.addLine(to: CGPoint(x: rect.maxX, y: y))
+                context.stroke(lanePath, with: .color(.secondary.opacity(0.18)), lineWidth: 1)
+            }
+
+            for entry in timeline.entries where entry.hasLongGapBefore {
+                let previousX = rect.minX + rect.width * CGFloat(max(0, entry.previousRelativeSeconds ?? entry.relativeSeconds) / duration)
+                let currentX = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
+                let bandRect = CGRect(
+                    x: min(previousX, currentX),
+                    y: rect.minY,
+                    width: max(2, abs(currentX - previousX)),
+                    height: rect.height
+                )
+                context.fill(Path(bandRect), with: .color(.red.opacity(0.12)))
+            }
+
+            for entry in timeline.entries {
+                let x = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
+                let lane = entry.lane
+                let y = rect.minY + laneHeight * (CGFloat(lane.index) + 0.5)
+                let tickHeight = laneHeight * (entry.severity == .penalty ? 0.82 : 0.60)
+                var tick = Path()
+                tick.move(to: CGPoint(x: x, y: y - tickHeight / 2))
+                tick.addLine(to: CGPoint(x: x, y: y + tickHeight / 2))
+                context.stroke(tick, with: .color(entry.color), lineWidth: entry.severity == .penalty ? 3 : 2)
+            }
+        }
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(alignment: .topLeading) {
+            Text("\(timeline.entries.count) packets · threshold \(formatMilliseconds(timeline.longGapThresholdMilliseconds))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(8)
+        }
+    }
+
+    private func drawEmptyTimeline(context: inout GraphicsContext, size: CGSize) {
+        let rect = CGRect(origin: .zero, size: size).insetBy(dx: 8, dy: 8)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        context.stroke(path, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
+    }
+}
+
+private struct PacketLegend: View {
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                legendItems
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                legendItems
+            }
+        }
+        .font(.caption2)
+    }
+
+    @ViewBuilder
+    private var legendItems: some View {
+        LegendItem(color: .blue, title: "weight")
+        LegendItem(color: .green, title: "battery")
+        LegendItem(color: .purple, title: "control")
+        LegendItem(color: .orange, title: "warning")
+        LegendItem(color: .red, title: "penalty")
+        LegendItem(color: .gray, title: "unknown")
+    }
+}
+
+private struct LegendItem: View {
+    let color: Color
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct PacketChip: View {
+    let entry: PacketTimelineEntry
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Capsule()
+                    .fill(entry.color)
+                    .frame(width: 8, height: entry.severity == .penalty ? 28 : 20)
+                Text(formatSeconds(entry.relativeSeconds))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(isSelected ? entry.color.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? entry.color : .clear, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Packet at \(formatSeconds(entry.relativeSeconds)), \(entry.severity.label)")
     }
 }
 
@@ -765,27 +1125,43 @@ private struct RecordingStreamChart: View {
 }
 
 private struct RawPacketRow: View {
-    let packet: RawScalePacket
+    let entry: PacketTimelineEntry
+
+    private var packet: RawScalePacket { entry.packet }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(packet.role.rawValue)
+                Label(packet.role.rawValue, systemImage: entry.severity.systemImage)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(entry.color)
                 Spacer()
-                if let rejectionReason = packet.rejectionReason {
-                    Text(rejectionReason.rawValue)
-                        .font(.caption2)
-                        .foregroundStyle(.red)
+                Text(formatSeconds(entry.relativeSeconds))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if !entry.evidence.isEmpty {
+                ForEach(entry.evidence, id: \.self) { evidence in
+                    Text(evidence)
+                        .font(.caption)
+                        .foregroundStyle(entry.severity == .penalty ? .red : .orange)
                 }
             }
+
+            if let interval = entry.intervalMilliseconds {
+                MetricRow(title: "Interval before", value: formatMilliseconds(interval))
+            }
+
             Text(packet.characteristicUUID)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(packet.bytesHex)
                 .font(.caption2.monospaced())
-                .lineLimit(2)
+                .textSelection(.enabled)
         }
+        .padding(10)
+        .background(entry.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -1159,6 +1535,260 @@ private struct RecordingActionButtons: View {
     }
 }
 
+private struct PacketTimeline: Equatable {
+    var entries: [PacketTimelineEntry]
+    var longGapThresholdMilliseconds: Double
+
+    var durationSeconds: Double {
+        guard let first = entries.first, let last = entries.last else { return 0 }
+        return max(0, last.relativeSeconds - first.relativeSeconds)
+    }
+
+    var warningIntervalCount: Int {
+        entries.filter { $0.severity == .warning && $0.intervalMilliseconds != nil }.count
+    }
+
+    static func make(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> PacketTimeline {
+        let packets = recording.rawPackets.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
+        let threshold = packetLongGapThresholdMilliseconds(recording: recording, metrics: metrics)
+        guard let firstPacket = packets.first else {
+            return PacketTimeline(entries: [], longGapThresholdMilliseconds: threshold)
+        }
+
+        var entries: [PacketTimelineEntry] = []
+        var previousPacket: RawScalePacket?
+        for packet in packets {
+            let interval = previousPacket.map { max(0, packet.monotonicSeconds - $0.monotonicSeconds) * 1_000 }
+            let relative = packet.monotonicSeconds - firstPacket.monotonicSeconds
+            let previousRelative = previousPacket.map { $0.monotonicSeconds - firstPacket.monotonicSeconds }
+            let severity = packetSeverity(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
+            let evidence = packetEvidence(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
+
+            entries.append(
+                PacketTimelineEntry(
+                    id: packet.id,
+                    packet: packet,
+                    relativeSeconds: relative,
+                    previousRelativeSeconds: previousRelative,
+                    intervalMilliseconds: interval,
+                    severity: severity,
+                    evidence: evidence
+                )
+            )
+            previousPacket = packet
+        }
+
+        return PacketTimeline(entries: entries, longGapThresholdMilliseconds: threshold)
+    }
+}
+
+private struct PacketTimelineEntry: Identifiable, Equatable {
+    var id: UUID
+    var packet: RawScalePacket
+    var relativeSeconds: Double
+    var previousRelativeSeconds: Double?
+    var intervalMilliseconds: Double?
+    var severity: PacketSeverity
+    var evidence: [String]
+
+    var hasLongGapBefore: Bool {
+        guard intervalMilliseconds != nil else { return false }
+        return severity == .penalty && evidence.contains { $0.localizedCaseInsensitiveContains("long gap") }
+    }
+
+    var lane: PacketLane {
+        if severity == .penalty { return .penalty }
+        switch packet.role {
+        case .weight:
+            return .weight
+        case .battery:
+            return .metadata
+        case .capabilities, .commandAck:
+            return .control
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    var color: Color {
+        switch severity {
+        case .penalty:
+            .red
+        case .warning:
+            .orange
+        case .info:
+            switch packet.role {
+            case .battery:
+                .green
+            case .capabilities, .commandAck:
+                .purple
+            case .unknown:
+                .gray
+            case .weight:
+                .blue
+            }
+        case .normal:
+            switch packet.role {
+            case .weight:
+                .blue
+            case .battery:
+                .green
+            case .capabilities, .commandAck:
+                .purple
+            case .unknown:
+                .gray
+            }
+        }
+    }
+
+    var intervalColor: Color {
+        guard intervalMilliseconds != nil else { return Color.clear }
+        switch severity {
+        case .penalty:
+            return Color.red
+        case .warning:
+            return Color.orange
+        case .info:
+            return Color.gray.opacity(0.55)
+        case .normal:
+            return Color.blue.opacity(0.55)
+        }
+    }
+}
+
+private enum PacketSeverity: Int, Equatable {
+    case normal
+    case info
+    case warning
+    case penalty
+
+    var color: Color {
+        switch self {
+        case .normal:
+            .blue
+        case .info:
+            .green
+        case .warning:
+            .orange
+        case .penalty:
+            .red
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .normal:
+            "normal"
+        case .info:
+            "metadata or control"
+        case .warning:
+            "warning"
+        case .penalty:
+            "score penalty"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .normal:
+            "checkmark.circle"
+        case .info:
+            "info.circle"
+        case .warning:
+            "exclamationmark.triangle"
+        case .penalty:
+            "xmark.octagon"
+        }
+    }
+}
+
+private enum PacketLane: CaseIterable {
+    case weight
+    case metadata
+    case control
+    case penalty
+    case unknown
+
+    var index: Int {
+        switch self {
+        case .weight:
+            0
+        case .metadata:
+            1
+        case .control:
+            2
+        case .penalty:
+            3
+        case .unknown:
+            4
+        }
+    }
+}
+
+private func packetLongGapThresholdMilliseconds(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> Double {
+    if let rate = metrics.effectiveSampleRateHz, rate > 0 {
+        let expected = 1_000 / rate
+        return max(recording.scoringProfile.minimumLongGapMilliseconds, expected * recording.scoringProfile.longGapMultiplier)
+    }
+    return recording.scoringProfile.minimumLongGapMilliseconds
+}
+
+private func packetSeverity(
+    packet: RawScalePacket,
+    intervalMilliseconds: Double?,
+    longGapThresholdMilliseconds: Double
+) -> PacketSeverity {
+    if packet.rejectionReason != nil {
+        return .penalty
+    }
+    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
+        return .penalty
+    }
+    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
+        return .warning
+    }
+    switch packet.role {
+    case .unknown:
+        return .warning
+    case .battery, .capabilities, .commandAck:
+        return .info
+    case .weight:
+        return .normal
+    }
+}
+
+private func packetEvidence(
+    packet: RawScalePacket,
+    intervalMilliseconds: Double?,
+    longGapThresholdMilliseconds: Double
+) -> [String] {
+    var evidence: [String] = []
+    if let rejectionReason = packet.rejectionReason {
+        evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
+    }
+    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
+        evidence.append("Long gap before packet: \(formatMilliseconds(intervalMilliseconds)). This directly lowers transport quality.")
+    } else if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
+        evidence.append("Near-threshold interval before packet: \(formatMilliseconds(intervalMilliseconds)). Warning only.")
+    }
+    if packet.role == .unknown {
+        evidence.append("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.")
+    }
+    if packet.role == .battery {
+        evidence.append("Battery/metadata packet. This can improve metadata coverage when parsed.")
+    }
+    if packet.role == .capabilities {
+        evidence.append("Capability packet. Useful context for WMB+ features and parser behavior.")
+    }
+    if packet.role == .commandAck {
+        evidence.append("Command acknowledgement packet. Useful context around tare/start/stop actions.")
+    }
+    if evidence.isEmpty {
+        evidence.append("Normal parsed packet. No direct score penalty attached.")
+    }
+    return evidence
+}
+
 private func formatRate(_ value: Double?) -> String {
     value.map { String(format: "%.1f Hz", $0) } ?? "—"
 }
@@ -1173,6 +1803,10 @@ private func formatMilliseconds(_ value: Double) -> String {
 
 private func formatPercent(_ value: Double) -> String {
     String(format: "%.0f%%", value * 100)
+}
+
+private func formatSeconds(_ value: Double) -> String {
+    String(format: "%.2fs", value)
 }
 
 private func recordingDuration(_ recording: ScaleRecording, now: Date = Date()) -> TimeInterval {
