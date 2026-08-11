@@ -631,6 +631,10 @@ private struct RecordingResultsView: View {
                     RecordingSummaryRows(recording: recording, metrics: recording.metrics)
                 }
 
+                Section("Deductions") {
+                    ScoreDeductionsView(recording: recording, metrics: recording.metrics)
+                }
+
                 Section("Actions") {
                     Button {
                         if save(recording) != nil {
@@ -709,6 +713,9 @@ private struct RecordingResultsView: View {
 private struct SavedRecordingDetailView: View {
     let saved: SavedScaleRecording
     let explain: () -> Void
+    @State private var jsonURL: URL?
+    @State private var scorecardURL: URL?
+    @State private var exportErrorMessage: String?
 
     private var recording: ScaleRecording { saved.recording }
     private var metrics: ScaleQualityMetrics { saved.scoreSnapshot }
@@ -727,6 +734,10 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Saved", value: saved.savedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
+            Section("Deductions") {
+                ScoreDeductionsView(recording: recording, metrics: metrics)
+            }
+
             Section("Packet visualizer") {
                 RecordingVisualizerView(recording: recording, metrics: metrics)
             }
@@ -738,6 +749,48 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Transport", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
                 MetricRow(title: "Stability", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
                 MetricRow(title: "Metadata", value: metrics.metadataScore.map { "\($0)/100" } ?? "—")
+            }
+
+            Section("Export") {
+                Button {
+                    do {
+                        jsonURL = try RecordingExporter.export(recording)
+                        exportErrorMessage = nil
+                    } catch {
+                        exportErrorMessage = error.localizedDescription
+                    }
+                } label: {
+                    Label("Export JSON", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
+                    do {
+                        scorecardURL = try ScoreCardExporter.exportOfficial(recording)
+                        exportErrorMessage = nil
+                    } catch {
+                        exportErrorMessage = error.localizedDescription
+                    }
+                } label: {
+                    Label("Export Official Scorecard", systemImage: "photo")
+                }
+
+                if let jsonURL {
+                    ShareLink(item: jsonURL) {
+                        Label("Share JSON \(jsonURL.lastPathComponent)", systemImage: "square.and.arrow.up")
+                    }
+                }
+
+                if let scorecardURL {
+                    ShareLink(item: scorecardURL) {
+                        Label("Share Official Scorecard \(scorecardURL.lastPathComponent)", systemImage: "photo")
+                    }
+                }
+
+                if let exportErrorMessage {
+                    Text(exportErrorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -799,6 +852,164 @@ private struct RecordingSummaryRows: View {
     }
 }
 
+private struct ScoreDeductionsView: View {
+    let recording: ScaleRecording
+    let metrics: ScaleQualityMetrics
+
+    private var deductions: [WeightedScoreDeduction] {
+        let profile = recording.scoringProfile.normalized
+        var rows: [WeightedScoreDeduction] = []
+
+        if let transportScore = metrics.transportScore {
+            let points = Double(100 - transportScore) * profile.transportWeight
+            if points > 0.05 {
+                rows.append(WeightedScoreDeduction(
+                    title: "Transport",
+                    points: points,
+                    subscore: transportScore,
+                    detail: transportDeductionDetail(metrics: metrics)
+                ))
+            }
+        }
+
+        if let stabilityScore = metrics.stabilityScore {
+            let points = Double(100 - stabilityScore) * profile.stabilityWeight
+            if points > 0.05 {
+                rows.append(WeightedScoreDeduction(
+                    title: "Stability",
+                    points: points,
+                    subscore: stabilityScore,
+                    detail: stabilityDeductionDetail(recording: recording, metrics: metrics)
+                ))
+            }
+        }
+
+        if let metadataScore = metrics.metadataScore {
+            let points = Double(100 - metadataScore) * profile.metadataWeight
+            if points > 0.05 {
+                rows.append(WeightedScoreDeduction(
+                    title: "Metadata",
+                    points: points,
+                    subscore: metadataScore,
+                    detail: metadataDeductionDetail(recording: recording)
+                ))
+            }
+        }
+
+        return rows
+    }
+
+    var body: some View {
+        if deductions.isEmpty {
+            Text("No weighted score deductions for this recording.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("The score starts at 100. These rows show the weighted points removed by each subscore.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(deductions) { deduction in
+                ScoreDeductionRow(deduction: deduction)
+            }
+        }
+    }
+
+    private func transportDeductionDetail(metrics: ScaleQualityMetrics) -> String {
+        var parts: [String] = []
+        if metrics.longGapCount > 0 {
+            parts.append("\(metrics.longGapCount) parsed-sample long gap\(metrics.longGapCount == 1 ? "" : "s")")
+        }
+        if metrics.missingSequenceCount > 0 {
+            parts.append("\(metrics.missingSequenceCount) missing sequence step\(metrics.missingSequenceCount == 1 ? "" : "s")")
+        }
+        if metrics.duplicateOrOutOfOrderTimestampCount > 0 {
+            parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
+        }
+        if metrics.rejectedPacketCount > 0 {
+            parts.append("\(metrics.rejectedPacketCount) rejected packet\(metrics.rejectedPacketCount == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "Transport subscore was below 100." : parts.joined(separator: ", ")
+    }
+
+    private func stabilityDeductionDetail(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
+        if recording.mode != .idleStability {
+            return metrics.firmwareBumpCount > 0
+                ? "\(metrics.firmwareBumpCount) firmware bump flag\(metrics.firmwareBumpCount == 1 ? "" : "s")"
+                : "Dynamic stability subscore was below 100."
+        }
+
+        var parts: [String] = []
+        if let noise = metrics.idleNoisePeakToPeakGrams {
+            parts.append(String(format: "idle noise %.3f g p-p", noise))
+        }
+        if let drift = metrics.driftGramsPerMinute {
+            parts.append(String(format: "drift %.3f g/min", drift))
+        }
+        return parts.isEmpty ? "Idle stability subscore was below 100." : parts.joined(separator: ", ")
+    }
+
+    private func metadataDeductionDetail(recording: ScaleRecording) -> String {
+        let sampleCount = max(recording.samples.count, 1)
+        let timestampCount = recording.samples.filter { $0.deviceTimestampMilliseconds != nil }.count
+        let sequenceCount = recording.samples.filter { $0.sequence != nil }.count
+        let sampleBatteryCount = recording.samples.filter { $0.batteryPercent != nil }.count
+        let firmwareQualityCount = recording.samples.filter { $0.firmwareQualityScore != nil }.count
+        let hasBattery = sampleBatteryCount > 0 || !recording.batteryEvents.isEmpty
+
+        let parts = [
+            metadataCoverageLabel("timestamps", count: timestampCount, total: sampleCount),
+            metadataCoverageLabel("sequence", count: sequenceCount, total: sampleCount),
+            hasBattery ? "battery present" : "battery missing",
+            metadataCoverageLabel("firmware quality", count: firmwareQualityCount, total: sampleCount)
+        ]
+        return parts.joined(separator: ", ")
+    }
+
+    private func metadataCoverageLabel(_ label: String, count: Int, total: Int) -> String {
+        if count == 0 { return "\(label) missing" }
+        if count == total { return "\(label) full" }
+        return "\(label) partial \(count)/\(total)"
+    }
+}
+
+private struct WeightedScoreDeduction: Identifiable {
+    var id: String { title }
+    var title: String
+    var points: Double
+    var subscore: Int
+    var detail: String
+}
+
+private struct ScoreDeductionRow: View {
+    let deduction: WeightedScoreDeduction
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(deduction.title)
+                        .font(.headline)
+                    Text("Subscore \(deduction.subscore)/100")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(String(format: "−%.1f pts", deduction.points))
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(.red)
+            }
+
+            Text(deduction.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 private struct RecordingVisualizerView: View {
     let recording: ScaleRecording
     let metrics: ScaleQualityMetrics
@@ -838,7 +1049,7 @@ private struct RecordingVisualizerView: View {
                     .font(.headline)
                 PacketIntervalChart(timeline: timeline)
                     .frame(height: 170)
-                Text("Each bar is a parsed sample interval, matching the scoring calculation. Bars above the threshold line are score-impacting long gaps.")
+                Text("Dashed line is the gap threshold, not an observed gap. Only parsed sample bars crossing it count as long-gap deductions.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -846,6 +1057,7 @@ private struct RecordingVisualizerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Packet timeline", systemImage: "timeline.selection")
                     .font(.headline)
+                PacketTimelineStats(timeline: timeline)
                 PacketTimelineCanvas(
                     timeline: timeline,
                     selectedPacketID: selectedEntry?.id,
@@ -1019,6 +1231,7 @@ private struct PacketIntervalChart: View {
 
     var body: some View {
         let intervalEntries = timeline.sampleIntervals
+        let hasLongGaps = !timeline.scoringGaps.isEmpty
         if intervalEntries.isEmpty {
             EmptyVisualizerChart(message: "No parsed sample intervals.")
         } else {
@@ -1033,11 +1246,11 @@ private struct PacketIntervalChart: View {
 
                 RuleMark(y: .value("Long gap threshold", timeline.longGapThresholdMilliseconds))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
-                    .foregroundStyle(.red.opacity(0.65))
+                    .foregroundStyle(hasLongGaps ? .red.opacity(0.70) : .secondary.opacity(0.55))
                     .annotation(position: .top, alignment: .trailing) {
-                        Text("long gap")
+                        Text(hasLongGaps ? "long-gap threshold" : "gap threshold")
                             .font(.caption2)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(hasLongGaps ? .red : .secondary)
                     }
             }
             .chartXAxisLabel("seconds")
@@ -1057,6 +1270,47 @@ private struct EmptyVisualizerChart: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct PacketTimelineStats: View {
+    let timeline: PacketTimeline
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                statChips
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                statChips
+            }
+        }
+        .font(.caption2)
+    }
+
+    @ViewBuilder
+    private var statChips: some View {
+        TimelineStatChip(title: "Packets", value: "\(timeline.entries.count)")
+        TimelineStatChip(title: "Scoring gaps", value: "\(timeline.scoringGaps.count)")
+        TimelineStatChip(title: "Gap threshold", value: formatMilliseconds(timeline.longGapThresholdMilliseconds))
+    }
+}
+
+private struct TimelineStatChip: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.quaternary, in: Capsule())
     }
 }
 
@@ -1151,12 +1405,6 @@ private struct PacketTimelineCanvas: View {
                     }
                     .hoverEffect(.highlight)
             }
-        }
-        .overlay(alignment: .topLeading) {
-            Text("\(timeline.entries.count) packets · \(timeline.scoringGaps.count) scoring gaps · threshold \(formatMilliseconds(timeline.longGapThresholdMilliseconds))")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(8)
         }
         .overlay(alignment: .topTrailing) {
             if let hoveredEntry {
