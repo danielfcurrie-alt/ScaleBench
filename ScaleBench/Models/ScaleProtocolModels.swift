@@ -3,21 +3,41 @@ import Foundation
 enum ScaleKind: String, Codable, CaseIterable, Identifiable {
     case unknown
     case bookoo
+    case bookooMini
+    case bookooUltra
     case weighMyBru
     case weighMyBruPlus
     case eureka
     case acaia
+    case decent
+    case espressi
+    case difluid
+    case difluidTi
+    case felicita
+    case futula
+    case skale2
+    case timemoreDot
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .unknown: "Unknown"
-        case .bookoo: "Bookoo"
+        case .bookoo: "BooKoo Standard"
+        case .bookooMini: "BooKoo Mini Native"
+        case .bookooUltra: "BooKoo Ultra Native"
         case .weighMyBru: "WeighMyBru"
         case .weighMyBruPlus: "WeighMyBru+"
         case .eureka: "Eureka / Solo Barista"
         case .acaia: "Acaia"
+        case .decent: "Decent Scale"
+        case .espressi: "Espressi Scale"
+        case .difluid: "DiFluid Microbalance"
+        case .difluidTi: "DiFluid Microbalance Ti"
+        case .felicita: "Felicita"
+        case .futula: "Futula / LFSmart / Lefu"
+        case .skale2: "Skale2"
+        case .timemoreDot: "Timemore Dot"
         }
     }
 }
@@ -160,8 +180,19 @@ enum ParseRejectionReason: String, Codable, Equatable, Error {
     case invalidProduct
     case invalidMessageType
     case invalidChecksum
+    case invalidHeader
+    case invalidUnit
+    case invalidRange
+    case invalidCRC
     case invalidFloat
+    case unsupportedFrame
     case unsupportedCharacteristic
+}
+
+enum ScaleParserEvent: Equatable {
+    case sample(ScaleSample)
+    case battery(percent: Int)
+    case rejected(ParseRejectionReason)
 }
 
 struct DiscoveredScale: Identifiable, Equatable {

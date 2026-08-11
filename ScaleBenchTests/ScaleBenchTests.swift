@@ -53,27 +53,120 @@ final class ScaleBenchTests: XCTestCase {
     }
 
     func testBookooPacketParse() throws {
-        let bytes = Data([
+        var packet: [UInt8] = [
             0x03, 0x0B,
             0x00, 0x10, 0x00,
-            0x00,
+            0x02,
             0x2D, 0x00, 0x00, 0x64,
             0x2B, 0x00, 0xC8,
             0x63,
-            0, 0, 0, 0, 0, 0
-        ])
+            0, 30, 2, 0, 1, 0
+        ]
+        packet[19] = xorChecksum(packet.dropLast())
+        let bytes = Data(packet)
 
-        let result = BookooParser.parseWeightPacket(bytes, arrivalTime: Date(), monotonicSeconds: 1)
+        let result = BookooParser.parseWeightPacket(bytes, kind: .bookooUltra, arrivalTime: Date(), monotonicSeconds: 1)
 
         guard case let .success(sample) = result else {
             return XCTFail("Expected success")
         }
 
-        XCTAssertEqual(sample.scaleKind, .bookoo)
+        XCTAssertEqual(sample.scaleKind, .bookooUltra)
         XCTAssertEqual(sample.deviceTimestampMilliseconds, 0x001000)
         XCTAssertEqual(sample.weightGrams, -1.0, accuracy: 0.001)
         XCTAssertEqual(try XCTUnwrap(sample.flowGramsPerSecond), 2.0, accuracy: 0.001)
         XCTAssertEqual(sample.batteryPercent, 99)
+    }
+
+
+
+    func testAcaiaPacketParse() throws {
+        let frame = Data([0xEF, 0xDD, 0x0C, 0x04, 0x7B, 0x00, 0x01, 0x00, 0x7C, 0x00])
+        let events = AcaiaParser.Codec().receive(frame, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .sample(sample) = try XCTUnwrap(events.first) else {
+            return XCTFail("Expected Acaia sample")
+        }
+        XCTAssertEqual(sample.scaleKind, .acaia)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
+    }
+
+    func testDecentPacketParse() throws {
+        let data = Data([0x03, 0xCE, 0x00, 0x7B, 0x00, 0x01, 0x02, 0x03, 0x00, 0x00])
+        let result = DecentEspressiParser.parseWeightPacket(data, kind: .decent, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Decent sample") }
+        XCTAssertEqual(sample.scaleKind, .decent)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
+        XCTAssertEqual(sample.deviceTimestampMilliseconds, 62_300)
+    }
+
+    func testDiFluidSensorAndBatteryPacketsParse() throws {
+        var sensor: [UInt8] = [
+            0xDF, 0xDF, 0x03, 0x00, 0x0D,
+            0x00, 0x00, 0x00, 0x7B,
+            0x00, 0x0C,
+            0x00, 0x00,
+            0x00, 0x00, 0x03, 0xE8,
+            0x00,
+            0x00
+        ]
+        sensor[18] = sensor.dropLast().reduce(UInt8(0)) { $0 &+ $1 }
+        let sensorEvent = DiFluidParser.parse(Data(sensor), kind: .difluidTi, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .sample(sample) = sensorEvent else { return XCTFail("Expected DiFluid sample") }
+        XCTAssertEqual(sample.scaleKind, .difluidTi)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(sample.flowGramsPerSecond), 1.2, accuracy: 0.001)
+        XCTAssertEqual(sample.deviceTimestampMilliseconds, 1000)
+
+        var status: [UInt8] = [0xDF, 0xDF, 0x03, 0x05, 0x08, 0x00, 0x55, 0, 0, 0, 0, 0, 0, 0]
+        status[13] = status.dropLast().reduce(UInt8(0)) { $0 &+ $1 }
+        let statusEvent = DiFluidParser.parse(Data(status), kind: .difluid, arrivalTime: Date(), monotonicSeconds: 1)
+        XCTAssertEqual(statusEvent, .battery(percent: 85))
+    }
+
+    func testEurekaPacketParse() throws {
+        let data = Data([0xAA, 0x09, 0x41, 0x00, 0x1D, 0x00, 0x00, 0x7B, 0x00, 0x00, 0x00])
+        let result = EurekaPrecisaParser.parse(data, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Eureka sample") }
+        XCTAssertEqual(sample.scaleKind, .eureka)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
+    }
+
+    func testFelicitaPacketParse() throws {
+        var bytes = Array(repeating: UInt8(0), count: 18)
+        bytes[2] = 0x2D
+        for (index, byte) in Array("001234".utf8).enumerated() {
+            bytes[3 + index] = byte
+        }
+        let result = FelicitaParser.parse(Data(bytes), arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Felicita sample") }
+        XCTAssertEqual(sample.scaleKind, .felicita)
+        XCTAssertEqual(sample.weightGrams, -12.34, accuracy: 0.001)
+    }
+
+    func testFutulaPacketParse() throws {
+        let data = Data([0, 0, 0, 0x7B, 0x00, 0x01, 0, 0, 0])
+        let result = FutulaParser.parse(data, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Futula sample") }
+        XCTAssertEqual(sample.scaleKind, .futula)
+        XCTAssertEqual(sample.weightGrams, -12.3, accuracy: 0.001)
+    }
+
+    func testSkale2PacketParse() throws {
+        let data = Data([0x00, 0x7B, 0x00])
+        let result = Skale2Parser.parse(data, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Skale2 sample") }
+        XCTAssertEqual(sample.scaleKind, .skale2)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
+    }
+
+    func testTimemoreDotPacketParse() throws {
+        let frame = Data(TimemoreDotParser.frame(opcode: 0x01, command: 0x01, payload: [0x00, 0x00, 0x00, 0x7B, 0, 0, 0, 0]))
+        let events = TimemoreDotParser.Codec().receive(frame, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .sample(sample) = try XCTUnwrap(events.first) else {
+            return XCTFail("Expected Timemore sample")
+        }
+        XCTAssertEqual(sample.scaleKind, .timemoreDot)
+        XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
     }
 
     func testQualityAnalyzerUsesSequenceAndTimestamp() {

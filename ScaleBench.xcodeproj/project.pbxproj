@@ -13,6 +13,7 @@
 		000000000000000000000104 /* ScaleProtocolModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000004 /* ScaleProtocolModels.swift */; };
 		000000000000000000000105 /* BookooParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000005 /* BookooParser.swift */; };
 		000000000000000000000106 /* WeighMyBruParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000006 /* WeighMyBruParser.swift */; };
+		000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000012 /* AdditionalScaleParsers.swift */; };
 		000000000000000000000107 /* ScaleQualityAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000007 /* ScaleQualityAnalyzer.swift */; };
 		000000000000000000000108 /* RecordingExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000008 /* RecordingExporter.swift */; };
 		000000000000000000000201 /* ScaleBenchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000009 /* ScaleBenchTests.swift */; };
@@ -35,6 +36,7 @@
 		000000000000000000000004 /* ScaleProtocolModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleProtocolModels.swift; sourceTree = "<group>"; };
 		000000000000000000000005 /* BookooParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookooParser.swift; sourceTree = "<group>"; };
 		000000000000000000000006 /* WeighMyBruParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeighMyBruParser.swift; sourceTree = "<group>"; };
+		000000000000000000000012 /* AdditionalScaleParsers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdditionalScaleParsers.swift; sourceTree = "<group>"; };
 		000000000000000000000007 /* ScaleQualityAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleQualityAnalyzer.swift; sourceTree = "<group>"; };
 		000000000000000000000008 /* RecordingExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingExporter.swift; sourceTree = "<group>"; };
 		000000000000000000000009 /* ScaleBenchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScaleBenchTests.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 			children = (
 				000000000000000000000005 /* BookooParser.swift */,
 				000000000000000000000006 /* WeighMyBruParser.swift */,
+				000000000000000000000012 /* AdditionalScaleParsers.swift */,
 			);
 			path = Protocols;
 			sourceTree = "<group>";
@@ -244,6 +247,7 @@
 				000000000000000000000104 /* ScaleProtocolModels.swift in Sources */,
 				000000000000000000000105 /* BookooParser.swift in Sources */,
 				000000000000000000000106 /* WeighMyBruParser.swift in Sources */,
+				000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */,
 				000000000000000000000107 /* ScaleQualityAnalyzer.swift in Sources */,
 				000000000000000000000108 /* RecordingExporter.swift in Sources */,
 			);

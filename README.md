@@ -1,96 +1,56 @@
 # ScaleBench
 
-ScaleBench is an open iOS Swift app for measuring Bluetooth espresso-scale quality.
+ScaleBench is an open iOS Bluetooth scale analyzer for espresso-scale transport quality. It records raw BLE packets, parses supported scale protocols into a canonical sample stream, scores transport/stability/metadata quality, and exports a JSON recording for external analysis.
 
-It records raw scale packets, parses supported protocols, scores transport and measurement behavior, and exports sessions as JSON for external analysis.
+## Current protocol support
 
-## Current scope
+ScaleBench intentionally mirrors ScaleBench's scale protocol coverage and keeps protocol-specific fields in the exported raw packet stream.
 
-- BLE scan/connect/recording workflow
-- Bookoo packet parsing
-- WeighMyBru stock packet parsing
-- WeighMyBru+ capability and extended packet parsing
-- Standard BLE Battery Service support
-- Session metrics:
-  - effective sample rate
-  - packet interval p50/p95/max
-  - long gaps
-  - missing sequence count
-  - rejected packet count
-  - idle noise peak-to-peak
-  - idle standard deviation
-  - drift grams/minute
-  - battery update stability
-  - firmware-reported scale quality where available
-- JSON export of raw packets, parsed samples, capabilities, and metrics
+| Family | BLE support | Parsed data |
+| --- | --- | --- |
+| WeighMyBru | `6E400001...` Float32 and 20-byte/GaggiMate characteristics | weight, packet rejection diagnostics |
+| WeighMyBru+ | optional `6E400005...` capabilities plus extended 20-byte packets | weight, timestamp, sequence, flow, battery, status flags, diagnostics, firmware quality |
+| BooKoo Standard | `0FFE` / `FF11` / `FF12` | weight, 24-bit ms timestamp, flow, battery |
+| BooKoo Mini Native | official OpenSourceBooKoo Mini packet layout | weight, timestamp, flow, battery, standby, buzzer/smoothing bytes in raw export |
+| BooKoo Ultra Native | official OpenSourceBooKoo Ultra packet layout | weight, timestamp, flow, battery, smoothing, auto-stop status byte in raw export |
+| Acaia | modern `1820/2A80` and legacy `49535343-*` | weight |
+| Decent / Espressi | `FFF0` / `FFF4` / `36F5` | weight and v1.2 timer timestamp when present |
+| DiFluid Microbalance / Ti | `00EE` or `00DD`, characteristic `AA01` | weight, device timestamp, hardware flow, battery status |
+| Eureka Precisa / Solo Barista / LSJ | `FFF0` / `FFF1` / `FFF2` | weight |
+| Felicita | `FFE0` / `FFE1` | weight |
+| Futula / LFSmart / Lefu | `FFF0` / `FFF4` / `FFF1` | weight |
+| Skale2 | `FF08` / `EF81` / `EF80` | weight |
+| Timemore Black Mirror Dot | `FFF0` / `FFF1` / `FFF2` | weight, battery, CRC rejection diagnostics |
+
+BooKoo Mini/Ultra details are based on the public OpenSourceBooKoo protocol docs: https://github.com/patrlean/OpenSourceBooKoo
 
 ## Scoring
 
-ScaleBench has one default scoring method named **Standard**. It produces a 0-100 overall score from three sub-scores:
-
-- transport: sample cadence, long gaps, missing sequences, timestamp ordering, rejected packets
-- stability: idle noise peak-to-peak, idle standard deviation, drift
-- metadata: battery coverage, firmware quality coverage, diagnostic/capability coverage
-
-The scoring algorithm is configurable through a `ScoringProfile`. The app currently ships with:
+The default score is the standard ScaleBench score. The app also includes configurable scoring profiles so the same recording can be judged with different weights and thresholds:
 
 - Standard
 - Strict
 - Transport Focused
 
-Every exported JSON recording includes the exact scoring profile used, so scores can be reproduced or recomputed later.
+The selected scoring profile is embedded into every exported JSON recording so results can be reproduced.
 
-## Test modes
+## Export
 
-The first version supports manual recording modes:
-
-- Idle stability
-- Shot / pour
-- Tare latency
-- Transport stress
-- Battery stability
-
-The app does not try to be a brewing app. It is a measurement tool.
-
-## Supported protocols
-
-| Scale family | Status |
-| --- | --- |
-| Bookoo | Initial packet parser |
-| WeighMyBru stock | Initial 20-byte and Float32 parser |
-| WeighMyBru+ | Initial capabilities + extended packet parser |
-| Eureka/Solo Barista | Planned |
-| Acaia | Planned |
-
-## JSON export
-
-Exported recordings include:
+The JSON export includes:
 
 - app/schema version
-- device identity
+- device identity and advertised services
 - recording mode
-- start/end timestamps
-- raw packet bytes
-- parsed scale samples
-- parser rejection reasons
-- capability payloads
-- computed quality metrics
+- WMB+ capability payload when present
+- raw BLE packets with characteristic UUID and rejection reason
+- parsed canonical samples
+- scoring profile
+- calculated metrics
 
-This is intended to make hardware and firmware comparisons reproducible.
+## Build
 
-## Development
+Open `ScaleBench.xcodeproj` in Xcode 26+ or run:
 
-Open `ScaleBench.xcodeproj` in Xcode 26 or newer.
-
-Build from command line:
-
-```bash
-xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench -destination 'generic/platform=iOS Simulator' build
-```
-
-Run tests:
-
-```bash
-xcrun simctl list devices available
-xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench -destination 'id=<SIMULATOR-UDID>' CODE_SIGNING_ALLOWED=NO test
+```sh
+xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
