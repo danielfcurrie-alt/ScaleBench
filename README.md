@@ -49,6 +49,10 @@ Recordings can be saved in-app with:
 
 Saved recordings are stored as JSON under app support storage and are shown in the comparison section. This makes it possible to save one WMB run, one WMB+ run, one BooKoo standard run, and one BooKoo native run, then compare scores, sample rate, p95 interval, max gap, long-gap count, rejection count, and notes.
 
+## Accessibility and system settings
+
+ScaleBench should follow platform defaults wherever possible: semantic SwiftUI fonts, Dynamic Type, system color roles, Dark Mode, high contrast, and user text-size choices. Avoid fixed typography or layout assumptions that make score sharing harder for testers using larger text.
+
 ## Export
 
 The JSON export includes:

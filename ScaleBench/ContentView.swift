@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var selectedScoringPreset: ScoringPreset = .standard
     @State private var recordingNotes = ""
     @State private var exportURL: URL?
+    @ScaledMetric(relativeTo: .body) private var notesMinHeight = 72
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,7 @@ struct ContentView: View {
                                     if bluetooth.connectedDevice?.id == device.id {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
+                                            .accessibilityLabel("Connected")
                                     }
                                 }
                             }
@@ -72,30 +74,28 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         TextEditor(text: $recordingNotes)
-                            .frame(minHeight: 72)
+                            .frame(minHeight: notesMinHeight)
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(.quaternary)
                             }
                     }
 
-                    HStack {
-                        Button(bluetooth.isRecording ? "Stop Recording" : "Start Recording") {
+                    RecordingActionButtons(
+                        isRecording: bluetooth.isRecording,
+                        canRecord: bluetooth.connectedDevice != nil,
+                        canExport: !bluetooth.currentRecording.samples.isEmpty || !bluetooth.currentRecording.rawPackets.isEmpty,
+                        startOrStop: {
                             if bluetooth.isRecording {
                                 bluetooth.stopRecording()
                             } else {
                                 bluetooth.startRecording(mode: selectedMode, scoringProfile: selectedScoringPreset.profile)
                             }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(bluetooth.connectedDevice == nil)
-
-                        Button("Export JSON") {
+                        },
+                        export: {
                             exportURL = bluetooth.exportCurrentRecording(notes: recordingNotes)
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty)
-                    }
+                    )
 
                     Button {
                         let snapshot = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
@@ -189,12 +189,13 @@ private struct MetricRow: View {
     let value: String
 
     var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
+        LabeledContent {
             Text(value)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        } label: {
+            Text(title)
         }
     }
 }
@@ -241,9 +242,39 @@ private struct SavedRecordingRow: View {
                 Text(saved.notes)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
         }
+    }
+}
+
+private struct RecordingActionButtons: View {
+    let isRecording: Bool
+    let canRecord: Bool
+    let canExport: Bool
+    let startOrStop: () -> Void
+    let export: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                buttons
+            }
+
+            VStack(alignment: .leading) {
+                buttons
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        Button(isRecording ? "Stop Recording" : "Start Recording", action: startOrStop)
+            .buttonStyle(.borderedProminent)
+            .disabled(!canRecord)
+
+        Button("Export JSON", action: export)
+            .buttonStyle(.bordered)
+            .disabled(!canExport)
     }
 }
 
