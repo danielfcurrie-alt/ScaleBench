@@ -45,6 +45,16 @@ ScaleBench intentionally mirrors ScaleBench's scale protocol coverage and keeps 
 
 BooKoo Mini/Ultra details are based on the public OpenSourceBooKoo protocol docs: https://github.com/patrlean/OpenSourceBooKoo
 
+## Recording modes
+
+ScaleBench records the same raw packet stream in every mode; the mode labels what kind of test you are running and affects which metrics are most meaningful.
+
+- **Shot / Pour**: normal public comparison mode. Record one real espresso shot or pour from tare through finish.
+- **Idle Stability**: leave the scale untouched for 30–60 seconds. This is the mode where idle noise and drift fields are scored directly.
+- **Tare Latency**: record around a tare action. This is for testing how quickly app/scale tare behavior settles.
+- **Transport Stress**: intentionally stress Bluetooth by changing distance, moving the phone, or adding interference. Useful for gap/jitter/rejection testing.
+- **Battery Logging**: capture battery values over time. This currently logs exposed battery telemetry; it is not yet a calibrated runtime estimator.
+
 ## Scoring
 
 The default score is **ScaleBench Standard v1**. Treat that as the public benchmark profile for apples-to-apples tester comparisons.

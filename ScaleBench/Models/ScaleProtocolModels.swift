@@ -57,7 +57,37 @@ enum RecordingMode: String, Codable, CaseIterable, Identifiable {
         case .shot: "Shot / Pour"
         case .tareLatency: "Tare Latency"
         case .transportStress: "Transport Stress"
-        case .batteryStability: "Battery Stability"
+        case .batteryStability: "Battery Logging"
+        }
+    }
+
+    var shortDescription: String {
+        switch self {
+        case .idleStability:
+            "Leave the scale untouched. Measures noise, drift, cadence, packet gaps, and bump/disturbance behavior."
+        case .shot:
+            "Record a real espresso shot or pour. This is the normal mode for public ScaleBench score comparisons."
+        case .tareLatency:
+            "Record while testing tare behavior. Start recording, trigger tare on the app or scale, then stop after it settles."
+        case .transportStress:
+            "Stress Bluetooth transport by moving the phone, changing distance, or adding interference. Useful for gap/jitter testing."
+        case .batteryStability:
+            "Log battery values over time while the scale runs. This is battery telemetry capture, not a calibrated runtime estimate yet."
+        }
+    }
+
+    var suggestedDuration: String {
+        switch self {
+        case .idleStability:
+            "Suggested: 30–60 seconds on a stable surface."
+        case .shot:
+            "Suggested: one normal shot or pour from tare through finish."
+        case .tareLatency:
+            "Suggested: 5–10 seconds around the tare action."
+        case .transportStress:
+            "Suggested: 30–60 seconds while intentionally stressing the BLE link."
+        case .batteryStability:
+            "Suggested: several minutes or longer, unplugged if you are testing battery reporting."
         }
     }
 }

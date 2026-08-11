@@ -4,7 +4,7 @@ struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
     @StateObject private var savedStore = SavedRecordingStore()
     @StateObject private var scoringStore = CustomScoringProfileStore()
-    @State private var selectedMode: RecordingMode = .idleStability
+    @State private var selectedMode: RecordingMode = .shot
     @State private var selectedScoringProfileID = ScoringProfileOption.builtIn(.standard).id
     @State private var recordingNotes = ""
     @State private var exportURL: URL?
@@ -55,17 +55,30 @@ struct ContentView: View {
                                             .accessibilityLabel("Connected")
                                     }
                                 }
+                                .contentShape(Rectangle())
+                                .foregroundStyle(.primary)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
                 Section("Recording") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("How to use ScaleBench", systemImage: "list.number")
+                            .font(.headline)
+                        Text("Connect a scale, choose what you are testing, start recording, then stop and save/export. Official share cards always use ScaleBench Standard v1.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     Picker("Mode", selection: $selectedMode) {
                         ForEach(RecordingMode.allCases) { mode in
                             Text(mode.displayName).tag(mode)
                         }
                     }
+
+                    ModeHelpCard(mode: selectedMode)
 
                     Picker("Scoring", selection: $selectedScoringProfileID) {
                         ForEach(scoringOptions) { option in
@@ -353,6 +366,21 @@ private struct ScoringProfileOption: Identifiable, Equatable {
             displayName: custom.profile.name,
             profile: custom.profile
         )
+    }
+}
+
+private struct ModeHelpCard: View {
+    let mode: RecordingMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(mode.shortDescription)
+            Text(mode.suggestedDuration)
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }
 
