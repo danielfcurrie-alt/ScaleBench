@@ -1,6 +1,6 @@
 import Foundation
 
-// Parser adapters ported from ScaleBench's supported BLE scale handlers.
+// Parser adapters for supported Bluetooth scale protocols.
 // These are intentionally sample-focused: ScaleBench records raw packets for forensic analysis
 // and turns every supported weight/status notification into one canonical ScaleSample stream.
 
