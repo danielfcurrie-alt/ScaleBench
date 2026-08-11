@@ -4,6 +4,12 @@ ScaleBench is an open iOS Bluetooth scale analyzer for espresso-scale transport 
 
 The main goal is protocol and hardware comparison: WMB vs WMB+, BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
 
+## Requirements
+
+- iPhone/iPad: iOS/iPadOS 17.0 or newer
+- Mac: macOS 14.0 Sonoma or newer through Mac Catalyst
+- Bluetooth access is required for live scale recording
+
 ## Project intent and provenance
 
 ScaleBench is a diagnostic and benchmarking tool, not a brew logger clone. It is meant to answer concrete hardware/protocol questions:
