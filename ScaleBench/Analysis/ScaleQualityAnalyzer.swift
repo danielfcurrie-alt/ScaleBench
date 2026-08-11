@@ -28,6 +28,13 @@ enum ScaleQualityAnalyzer {
         let effectiveRate = duration > 0 ? Double(samples.count - 1) / duration : nil
         let longGapThreshold = longGapThresholdMilliseconds(forTypicalIntervalMilliseconds: p50, profile: profile)
         let longGaps = intervals.filter { $0 >= longGapThreshold }.count
+        let cadencePenalty = scoreCadencePenalty(
+            intervals: intervals,
+            typicalInterval: p50,
+            p95Interval: p95,
+            maxInterval: maxInterval,
+            longGapThreshold: longGapThreshold
+        )
         let missingSequence = missingSequenceCount(samples)
         let timestampIssues = duplicateOrOutOfOrderDeviceTimestamps(samples)
         let weights = samples.map(\.weightGrams)
@@ -40,6 +47,7 @@ enum ScaleQualityAnalyzer {
             timestampIssues: timestampIssues,
             rejected: rejected,
             sampleCount: samples.count,
+            cadencePenalty: cadencePenalty,
             profile: profile
         )
         let stabilityScore = recording.mode == .idleStability
@@ -186,9 +194,11 @@ enum ScaleQualityAnalyzer {
         timestampIssues: Int,
         rejected: Int,
         sampleCount: Int,
+        cadencePenalty: Int,
         profile: ScoringProfile
     ) -> Int {
         var score = 100
+        score -= cadencePenalty
         score -= cappedPenalty(count: longGaps, unit: profile.longGapPenalty, cap: 40)
         score -= cappedPenalty(count: missingSequence, unit: profile.missingSequencePenalty, cap: 30)
         score -= cappedPenalty(count: timestampIssues, unit: profile.timestampIssuePenalty, cap: 20)
@@ -197,6 +207,33 @@ enum ScaleQualityAnalyzer {
             Double(rejected) / Double(parseAttemptCount) * profile.rejectedPacketRatePenaltyScale
         )))
         return max(0, score)
+    }
+
+    private static func scoreCadencePenalty(
+        intervals: [Double],
+        typicalInterval: Double?,
+        p95Interval: Double?,
+        maxInterval: Double?,
+        longGapThreshold: Double
+    ) -> Int {
+        guard intervals.count >= 8,
+              let typicalInterval,
+              typicalInterval > 0 else {
+            return 0
+        }
+
+        var penalty = 0
+        if let p95Interval {
+            let p95Ratio = p95Interval / typicalInterval
+            penalty += min(20, Int(round(max(0, p95Ratio - 1.10) * 35)))
+        }
+
+        if let maxInterval, maxInterval < longGapThreshold {
+            let maxRatio = maxInterval / typicalInterval
+            penalty += min(10, Int(round(max(0, maxRatio - 1.75) * 10)))
+        }
+
+        return min(25, max(0, penalty))
     }
 
     private static func cappedPenalty(count: Int, unit: Int, cap: Int) -> Int {

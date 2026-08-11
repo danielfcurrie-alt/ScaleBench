@@ -334,6 +334,31 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(ScaleQualityAnalyzer.analyze(recording).transportScore, 90)
     }
 
+    func testCadenceJitterPenalizesTransportBeforeLongGapThreshold() throws {
+        let times = [
+            0.00,
+            0.10,
+            0.20,
+            0.30,
+            0.40,
+            0.58,
+            0.68,
+            0.78,
+            0.88,
+            0.98,
+            1.16,
+            1.26
+        ]
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = times.map { makeSample(seconds: $0, weight: $0) }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.longGapCount, 0)
+        XCTAssertLessThan(try XCTUnwrap(metrics.transportScore), 100)
+        XCTAssertLessThan(try XCTUnwrap(metrics.overallScore), 85)
+    }
+
     func testFullWidthDeviceTimestampRolloverUsesUInt32Range() throws {
         var first = makeSample(seconds: 0, weight: 0)
         first.scaleKind = .difluid

@@ -923,6 +923,9 @@ private struct ScoreDeductionsView: View {
 
     private func transportDeductionDetail(metrics: ScaleQualityMetrics) -> String {
         var parts: [String] = []
+        if let cadenceDetail = cadenceDeductionDetail(metrics: metrics) {
+            parts.append(cadenceDetail)
+        }
         if metrics.longGapCount > 0 {
             parts.append("\(metrics.longGapCount) parsed-sample long gap\(metrics.longGapCount == 1 ? "" : "s")")
         }
@@ -936,6 +939,33 @@ private struct ScoreDeductionsView: View {
             parts.append("\(metrics.rejectedPacketCount) rejected packet\(metrics.rejectedPacketCount == 1 ? "" : "s")")
         }
         return parts.isEmpty ? "Transport subscore was below 100." : parts.joined(separator: ", ")
+    }
+
+    private func cadenceDeductionDetail(metrics: ScaleQualityMetrics) -> String? {
+        guard let p50 = metrics.packetIntervalP50Milliseconds,
+              let p95 = metrics.packetIntervalP95Milliseconds,
+              p50 > 0 else {
+            return nil
+        }
+
+        let p95Ratio = p95 / p50
+        let maxRatio = metrics.packetIntervalMaxMilliseconds.map { $0 / p50 } ?? 0
+        guard p95Ratio > 1.10 || maxRatio > 1.75 else { return nil }
+
+        if let max = metrics.packetIntervalMaxMilliseconds, maxRatio > 1.75 {
+            return String(
+                format: "cadence variation: p95 %.0f ms vs typical %.0f ms; max %.0f ms",
+                p95,
+                p50,
+                max
+            )
+        }
+
+        return String(
+            format: "cadence variation: p95 %.0f ms vs typical %.0f ms",
+            p95,
+            p50
+        )
     }
 
     private func stabilityDeductionDetail(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
