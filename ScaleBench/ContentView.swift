@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
+    @EnvironmentObject private var appCommands: AppCommandRouter
     @StateObject private var savedStore = SavedRecordingStore()
     @StateObject private var scoringStore = CustomScoringProfileStore()
     @State private var selectedMode: RecordingMode = .shot
@@ -327,6 +328,9 @@ struct ContentView: View {
                         }
                     }
                 }
+            }
+            .onChange(of: appCommands.helpRequestID) { _, _ in
+                activeSheet = .help
             }
         }
     }
