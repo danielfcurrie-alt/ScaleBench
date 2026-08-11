@@ -887,11 +887,13 @@ private struct ScoreDeductionsView: View {
         if let metadataScore = metrics.metadataScore {
             let points = Double(100 - metadataScore) * profile.metadataWeight
             if points > 0.05 {
+                let components = metadataDeductionComponents(recording: recording, profile: profile)
                 rows.append(WeightedScoreDeduction(
                     title: "Metadata",
                     points: points,
                     subscore: metadataScore,
-                    detail: metadataDeductionDetail(recording: recording)
+                    detail: metadataDeductionDetail(components: components),
+                    components: components
                 ))
             }
         }
@@ -949,27 +951,76 @@ private struct ScoreDeductionsView: View {
         return parts.isEmpty ? "Idle stability subscore was below 100." : parts.joined(separator: ", ")
     }
 
-    private func metadataDeductionDetail(recording: ScaleRecording) -> String {
+    private func metadataDeductionDetail(components: [ScoreDeductionComponent]) -> String {
+        guard !components.isEmpty else {
+            return "Metadata subscore was below 100."
+        }
+
+        if let battery = components.first(where: { $0.title == "Battery" }) {
+            return "Battery reporting is missing, accounting for \(formatScorePoints(battery.points)) of the weighted deduction. Other optional telemetry accounts for the rest."
+        }
+
+        return "Missing or partial optional telemetry reduced the metadata subscore."
+    }
+
+    private func metadataDeductionComponents(recording: ScaleRecording, profile: ScoringProfile) -> [ScoreDeductionComponent] {
         let sampleCount = max(recording.samples.count, 1)
         let timestampCount = recording.samples.filter { $0.deviceTimestampMilliseconds != nil }.count
         let sequenceCount = recording.samples.filter { $0.sequence != nil }.count
         let sampleBatteryCount = recording.samples.filter { $0.batteryPercent != nil }.count
         let firmwareQualityCount = recording.samples.filter { $0.firmwareQualityScore != nil }.count
-        let hasBattery = sampleBatteryCount > 0 || !recording.batteryEvents.isEmpty
+        let batteryCoverage = sampleBatteryCount > 0 || !recording.batteryEvents.isEmpty ? 1.0 : 0.0
 
-        let parts = [
-            metadataCoverageLabel("timestamps", count: timestampCount, total: sampleCount),
-            metadataCoverageLabel("sequence", count: sequenceCount, total: sampleCount),
-            hasBattery ? "battery present" : "battery missing",
-            metadataCoverageLabel("firmware quality", count: firmwareQualityCount, total: sampleCount)
+        return [
+            metadataComponent(
+                title: "Device timestamps",
+                coverage: Double(timestampCount) / Double(sampleCount),
+                metadataSubscoreWeight: 40,
+                profile: profile,
+                detail: metadataCoverageLabel(count: timestampCount, total: sampleCount)
+            ),
+            metadataComponent(
+                title: "Sequence numbers",
+                coverage: Double(sequenceCount) / Double(sampleCount),
+                metadataSubscoreWeight: 25,
+                profile: profile,
+                detail: metadataCoverageLabel(count: sequenceCount, total: sampleCount)
+            ),
+            metadataComponent(
+                title: "Battery",
+                coverage: batteryCoverage,
+                metadataSubscoreWeight: 20,
+                profile: profile,
+                detail: batteryCoverage > 0 ? "present" : "missing"
+            ),
+            metadataComponent(
+                title: "Firmware quality",
+                coverage: Double(firmwareQualityCount) / Double(sampleCount),
+                metadataSubscoreWeight: 15,
+                profile: profile,
+                detail: metadataCoverageLabel(count: firmwareQualityCount, total: sampleCount)
+            )
         ]
-        return parts.joined(separator: ", ")
+        .compactMap { $0 }
     }
 
-    private func metadataCoverageLabel(_ label: String, count: Int, total: Int) -> String {
-        if count == 0 { return "\(label) missing" }
-        if count == total { return "\(label) full" }
-        return "\(label) partial \(count)/\(total)"
+    private func metadataComponent(
+        title: String,
+        coverage: Double,
+        metadataSubscoreWeight: Double,
+        profile: ScoringProfile,
+        detail: String
+    ) -> ScoreDeductionComponent? {
+        let missingCoverage = max(0, min(1, 1 - coverage))
+        let points = metadataSubscoreWeight * profile.metadataWeight * missingCoverage
+        guard points > 0.05 else { return nil }
+        return ScoreDeductionComponent(title: title, points: points, detail: detail)
+    }
+
+    private func metadataCoverageLabel(count: Int, total: Int) -> String {
+        if count == 0 { return "missing" }
+        if count == total { return "full" }
+        return "partial \(count)/\(total)"
     }
 }
 
@@ -978,6 +1029,14 @@ private struct WeightedScoreDeduction: Identifiable {
     var title: String
     var points: Double
     var subscore: Int
+    var detail: String
+    var components: [ScoreDeductionComponent] = []
+}
+
+private struct ScoreDeductionComponent: Identifiable {
+    var id: String { title }
+    var title: String
+    var points: Double
     var detail: String
 }
 
@@ -1005,6 +1064,26 @@ private struct ScoreDeductionRow: View {
             Text(deduction.detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            if !deduction.components.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(deduction.components) { component in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(component.title)
+                                Text(component.detail)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("−\(formatScorePoints(component.points))")
+                                .monospacedDigit()
+                                .foregroundStyle(.red)
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -2406,6 +2485,14 @@ private func formatMilliseconds(_ value: Double) -> String {
 
 private func formatPercent(_ value: Double) -> String {
     String(format: "%.0f%%", value * 100)
+}
+
+private func formatScorePoints(_ value: Double) -> String {
+    let roundedWhole = value.rounded()
+    if abs(value - roundedWhole) < 0.005 {
+        return String(format: "%.0f pts", roundedWhole)
+    }
+    return String(format: "%.2f pts", value)
 }
 
 private func formatSeconds(_ value: Double) -> String {
