@@ -8,6 +8,8 @@ ScaleBench is an open iOS and MacOS Bluetooth scale analyzer for coffee-scale tr
 
 The main goal is protocol and hardware comparison: WMB vs BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
 
+For basic usage, recording modes, scorecards, and packet visualizer help, see [HELP.md](HELP.md).
+
 ## Requirements
 
 - iPhone/iPad: iOS/iPadOS 17.0 or newer
