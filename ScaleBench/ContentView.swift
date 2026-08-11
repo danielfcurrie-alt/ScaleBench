@@ -97,7 +97,7 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(selectedScoringProfile.name == ScoringProfile.standardBenchmarkName
+                        Text(selectedScoringProfile.isStandardBenchmark
                             ? "Official comparable benchmark profile. Use this for public tester score claims."
                             : "Custom profile. Useful for experiments, but not comparable to Standard v1 scores.")
                             .font(.caption)
@@ -184,7 +184,7 @@ struct ContentView: View {
                 Section("Scorecard") {
                     let metrics = bluetooth.currentMetrics
                     MetricRow(title: "Scoring", value: bluetooth.currentRecording.scoringProfile.name)
-                    MetricRow(title: "Benchmark", value: bluetooth.currentRecording.scoringProfile.name == ScoringProfile.standardBenchmarkName ? "Standard v1" : "Custom")
+                    MetricRow(title: "Benchmark", value: bluetooth.currentRecording.scoringProfile.isStandardBenchmark ? "Standard v1" : "Custom")
                     MetricRow(title: "Overall", value: metrics.overallScore.map { "\($0)/100" } ?? "—")
                     MetricRow(title: "Transport", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
                     MetricRow(title: "Stability", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
@@ -270,7 +270,7 @@ struct ContentView: View {
             }
             .navigationTitle("ScaleBench")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: helpToolbarPlacement) {
                     Button {
                         activeSheet = .help
                     } label: {
@@ -278,7 +278,7 @@ struct ContentView: View {
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: resetToolbarPlacement) {
                     Button("Reset") {
                         bluetooth.resetRecording()
                         exportURL = nil
@@ -621,7 +621,7 @@ private struct RecordingResultsView: View {
         NavigationStack {
             List {
                 Section {
-                    ScoreHero(metrics: recording.metrics)
+                    ScoreHero(metrics: recording.metrics, profile: recording.scoringProfile)
                     Text(resultNarrative(for: recording))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -716,7 +716,7 @@ private struct SavedRecordingDetailView: View {
     var body: some View {
         List {
             Section {
-                ScoreHero(metrics: metrics)
+                ScoreHero(metrics: metrics, profile: recording.scoringProfile)
                 Text(resultNarrative(for: recording))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -752,11 +752,12 @@ private struct SavedRecordingDetailView: View {
 
 private struct ScoreHero: View {
     let metrics: ScaleQualityMetrics
+    let profile: ScoringProfile
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Official score")
+                Text(profile.isStandardBenchmark ? "Official score" : "Custom score")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(metrics.overallScore.map { "\($0)" } ?? "—")
@@ -766,7 +767,7 @@ private struct ScoreHero: View {
 
             Spacer()
 
-            Text("Standard v1")
+            Text(profile.isStandardBenchmark ? "Standard v1" : "Custom")
                 .font(.caption.weight(.semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -782,6 +783,7 @@ private struct RecordingSummaryRows: View {
 
     var body: some View {
         MetricRow(title: "Mode", value: recording.mode.displayName)
+        MetricRow(title: "Scoring", value: recording.scoringProfile.name)
         MetricRow(title: "Duration", value: formatDuration(recordingDuration(recording)))
         MetricRow(title: "Protocol", value: recording.device?.kind.displayName ?? recording.samples.last?.scaleKind.displayName ?? "—")
         MetricRow(title: "Samples", value: "\(recording.samples.count)")
@@ -819,7 +821,7 @@ private struct RecordingVisualizerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PacketEvidenceSummary(metrics: metrics, timeline: timeline)
+            PacketEvidenceSummary(metrics: metrics, timeline: timeline, mode: recording.mode)
 
             VStack(alignment: .leading, spacing: 8) {
                 Label("Weight stream", systemImage: "waveform.path.ecg")
@@ -895,6 +897,7 @@ private struct RecordingVisualizerView: View {
 private struct PacketEvidenceSummary: View {
     let metrics: ScaleQualityMetrics
     let timeline: PacketTimeline
+    let mode: RecordingMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -909,8 +912,8 @@ private struct PacketEvidenceSummary: View {
                 EvidencePill(title: "Rejected", value: "\(metrics.rejectedPacketCount)", severity: metrics.rejectedPacketCount > 0 ? .penalty : .normal)
                 EvidencePill(title: "Long gaps", value: "\(metrics.longGapCount)", severity: metrics.longGapCount > 0 ? .penalty : .normal)
                 EvidencePill(title: "Missing seq", value: "\(metrics.missingSequenceCount)", severity: metrics.missingSequenceCount > 0 ? .penalty : .normal)
-                EvidencePill(title: "Timestamp", value: "\(metrics.duplicateOrOutOfOrderTimestampCount)", severity: metrics.duplicateOrOutOfOrderTimestampCount > 0 ? .warning : .normal)
-                EvidencePill(title: "Bumps", value: "\(metrics.firmwareBumpCount)", severity: metrics.firmwareBumpCount > 0 ? .warning : .normal)
+                EvidencePill(title: "Timestamp", value: "\(metrics.duplicateOrOutOfOrderTimestampCount)", severity: metrics.duplicateOrOutOfOrderTimestampCount > 0 ? .penalty : .normal)
+                EvidencePill(title: "Bumps", value: "\(metrics.firmwareBumpCount)", severity: bumpSeverity)
                 EvidencePill(title: "Near gaps", value: "\(timeline.warningIntervalCount)", severity: timeline.warningIntervalCount > 0 ? .warning : .normal)
             }
         }
@@ -919,9 +922,17 @@ private struct PacketEvidenceSummary: View {
     }
 
     private var scoreEvidenceSummary: String {
-        let directIssues = metrics.rejectedPacketCount + metrics.longGapCount + metrics.missingSequenceCount
-        if directIssues == 0 && metrics.duplicateOrOutOfOrderTimestampCount == 0 && metrics.firmwareBumpCount == 0 {
-            return "No direct transport penalties are visible in this recording. The score is mostly driven by cadence, stability, and metadata coverage."
+        let dynamicBumps = mode == .idleStability ? 0 : metrics.firmwareBumpCount
+        let directIssues = metrics.rejectedPacketCount
+            + metrics.longGapCount
+            + metrics.missingSequenceCount
+            + metrics.duplicateOrOutOfOrderTimestampCount
+            + dynamicBumps
+        if directIssues == 0 {
+            if metrics.firmwareBumpCount > 0 {
+                return "No direct score penalties are visible. Firmware bump flags are warning context in Idle Stability mode."
+            }
+            return "No direct score penalties are visible in this recording. The score is mostly driven by cadence, stability, and metadata coverage."
         }
 
         var parts: [String] = []
@@ -937,10 +948,15 @@ private struct PacketEvidenceSummary: View {
         if metrics.duplicateOrOutOfOrderTimestampCount > 0 {
             parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
         }
-        if metrics.firmwareBumpCount > 0 {
+        if dynamicBumps > 0 {
             parts.append("\(metrics.firmwareBumpCount) bump flag\(metrics.firmwareBumpCount == 1 ? "" : "s")")
         }
         return "Score-impacting evidence: \(parts.joined(separator: ", "))."
+    }
+
+    private var bumpSeverity: PacketSeverity {
+        guard metrics.firmwareBumpCount > 0 else { return .normal }
+        return mode == .idleStability ? .warning : .penalty
     }
 }
 
@@ -1397,7 +1413,7 @@ private struct ScoreExplanationView: View {
         NavigationStack {
             List {
                 Section("This recording") {
-                    ScoreHero(metrics: metrics)
+                    ScoreHero(metrics: metrics, profile: profile)
                     Text(resultNarrative(for: recording))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1406,7 +1422,7 @@ private struct ScoreExplanationView: View {
 
                 Section("Benchmark identity") {
                     MetricRow(title: "Profile", value: profile.name)
-                    MetricRow(title: "Comparable badge", value: profile.name == ScoringProfile.standardBenchmarkName ? "ScaleBench Standard v1" : "Custom")
+                    MetricRow(title: "Comparable badge", value: profile.isStandardBenchmark ? "ScaleBench Standard v1" : "Custom")
                     Text("Use ScaleBench Standard v1 when publishing tester scores. Custom profiles are saved into JSON exports, but they are not directly comparable to Standard v1 results.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1492,7 +1508,7 @@ private struct ScoringProfileEditorView: View {
             initialProfile = customProfile.profile
         } else {
             var copy = baseProfile
-            copy.name = baseProfile.name == ScoringProfile.standardBenchmarkName
+            copy.name = baseProfile.isStandardBenchmark
                 ? "Custom Standard v1"
                 : "\(baseProfile.name) Copy"
             initialProfile = copy
@@ -1674,6 +1690,22 @@ private struct IntSettingRow: View {
     }
 }
 
+private var helpToolbarPlacement: ToolbarItemPlacement {
+#if os(macOS)
+    .automatic
+#else
+    .topBarLeading
+#endif
+}
+
+private var resetToolbarPlacement: ToolbarItemPlacement {
+#if os(macOS)
+    .automatic
+#else
+    .topBarTrailing
+#endif
+}
+
 private struct MetricRow: View {
     let title: String
     let value: String
@@ -1696,13 +1728,13 @@ private struct ComparisonRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(row.protocolKind.displayName)
+                Text(row.title)
                     .font(.headline)
                 Spacer()
                 Text(row.score.map { "\($0)/100" } ?? "—")
                     .monospacedDigit()
             }
-            Text("\(row.mode.displayName) · \(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds))")
+            Text("\(row.protocolKind.displayName) · \(row.mode.displayName) · \(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text("gaps \(row.longGapCount) · rejected \(row.rejectedPacketCount) · max \(formatMilliseconds(row.maxGapMilliseconds))")
@@ -2028,17 +2060,12 @@ private func sampleIntervalEntries(
     firstReferenceTime: Double,
     thresholdMilliseconds: Double
 ) -> [SampleIntervalEntry] {
-    let samples = inputSamples.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
-    guard samples.count >= 2 else { return [] }
+    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(inputSamples)
+    guard intervals.count == inputSamples.count - 1 else { return [] }
 
-    return zip(samples, samples.dropFirst()).enumerated().map { index, pair in
-        let interval: Double
-        if let previousTimestamp = pair.0.deviceTimestampMilliseconds,
-           let currentTimestamp = pair.1.deviceTimestampMilliseconds {
-            interval = Double(deltaUInt24(previousTimestamp, currentTimestamp))
-        } else {
-            interval = max(0, pair.1.monotonicSeconds - pair.0.monotonicSeconds) * 1_000
-        }
+    return intervals.enumerated().map { index, interval in
+        let previous = inputSamples[index]
+        let current = inputSamples[index + 1]
         let severity: PacketSeverity
         if interval >= thresholdMilliseconds {
             severity = .penalty
@@ -2049,8 +2076,8 @@ private func sampleIntervalEntries(
         }
         return SampleIntervalEntry(
             index: index,
-            previousRelativeSeconds: pair.0.monotonicSeconds - firstReferenceTime,
-            relativeSeconds: pair.1.monotonicSeconds - firstReferenceTime,
+            previousRelativeSeconds: previous.monotonicSeconds - firstReferenceTime,
+            relativeSeconds: current.monotonicSeconds - firstReferenceTime,
             intervalMilliseconds: interval,
             severity: severity
         )
@@ -2115,11 +2142,6 @@ private func percentile(_ values: [Double], _ p: Double) -> Double? {
     let sorted = values.sorted()
     let index = min(sorted.count - 1, max(0, Int(round(Double(sorted.count - 1) * p))))
     return sorted[index]
-}
-
-private func deltaUInt24(_ previous: UInt32, _ current: UInt32) -> UInt32 {
-    let mask: UInt32 = 0x00FF_FFFF
-    return current >= previous ? current - previous : (mask - previous) + current + 1
 }
 
 private func formatRate(_ value: Double?) -> String {

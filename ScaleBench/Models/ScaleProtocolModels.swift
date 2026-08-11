@@ -191,17 +191,68 @@ struct ScoringProfile: Codable, Equatable {
 
     var normalized: ScoringProfile {
         var copy = self
-        let total = transportWeight + stabilityWeight + metadataWeight
-        guard total > 0 else {
+        let safeTransportWeight = Self.nonnegativeFinite(transportWeight, fallback: 0)
+        let safeStabilityWeight = Self.nonnegativeFinite(stabilityWeight, fallback: 0)
+        let safeMetadataWeight = Self.nonnegativeFinite(metadataWeight, fallback: 0)
+        let total = safeTransportWeight + safeStabilityWeight + safeMetadataWeight
+        guard total > 0, total.isFinite else {
             copy.transportWeight = ScoringProfile.standard.transportWeight
             copy.stabilityWeight = ScoringProfile.standard.stabilityWeight
             copy.metadataWeight = ScoringProfile.standard.metadataWeight
-            return copy
+            return copy.sanitizingThresholdsAndPenalties()
         }
-        copy.transportWeight = transportWeight / total
-        copy.stabilityWeight = stabilityWeight / total
-        copy.metadataWeight = metadataWeight / total
+        copy.transportWeight = safeTransportWeight / total
+        copy.stabilityWeight = safeStabilityWeight / total
+        copy.metadataWeight = safeMetadataWeight / total
+        return copy.sanitizingThresholdsAndPenalties()
+    }
+
+    var isStandardBenchmark: Bool {
+        normalized == ScoringProfile.standard.normalized
+    }
+
+    private func sanitizingThresholdsAndPenalties() -> ScoringProfile {
+        var copy = self
+        copy.minimumLongGapMilliseconds = Self.nonnegativeFinite(
+            minimumLongGapMilliseconds,
+            fallback: ScoringProfile.standard.minimumLongGapMilliseconds
+        )
+        copy.longGapMultiplier = Self.nonnegativeFinite(
+            longGapMultiplier,
+            fallback: ScoringProfile.standard.longGapMultiplier
+        )
+        copy.longGapPenalty = max(0, longGapPenalty)
+        copy.missingSequencePenalty = max(0, missingSequencePenalty)
+        copy.timestampIssuePenalty = max(0, timestampIssuePenalty)
+        copy.rejectedPacketRatePenaltyScale = Self.nonnegativeFinite(
+            rejectedPacketRatePenaltyScale,
+            fallback: ScoringProfile.standard.rejectedPacketRatePenaltyScale
+        )
+        copy.idleNoiseFreePeakToPeakGrams = Self.nonnegativeFinite(
+            idleNoiseFreePeakToPeakGrams,
+            fallback: ScoringProfile.standard.idleNoiseFreePeakToPeakGrams
+        )
+        copy.idleNoisePeakToPeakPenaltyScale = Self.nonnegativeFinite(
+            idleNoisePeakToPeakPenaltyScale,
+            fallback: ScoringProfile.standard.idleNoisePeakToPeakPenaltyScale
+        )
+        copy.idleStandardDeviationFreeGrams = Self.nonnegativeFinite(
+            idleStandardDeviationFreeGrams,
+            fallback: ScoringProfile.standard.idleStandardDeviationFreeGrams
+        )
+        copy.idleStandardDeviationPenaltyScale = Self.nonnegativeFinite(
+            idleStandardDeviationPenaltyScale,
+            fallback: ScoringProfile.standard.idleStandardDeviationPenaltyScale
+        )
+        copy.driftPenaltyScale = Self.nonnegativeFinite(
+            driftPenaltyScale,
+            fallback: ScoringProfile.standard.driftPenaltyScale
+        )
         return copy
+    }
+
+    private static func nonnegativeFinite(_ value: Double, fallback: Double) -> Double {
+        value.isFinite ? max(0, value) : fallback
     }
 }
 
@@ -348,7 +399,7 @@ struct WMBPlusCapabilities: Codable, Equatable {
 }
 
 struct ScaleRecording: Codable, Equatable {
-    static let schemaVersion = 3
+    static let schemaVersion = 4
 
     var id: UUID
     var schemaVersion: Int
@@ -472,6 +523,7 @@ struct SavedScaleRecording: Codable, Identifiable, Equatable {
         notes inputNotes: String
     ) -> SavedScaleRecording {
         var finalized = inputRecording
+        finalized.schemaVersion = ScaleRecording.schemaVersion
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.notes = inputNotes
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)

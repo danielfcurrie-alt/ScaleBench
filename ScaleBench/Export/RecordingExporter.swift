@@ -8,6 +8,7 @@ enum RecordingExporter {
         encoder.dateEncodingStrategy = .iso8601
 
         var finalized = recording
+        finalized.schemaVersion = ScaleRecording.schemaVersion
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
 
@@ -85,6 +86,7 @@ final class SavedRecordingStore: ObservableObject {
             .compactMap { url in
                 try? decoder.decode(SavedScaleRecording.self, from: Data(contentsOf: url))
             }
+            .map(Self.migratingScoreIfNeeded)
             .sorted { $0.savedAt > $1.savedAt }
             lastErrorMessage = nil
         } catch {
@@ -138,6 +140,15 @@ final class SavedRecordingStore: ObservableObject {
         } catch {
             lastErrorMessage = error.localizedDescription
         }
+    }
+
+    private static func migratingScoreIfNeeded(_ saved: SavedScaleRecording) -> SavedScaleRecording {
+        guard saved.recording.schemaVersion < ScaleRecording.schemaVersion else { return saved }
+        var migrated = saved
+        migrated.recording.schemaVersion = ScaleRecording.schemaVersion
+        migrated.recording.metrics = ScaleQualityAnalyzer.analyze(migrated.recording)
+        migrated.scoreSnapshot = migrated.recording.metrics
+        return migrated
     }
 
     private static func defaultDirectoryURL(fileManager: FileManager) -> URL {

@@ -5,6 +5,7 @@ import Foundation
 // and turns every supported weight/status notification into one canonical ScaleSample stream.
 
 enum AcaiaParser {
+    static let maxPayloadLength = 64
     static let serviceUUID = "1820"
     static let fullServiceUUID = "00001820-0000-1000-8000-00805F9B34FB"
     static let legacyServiceUUID = "49535343-FE7D-4AE5-8FA9-9FAFD205E455"
@@ -59,6 +60,11 @@ enum AcaiaParser {
                 }
                 guard buffer.count >= 4 else { return events }
                 let payloadLength = Int(buffer[3])
+                guard payloadLength <= AcaiaParser.maxPayloadLength else {
+                    buffer.removeFirst()
+                    events.append(.rejected(.invalidLength))
+                    continue
+                }
                 let frameLength = 4 + payloadLength + 2
                 guard buffer.count >= frameLength else { return events }
                 let frame = Array(buffer.prefix(frameLength))
@@ -74,7 +80,7 @@ enum AcaiaParser {
             let raw = Int16(bitPattern: UInt16(frame[4]) | (UInt16(frame[5]) << 8))
             let divisor = Int(frame[6])
             let isNegative = (frame[7] & 0x02) != 0
-            let magnitude = Double(abs(raw)) / pow(10.0, Double(divisor))
+            let magnitude = abs(Double(raw)) / pow(10.0, Double(divisor))
             let grams = isNegative ? -magnitude : magnitude
             guard grams.isFinite else { return .rejected(.invalidRange) }
             return .sample(ScaleSample(

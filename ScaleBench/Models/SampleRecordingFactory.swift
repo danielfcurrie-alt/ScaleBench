@@ -99,7 +99,7 @@ enum SampleRecordingFactory {
             let flow = shotFlow(progress: progress)
             let battery = batteryStart.map { max(0, $0 - Int(progress * 2)) }
             let status = includeMetadata ? ScaleStatusFlags(byte: 0xC3) : nil
-            let diagnostics = includeMetadata ? ScaleDiagnosticFlags(byte: 0xAC) : nil
+            let diagnostics = includeMetadata ? ScaleDiagnosticFlags(byte: 0xF4) : nil
 
             let sample = ScaleSample(
                 arrivalTime: startedAt.addingTimeInterval(seconds),
@@ -124,7 +124,17 @@ enum SampleRecordingFactory {
                     scaleKind: kind,
                     characteristicUUID: characteristicUUID(for: kind),
                     role: .weight,
-                    bytesHex: packetHex(kind: kind, index: index, weight: weight, includeMetadata: includeMetadata),
+                    bytesHex: packetHex(
+                        kind: kind,
+                        index: index,
+                        weight: weight,
+                        deviceTimestamp: sample.deviceTimestampMilliseconds,
+                        sequence: sample.sequence,
+                        battery: sample.batteryPercent,
+                        flow: sample.flowGramsPerSecond,
+                        quality: sample.firmwareQualityScore,
+                        includeMetadata: includeMetadata
+                    ),
                     rejectionReason: nil
                 )
             )
@@ -155,6 +165,7 @@ enum SampleRecordingFactory {
         }
 
         for (offset, rejectedTime) in rejectedPacketTimes.enumerated() {
+            let rejectionReason: ParseRejectionReason = offset.isMultiple(of: 2) ? .invalidHeader : .invalidLength
             rawPackets.append(
                 RawScalePacket(
                     arrivalTime: startedAt.addingTimeInterval(rejectedTime),
@@ -162,8 +173,8 @@ enum SampleRecordingFactory {
                     scaleKind: kind,
                     characteristicUUID: characteristicUUID(for: kind),
                     role: .weight,
-                    bytesHex: packetHex(kind: kind, index: 9_000 + offset, weight: 0, includeMetadata: false),
-                    rejectionReason: offset.isMultiple(of: 2) ? .invalidChecksum : .invalidLength
+                    bytesHex: rejectedPacketHex(kind: kind, index: 9_000 + offset, reason: rejectionReason),
+                    rejectionReason: rejectionReason
                 )
             )
         }
@@ -231,28 +242,114 @@ enum SampleRecordingFactory {
         }
     }
 
-    private static func packetHex(kind: ScaleKind, index: Int, weight: Double, includeMetadata: Bool) -> String {
-        let scaledWeight = Int16((weight * 100).rounded())
-        var bytes: [UInt8] = [
-            UInt8(index & 0xFF),
-            UInt8((index >> 8) & 0xFF),
-            UInt8(bitPattern: Int8(truncatingIfNeeded: scaledWeight & 0xFF)),
-            UInt8(bitPattern: Int8(truncatingIfNeeded: (scaledWeight >> 8) & 0xFF))
-        ]
-        if includeMetadata {
-            bytes.append(contentsOf: [0x2B, UInt8(index & 0xFF), 0x61, 0x0C])
-        }
+    private static func packetHex(
+        kind: ScaleKind,
+        index: Int,
+        weight: Double,
+        deviceTimestamp: UInt32?,
+        sequence: UInt8?,
+        battery: Int?,
+        flow: Double?,
+        quality: Int?,
+        includeMetadata: Bool
+    ) -> String {
+        Data(packetBytes(
+            kind: kind,
+            index: index,
+            weight: weight,
+            deviceTimestamp: deviceTimestamp,
+            sequence: sequence,
+            battery: battery,
+            flow: flow,
+            quality: quality,
+            includeMetadata: includeMetadata
+        )).hexString
+    }
+
+    private static func packetBytes(
+        kind: ScaleKind,
+        index: Int,
+        weight: Double,
+        deviceTimestamp: UInt32?,
+        sequence: UInt8?,
+        battery: Int?,
+        flow: Double?,
+        quality: Int?,
+        includeMetadata: Bool
+    ) -> [UInt8] {
         switch kind {
-        case .weighMyBruPlus:
-            bytes.insert(contentsOf: [0x03, 0x0B], at: 0)
-        case .weighMyBru:
-            bytes.insert(contentsOf: [0x57, 0x4D, 0x42], at: 0)
+        case .weighMyBru, .weighMyBruPlus:
+            var bytes = Array(repeating: UInt8(0), count: 20)
+            bytes[0] = WeighMyBruParser.productNumber
+            bytes[1] = WeighMyBruParser.weightMessageType
+            let timestamp = (deviceTimestamp ?? UInt32(index * 100)) & 0x00FF_FFFF
+            bytes[2] = UInt8((timestamp >> 16) & 0xFF)
+            bytes[3] = UInt8((timestamp >> 8) & 0xFF)
+            bytes[4] = UInt8(timestamp & 0xFF)
+            bytes[5] = includeMetadata ? 1 : 0
+            writeSignedCenti(weight, signIndex: 6, highIndex: 7, midIndex: 8, lowIndex: 9, into: &bytes)
+            if includeMetadata {
+                writeSignedCenti(flow ?? 0, signIndex: 10, highIndex: nil, midIndex: 11, lowIndex: 12, into: &bytes)
+                bytes[13] = UInt8(clamping: battery ?? 0)
+                bytes[14] = sequence ?? UInt8(truncatingIfNeeded: index)
+                bytes[15] = 0xC3
+                bytes[16] = UInt8(clamping: quality ?? 0)
+                bytes[17] = 12
+                bytes[18] = 0xF4
+            }
+            bytes[19] = xorChecksum(bytes.dropLast())
+            return bytes
         case .eureka:
-            bytes.insert(contentsOf: [0xAA, 0x09, 0x41], at: 0)
+            var bytes = Array(repeating: UInt8(0), count: 11)
+            bytes[0] = 0xAA
+            bytes[1] = 0x09
+            bytes[2] = 0x41
+            bytes[6] = weight < 0 ? 1 : 0
+            let magnitude = UInt16(clamping: Int((abs(weight) * 10).rounded()))
+            bytes[7] = UInt8(magnitude & 0xFF)
+            bytes[8] = UInt8((magnitude >> 8) & 0xFF)
+            return bytes
         default:
-            break
+            return [UInt8(index & 0xFF)]
+        }
+    }
+
+    private static func rejectedPacketHex(kind: ScaleKind, index: Int, reason: ParseRejectionReason) -> String {
+        var bytes = packetBytes(
+            kind: kind,
+            index: index,
+            weight: 0,
+            deviceTimestamp: nil,
+            sequence: nil,
+            battery: nil,
+            flow: nil,
+            quality: nil,
+            includeMetadata: false
+        )
+        switch reason {
+        case .invalidLength:
+            if !bytes.isEmpty { bytes.removeLast() }
+        default:
+            if !bytes.isEmpty { bytes[0] ^= 0xFF }
         }
         return Data(bytes).hexString
+    }
+
+    private static func writeSignedCenti(
+        _ value: Double,
+        signIndex: Int,
+        highIndex: Int?,
+        midIndex: Int,
+        lowIndex: Int,
+        into bytes: inout [UInt8]
+    ) {
+        let magnitude = UInt32(clamping: Int((abs(value) * 100).rounded()))
+        bytes[signIndex] = value < 0 ? 0x2D : 0x2B
+        if let highIndex {
+            bytes[highIndex] = UInt8((magnitude >> 16) & 0xFF)
+        }
+        bytes[midIndex] = UInt8((magnitude >> 8) & 0xFF)
+        bytes[lowIndex] = UInt8(magnitude & 0xFF)
     }
 
     private static func deterministicRecordingID(_ title: String) -> UUID {

@@ -5,6 +5,7 @@ import UIKit
 enum ScoreCardExporter {
     static func officialRecording(from recording: ScaleRecording) -> ScaleRecording {
         var finalized = recording
+        finalized.schemaVersion = ScaleRecording.schemaVersion
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.scoringProfile = .standard
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized, profile: .standard)
