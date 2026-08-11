@@ -14,6 +14,7 @@
 		000000000000000000000105 /* BookooParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000005 /* BookooParser.swift */; };
 		000000000000000000000106 /* WeighMyBruParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000006 /* WeighMyBruParser.swift */; };
 		000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000012 /* AdditionalScaleParsers.swift */; };
+		000000000000000000000114 /* SampleRecordingFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000017 /* SampleRecordingFactory.swift */; };
 		000000000000000000000107 /* ScaleQualityAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000007 /* ScaleQualityAnalyzer.swift */; };
 		000000000000000000000108 /* RecordingExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000008 /* RecordingExporter.swift */; };
 		000000000000000000000112 /* ScoringProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000015 /* ScoringProfileStore.swift */; };
@@ -49,6 +50,7 @@
 		000000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000015 /* ScoringProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoringProfileStore.swift; sourceTree = "<group>"; };
 		000000000000000000000016 /* ScoreCardExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCardExporter.swift; sourceTree = "<group>"; };
+		000000000000000000000017 /* SampleRecordingFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleRecordingFactory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +134,7 @@
 			children = (
 				000000000000000000000004 /* ScaleProtocolModels.swift */,
 				000000000000000000000015 /* ScoringProfileStore.swift */,
+				000000000000000000000017 /* SampleRecordingFactory.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -257,6 +260,7 @@
 				000000000000000000000102 /* ContentView.swift in Sources */,
 				000000000000000000000103 /* BluetoothScaleManager.swift in Sources */,
 				000000000000000000000104 /* ScaleProtocolModels.swift in Sources */,
+				000000000000000000000114 /* SampleRecordingFactory.swift in Sources */,
 				000000000000000000000105 /* BookooParser.swift in Sources */,
 				000000000000000000000106 /* WeighMyBruParser.swift in Sources */,
 				000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */,

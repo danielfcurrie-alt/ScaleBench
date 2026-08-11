@@ -23,6 +23,8 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private var acaiaCodec = AcaiaParser.Codec()
     private var timemoreDotCodec = TimemoreDotParser.Codec()
     private var didSendInitialConfiguration = false
+    private let liveMetricsRefreshIntervalSeconds: Double = 1.0
+    private var lastLiveMetricsRefreshSeconds = -Double.infinity
 
     override init() {
         super.init()
@@ -77,6 +79,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         }
         currentRecording.capabilities = wmbPlusCapabilities
         currentMetrics = .empty
+        lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = "Recording \(mode.displayName)"
     }
 
@@ -85,6 +88,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         currentRecording.endedAt = Date()
         currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
         currentMetrics = currentRecording.metrics
+        lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = "Recording stopped"
     }
 
@@ -93,6 +97,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         currentRecording = .empty()
         currentMetrics = .empty
         latestSample = nil
+        lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = connectedDevice == nil ? "Idle" : "Connected"
     }
 
@@ -150,13 +155,15 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         data: Data,
         characteristic: CBCharacteristic,
         role: PacketRole,
-        rejectionReason: ParseRejectionReason?
+        rejectionReason: ParseRejectionReason?,
+        arrivalTime: Date = Date(),
+        monotonicSeconds: Double = CACurrentMediaTime()
     ) {
         guard isRecording else { return }
 
         currentRecording.rawPackets.append(RawScalePacket(
-            arrivalTime: Date(),
-            monotonicSeconds: CACurrentMediaTime(),
+            arrivalTime: arrivalTime,
+            monotonicSeconds: monotonicSeconds,
             scaleKind: activeProtocol,
             characteristicUUID: characteristic.uuid.uuidString.uppercased(),
             role: role,
@@ -173,34 +180,49 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
 
         guard isRecording else { return }
         currentRecording.samples.append(sample)
+        refreshCurrentMetricsIfNeeded(monotonicSeconds: sample.monotonicSeconds)
+    }
+
+    private func receiveBattery(_ percent: Int, arrivalTime: Date = Date(), monotonicSeconds: Double = CACurrentMediaTime()) {
+        latestBatteryPercent = percent
+        guard isRecording else { return }
+        currentRecording.batteryEvents.append(ScaleBatteryEvent(
+            arrivalTime: arrivalTime,
+            monotonicSeconds: monotonicSeconds,
+            scaleKind: activeProtocol,
+            percent: percent
+        ))
+        refreshCurrentMetricsIfNeeded(monotonicSeconds: monotonicSeconds)
+    }
+
+    private func refreshCurrentMetricsIfNeeded(monotonicSeconds: Double) {
+        guard isRecording else { return }
+        guard monotonicSeconds - lastLiveMetricsRefreshSeconds >= liveMetricsRefreshIntervalSeconds else { return }
         currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
         currentMetrics = currentRecording.metrics
+        lastLiveMetricsRefreshSeconds = monotonicSeconds
     }
 
-    private func receiveBattery(_ percent: Int) {
-        latestBatteryPercent = percent
-    }
-
-    private func handleParserEvent(_ event: ScaleParserEvent, data: Data, characteristic: CBCharacteristic) {
+    private func handleParserEvent(_ event: ScaleParserEvent, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
         switch event {
         case let .sample(sample):
-            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil)
+            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveSample(sample)
         case let .battery(percent):
-            recordRawPacket(data: data, characteristic: characteristic, role: .battery, rejectionReason: nil)
-            receiveBattery(percent)
+            recordRawPacket(data: data, characteristic: characteristic, role: .battery, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
+            receiveBattery(percent, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         case let .rejected(reason):
-            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: reason)
+            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         }
     }
 
-    private func handleResult(_ result: Result<ScaleSample, ParseRejectionReason>, data: Data, characteristic: CBCharacteristic) {
+    private func handleResult(_ result: Result<ScaleSample, ParseRejectionReason>, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
         switch result {
         case let .success(sample):
-            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil)
+            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveSample(sample)
         case let .failure(reason):
-            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: reason)
+            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         }
     }
 
@@ -253,25 +275,31 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             handleResult(
                 BookooParser.parseWeightPacket(data, kind: activeProtocol, arrivalTime: arrival, monotonicSeconds: monotonic),
                 data: data,
-                characteristic: characteristic
+                characteristic: characteristic,
+                arrivalTime: arrival,
+                monotonicSeconds: monotonic
             )
 
         case WeighMyBruParser.weight20UUID:
             handleResult(
                 WeighMyBruParser.parse20BytePacket(data, capabilities: wmbPlusCapabilities, arrivalTime: arrival, monotonicSeconds: monotonic),
                 data: data,
-                characteristic: characteristic
+                characteristic: characteristic,
+                arrivalTime: arrival,
+                monotonicSeconds: monotonic
             )
 
         case WeighMyBruParser.float32UUID:
             handleResult(
                 WeighMyBruParser.parseFloat32Packet(data, arrivalTime: arrival, monotonicSeconds: monotonic),
                 data: data,
-                characteristic: characteristic
+                characteristic: characteristic,
+                arrivalTime: arrival,
+                monotonicSeconds: monotonic
             )
 
         case WeighMyBruParser.capabilitiesUUID:
-            recordRawPacket(data: data, characteristic: characteristic, role: .capabilities, rejectionReason: nil)
+            recordRawPacket(data: data, characteristic: characteristic, role: .capabilities, rejectionReason: nil, arrivalTime: arrival, monotonicSeconds: monotonic)
             if let capabilities = WeighMyBruParser.parseCapabilities(data) {
                 wmbPlusCapabilities = capabilities
                 currentRecording.capabilities = capabilities
@@ -288,50 +316,54 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             }
 
         case WeighMyBruParser.batteryLevelUUID:
-            if let value = data.first, value <= 100 { receiveBattery(Int(value)) }
-            recordRawPacket(data: data, characteristic: characteristic, role: .battery, rejectionReason: nil)
+            if let value = data.first, value <= 100 { receiveBattery(Int(value), arrivalTime: arrival, monotonicSeconds: monotonic) }
+            recordRawPacket(data: data, characteristic: characteristic, role: .battery, rejectionReason: nil, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case WeighMyBruParser.commandUUID:
-            recordRawPacket(data: data, characteristic: characteristic, role: .commandAck, rejectionReason: nil)
+            recordRawPacket(data: data, characteristic: characteristic, role: .commandAck, rejectionReason: nil, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case AcaiaParser.modernCharUUID, AcaiaParser.fullModernCharUUID, AcaiaParser.legacyNotifyUUID:
             for event in acaiaCodec.receive(data, arrivalTime: arrival, monotonicSeconds: monotonic) {
-                handleParserEvent(event, data: data, characteristic: characteristic)
+                handleParserEvent(event, data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
             }
 
         case DecentEspressiParser.notifyUUID where activeProtocol == .decent || activeProtocol == .espressi:
             handleResult(
                 DecentEspressiParser.parseWeightPacket(data, kind: activeProtocol, arrivalTime: arrival, monotonicSeconds: monotonic),
                 data: data,
-                characteristic: characteristic
+                characteristic: characteristic,
+                arrivalTime: arrival,
+                monotonicSeconds: monotonic
             )
 
         case DiFluidParser.charUUID where activeProtocol == .difluid || activeProtocol == .difluidTi:
             handleParserEvent(
                 DiFluidParser.parse(data, kind: activeProtocol, arrivalTime: arrival, monotonicSeconds: monotonic),
                 data: data,
-                characteristic: characteristic
+                characteristic: characteristic,
+                arrivalTime: arrival,
+                monotonicSeconds: monotonic
             )
 
         case EurekaPrecisaParser.notifyUUID where activeProtocol == .eureka:
-            handleResult(EurekaPrecisaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic)
+            handleResult(EurekaPrecisaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case FelicitaParser.charUUID:
-            handleResult(FelicitaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic)
+            handleResult(FelicitaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case FutulaParser.notifyUUID where activeProtocol == .futula:
-            handleResult(FutulaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic)
+            handleResult(FutulaParser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case Skale2Parser.notifyUUID:
-            handleResult(Skale2Parser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic)
+            handleResult(Skale2Parser.parse(data, arrivalTime: arrival, monotonicSeconds: monotonic), data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
 
         case TimemoreDotParser.notifyUUID where activeProtocol == .timemoreDot:
             for event in timemoreDotCodec.receive(data, arrivalTime: arrival, monotonicSeconds: monotonic) {
-                handleParserEvent(event, data: data, characteristic: characteristic)
+                handleParserEvent(event, data: data, characteristic: characteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
             }
 
         default:
-            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: .unsupportedCharacteristic)
+            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: .unsupportedCharacteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
         }
     }
 

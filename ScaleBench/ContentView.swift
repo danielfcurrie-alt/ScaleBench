@@ -71,6 +71,12 @@ struct ContentView: View {
                         Text("Connect a scale, choose what you are testing, start recording, then stop and save/export. Official share cards always use ScaleBench Standard v1.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Button {
+                            activeSheet = .help
+                        } label: {
+                            Label("Open Full Help", systemImage: "questionmark.circle")
+                        }
+                        .buttonStyle(.bordered)
                     }
 
                     Picker("Mode", selection: $selectedMode) {
@@ -228,8 +234,25 @@ struct ContentView: View {
 
                 Section("Saved recordings") {
                     if savedStore.recordings.isEmpty {
-                        ContentUnavailableView("No saved recordings", systemImage: "tray", description: Text("Saved recordings keep the raw packets, score snapshot, scoring profile, and your notes."))
+                        ContentUnavailableView {
+                            Label("No saved recordings", systemImage: "tray")
+                        } description: {
+                            Text("Saved recordings keep the raw packets, score snapshot, scoring profile, and your notes.")
+                        } actions: {
+                            Button {
+                                savedStore.loadExampleRecordings()
+                            } label: {
+                                Label("Load Example Recordings", systemImage: "sparkles")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     } else {
+                        Button {
+                            savedStore.loadExampleRecordings()
+                        } label: {
+                            Label("Load Example Recordings", systemImage: "sparkles")
+                        }
+
                         ForEach(savedStore.recordings) { saved in
                             NavigationLink {
                                 SavedRecordingDetailView(saved: saved) {
@@ -247,6 +270,14 @@ struct ContentView: View {
             }
             .navigationTitle("ScaleBench")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        activeSheet = .help
+                    } label: {
+                        Label("Help", systemImage: "questionmark.circle")
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Reset") {
                         bluetooth.resetRecording()
@@ -264,6 +295,8 @@ struct ContentView: View {
                         stopRecordingAndShowResults()
                     }
                     .presentationDetents([.medium])
+                case .help:
+                    ScaleBenchHelpView()
                 case let .recordingResults(recording):
                     RecordingResultsView(
                         recording: recording,
@@ -385,6 +418,7 @@ struct ContentView: View {
 }
 
 private enum ActiveSheet: Identifiable {
+    case help
     case recordingTimer
     case recordingResults(ScaleRecording)
     case scoreExplanation(ScaleRecording)
@@ -392,6 +426,7 @@ private enum ActiveSheet: Identifiable {
 
     var id: String {
         switch self {
+        case .help: "help"
         case .recordingTimer: "recording-timer"
         case let .recordingResults(recording): "recording-results-\(recording.id.uuidString)"
         case let .scoreExplanation(recording): "score-explanation-\(recording.id.uuidString)"
@@ -419,6 +454,89 @@ private struct ScoringProfileOption: Identifiable, Equatable {
             displayName: custom.profile.name,
             profile: custom.profile
         )
+    }
+}
+
+private struct ScaleBenchHelpView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Quick start") {
+                    HelpStepRow(number: 1, title: "Scan and connect", text: "Power on a supported Bluetooth scale, tap Scan, then select the scale.")
+                    HelpStepRow(number: 2, title: "Choose a mode", text: "Use Shot / Pour for normal public comparisons. Use the other modes only when testing a specific behavior.")
+                    HelpStepRow(number: 3, title: "Record", text: "Tap Start Recording. A timer sheet stays open so it is obvious that capture is running.")
+                    HelpStepRow(number: 4, title: "Stop, inspect, save", text: "Tap Stop and View Results, then save the recording, export JSON, or make an official scorecard.")
+                }
+
+                Section("Modes") {
+                    ForEach(RecordingMode.allCases) { mode in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(mode.displayName)
+                                .font(.headline)
+                            Text(mode.shortDescription)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(mode.suggestedDuration)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                Section("Score") {
+                    Text("ScaleBench Standard v1 combines transport quality, stability, and metadata coverage into a 0–100 score. Shot / Pour mode does not punish the normal rising beverage weight as idle drift.")
+                    Text("Red evidence means a direct score penalty, such as a rejected packet, missing sequence, or parsed-sample long gap. Yellow/orange means warning context.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Visualizer") {
+                    Text("Weight stream shows parsed samples. Packet cadence uses the same parsed sample intervals used by scoring. Packet timeline keeps raw packets for forensic inspection and overlays score-impacting gaps separately.")
+                    Text("Open a saved recording to inspect packets, intervals, raw bytes, notes, and the score explanation for that specific capture.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Examples") {
+                    Text("Synthetic examples are bundled so new users can inspect the app without owning a scale yet. They are marked as examples in the title and notes.")
+                }
+            }
+            .navigationTitle("ScaleBench Help")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HelpStepRow: View {
+    let number: Int
+    let title: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Color.accentColor, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -668,6 +786,9 @@ private struct RecordingSummaryRows: View {
         MetricRow(title: "Protocol", value: recording.device?.kind.displayName ?? recording.samples.last?.scaleKind.displayName ?? "—")
         MetricRow(title: "Samples", value: "\(recording.samples.count)")
         MetricRow(title: "Packets", value: "\(recording.rawPackets.count)")
+        if !recording.batteryEvents.isEmpty {
+            MetricRow(title: "Battery events", value: "\(recording.batteryEvents.count)")
+        }
         MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
         MetricRow(title: "p95 interval", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
         MetricRow(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
@@ -715,7 +836,7 @@ private struct RecordingVisualizerView: View {
                     .font(.headline)
                 PacketIntervalChart(timeline: timeline)
                     .frame(height: 170)
-                Text("Each bar is the interval before a packet. Bars above the threshold line are score-impacting long gaps.")
+                Text("Each bar is a parsed sample interval, matching the scoring calculation. Bars above the threshold line are score-impacting long gaps.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -723,10 +844,16 @@ private struct RecordingVisualizerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Packet timeline", systemImage: "timeline.selection")
                     .font(.headline)
-                PacketTimelineCanvas(timeline: timeline)
+                PacketTimelineCanvas(
+                    timeline: timeline,
+                    selectedPacketID: selectedEntry?.id,
+                    onSelect: { entry in
+                        selectedPacketID = entry.id
+                    }
+                )
                     .frame(height: 116)
                 PacketLegend()
-                Text("Dense packet raster. Loud colors are score evidence: red for direct penalties, orange/yellow for warnings or near-threshold behavior.")
+                Text("Dense raw packet raster. Click or hover a tick to inspect it below. Red packet ticks are parser rejections; translucent red bands are parsed-sample gaps that directly affect the score.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -875,19 +1002,17 @@ private struct PacketIntervalChart: View {
     let timeline: PacketTimeline
 
     var body: some View {
-        let intervalEntries = timeline.entries.filter { $0.intervalMilliseconds != nil }
+        let intervalEntries = timeline.sampleIntervals
         if intervalEntries.isEmpty {
-            EmptyVisualizerChart(message: "No packet intervals.")
+            EmptyVisualizerChart(message: "No parsed sample intervals.")
         } else {
             Chart {
                 ForEach(intervalEntries) { entry in
-                    if let interval = entry.intervalMilliseconds {
-                        BarMark(
-                            x: .value("Seconds", entry.relativeSeconds),
-                            y: .value("Interval", interval)
-                        )
-                        .foregroundStyle(entry.intervalColor)
-                    }
+                    BarMark(
+                        x: .value("Seconds", entry.relativeSeconds),
+                        y: .value("Interval", entry.intervalMilliseconds)
+                    )
+                    .foregroundStyle(entry.color)
                 }
 
                 RuleMark(y: .value("Long gap threshold", timeline.longGapThresholdMilliseconds))
@@ -921,6 +1046,14 @@ private struct EmptyVisualizerChart: View {
 
 private struct PacketTimelineCanvas: View {
     let timeline: PacketTimeline
+    let selectedPacketID: UUID?
+    let onSelect: (PacketTimelineEntry) -> Void
+    @State private var hoveredPacketID: UUID?
+
+    private var hoveredEntry: PacketTimelineEntry? {
+        guard let hoveredPacketID else { return nil }
+        return timeline.entries.first { $0.id == hoveredPacketID }
+    }
 
     var body: some View {
         Canvas { context, size in
@@ -929,15 +1062,9 @@ private struct PacketTimelineCanvas: View {
                 return
             }
 
-            let inset: CGFloat = 10
-            let rect = CGRect(
-                x: inset,
-                y: inset,
-                width: max(1, size.width - inset * 2),
-                height: max(1, size.height - inset * 2)
-            )
-            let laneCount = CGFloat(PacketLane.allCases.count)
-            let laneHeight = rect.height / laneCount
+            let layout = TimelineCanvasLayout(size: size)
+            let rect = layout.rect
+            let laneHeight = layout.laneHeight
             let duration = max(timeline.durationSeconds, 0.001)
 
             for lane in PacketLane.allCases {
@@ -948,9 +1075,9 @@ private struct PacketTimelineCanvas: View {
                 context.stroke(lanePath, with: .color(.secondary.opacity(0.18)), lineWidth: 1)
             }
 
-            for entry in timeline.entries where entry.hasLongGapBefore {
-                let previousX = rect.minX + rect.width * CGFloat(max(0, entry.previousRelativeSeconds ?? entry.relativeSeconds) / duration)
-                let currentX = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
+            for gap in timeline.scoringGaps {
+                let previousX = rect.minX + rect.width * CGFloat(max(0, gap.startRelativeSeconds) / duration)
+                let currentX = rect.minX + rect.width * CGFloat(max(0, gap.endRelativeSeconds) / duration)
                 let bandRect = CGRect(
                     x: min(previousX, currentX),
                     y: rect.minY,
@@ -964,7 +1091,21 @@ private struct PacketTimelineCanvas: View {
                 let x = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
                 let lane = entry.lane
                 let y = rect.minY + laneHeight * (CGFloat(lane.index) + 0.5)
+                let isSelected = entry.id == selectedPacketID
+                let isHovered = entry.id == hoveredPacketID
                 let tickHeight = laneHeight * (entry.severity == .penalty ? 0.82 : 0.60)
+
+                if isSelected || isHovered {
+                    let markerRect = CGRect(
+                        x: x - 6,
+                        y: y - tickHeight / 2 - 4,
+                        width: 12,
+                        height: tickHeight + 8
+                    )
+                    context.fill(Path(roundedRect: markerRect, cornerRadius: 5), with: .color(entry.color.opacity(isSelected ? 0.26 : 0.16)))
+                    context.stroke(Path(roundedRect: markerRect, cornerRadius: 5), with: .color(entry.color), lineWidth: isSelected ? 2 : 1)
+                }
+
                 var tick = Path()
                 tick.move(to: CGPoint(x: x, y: y - tickHeight / 2))
                 tick.addLine(to: CGPoint(x: x, y: y + tickHeight / 2))
@@ -972,12 +1113,49 @@ private struct PacketTimelineCanvas: View {
             }
         }
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(Rectangle())
+        .overlay {
+            GeometryReader { proxy in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { value in
+                                guard let entry = hitTestEntry(at: value.location, size: proxy.size) else { return }
+                                onSelect(entry)
+                            }
+                    )
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case let .active(location):
+                            hoveredPacketID = hitTestEntry(at: location, size: proxy.size)?.id
+                        case .ended:
+                            hoveredPacketID = nil
+                        }
+                    }
+                    .hoverEffect(.highlight)
+            }
+        }
         .overlay(alignment: .topLeading) {
-            Text("\(timeline.entries.count) packets · threshold \(formatMilliseconds(timeline.longGapThresholdMilliseconds))")
+            Text("\(timeline.entries.count) packets · \(timeline.scoringGaps.count) scoring gaps · threshold \(formatMilliseconds(timeline.longGapThresholdMilliseconds))")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .padding(8)
         }
+        .overlay(alignment: .topTrailing) {
+            if let hoveredEntry {
+                Text("\(formatSeconds(hoveredEntry.relativeSeconds)) · \(hoveredEntry.packet.role.rawValue)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(hoveredEntry.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(8)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Packet timeline")
+        .accessibilityHint("Tap or hover a packet tick to inspect its raw packet details.")
     }
 
     private func drawEmptyTimeline(context: inout GraphicsContext, size: CGSize) {
@@ -986,6 +1164,48 @@ private struct PacketTimelineCanvas: View {
         path.move(to: CGPoint(x: rect.minX, y: rect.midY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         context.stroke(path, with: .color(.secondary.opacity(0.35)), lineWidth: 1)
+    }
+
+    private func hitTestEntry(at location: CGPoint, size: CGSize) -> PacketTimelineEntry? {
+        guard !timeline.entries.isEmpty else { return nil }
+
+        let layout = TimelineCanvasLayout(size: size)
+        let rect = layout.rect
+        guard rect.insetBy(dx: -10, dy: -10).contains(location) else { return nil }
+
+        let duration = max(timeline.durationSeconds, 0.001)
+        let laneHeight = layout.laneHeight
+        let horizontalTolerance = max(12, min(28, rect.width / CGFloat(max(timeline.entries.count, 1)) * 2.5))
+        let verticalTolerance = max(12, laneHeight * 0.48)
+
+        let candidates = timeline.entries.compactMap { entry -> (entry: PacketTimelineEntry, distance: CGFloat)? in
+            let x = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
+            let y = rect.minY + laneHeight * (CGFloat(entry.lane.index) + 0.5)
+            let dx = abs(location.x - x)
+            let dy = abs(location.y - y)
+            guard dx <= horizontalTolerance, dy <= verticalTolerance else { return nil }
+
+            let severityBias: CGFloat = entry.severity == .penalty ? -6 : 0
+            return (entry, dx * dx + dy * dy + severityBias)
+        }
+
+        return candidates.min { $0.distance < $1.distance }?.entry
+    }
+}
+
+private struct TimelineCanvasLayout {
+    var rect: CGRect
+    var laneHeight: CGFloat
+
+    init(size: CGSize) {
+        let inset: CGFloat = 10
+        rect = CGRect(
+            x: inset,
+            y: inset,
+            width: max(1, size.width - inset * 2),
+            height: max(1, size.height - inset * 2)
+        )
+        laneHeight = rect.height / CGFloat(PacketLane.allCases.count)
     }
 }
 
@@ -1315,7 +1535,12 @@ private struct ScoringProfileEditorView: View {
                         step: 0.01,
                         format: formatPercent
                     )
-                    MetricRow(title: "Normalized total", value: "100%")
+                    MetricRow(title: "Normalized total", value: draftWeightTotal > 0 ? "100%" : "Invalid")
+                    if draftWeightTotal <= 0 {
+                        Text("At least one weight must be above zero.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Section("Transport penalties") {
@@ -1395,10 +1620,18 @@ private struct ScoringProfileEditorView: View {
                         onSave(draft, existingID)
                         dismiss()
                     }
-                    .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSave)
                 }
             }
         }
+    }
+
+    private var draftWeightTotal: Double {
+        draft.transportWeight + draft.stabilityWeight + draft.metadataWeight
+    }
+
+    private var canSave: Bool {
+        !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draftWeightTotal > 0
     }
 }
 
@@ -1537,30 +1770,54 @@ private struct RecordingActionButtons: View {
 
 private struct PacketTimeline: Equatable {
     var entries: [PacketTimelineEntry]
+    var sampleIntervals: [SampleIntervalEntry]
+    var scoringGaps: [ScoringGap]
     var longGapThresholdMilliseconds: Double
 
     var durationSeconds: Double {
-        guard let first = entries.first, let last = entries.last else { return 0 }
-        return max(0, last.relativeSeconds - first.relativeSeconds)
+        let rawEnd = entries.last?.relativeSeconds ?? 0
+        let sampleEnd = sampleIntervals.last?.relativeSeconds ?? 0
+        return max(0, rawEnd, sampleEnd)
     }
 
     var warningIntervalCount: Int {
-        entries.filter { $0.severity == .warning && $0.intervalMilliseconds != nil }.count
+        sampleIntervals.filter { $0.severity == .warning }.count
     }
 
-    static func make(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> PacketTimeline {
+    static func make(recording: ScaleRecording, metrics _: ScaleQualityMetrics) -> PacketTimeline {
         let packets = recording.rawPackets.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
-        let threshold = packetLongGapThresholdMilliseconds(recording: recording, metrics: metrics)
-        guard let firstPacket = packets.first else {
-            return PacketTimeline(entries: [], longGapThresholdMilliseconds: threshold)
+        let firstReferenceTime = packets.first?.monotonicSeconds ?? recording.samples.first?.monotonicSeconds ?? 0
+        let threshold = packetLongGapThresholdMilliseconds(recording: recording)
+        let sampleIntervals = sampleIntervalEntries(
+            samples: recording.samples,
+            firstReferenceTime: firstReferenceTime,
+            thresholdMilliseconds: threshold
+        )
+        let scoringGaps = sampleIntervals.compactMap { entry -> ScoringGap? in
+            guard entry.severity == .penalty else { return nil }
+            return ScoringGap(
+                id: entry.index,
+                startRelativeSeconds: entry.previousRelativeSeconds,
+                endRelativeSeconds: entry.relativeSeconds,
+                intervalMilliseconds: entry.intervalMilliseconds
+            )
+        }
+
+        guard !packets.isEmpty else {
+            return PacketTimeline(
+                entries: [],
+                sampleIntervals: sampleIntervals,
+                scoringGaps: scoringGaps,
+                longGapThresholdMilliseconds: threshold
+            )
         }
 
         var entries: [PacketTimelineEntry] = []
         var previousPacket: RawScalePacket?
         for packet in packets {
             let interval = previousPacket.map { max(0, packet.monotonicSeconds - $0.monotonicSeconds) * 1_000 }
-            let relative = packet.monotonicSeconds - firstPacket.monotonicSeconds
-            let previousRelative = previousPacket.map { $0.monotonicSeconds - firstPacket.monotonicSeconds }
+            let relative = packet.monotonicSeconds - firstReferenceTime
+            let previousRelative = previousPacket.map { $0.monotonicSeconds - firstReferenceTime }
             let severity = packetSeverity(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
             let evidence = packetEvidence(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
 
@@ -1578,8 +1835,40 @@ private struct PacketTimeline: Equatable {
             previousPacket = packet
         }
 
-        return PacketTimeline(entries: entries, longGapThresholdMilliseconds: threshold)
+        return PacketTimeline(
+            entries: entries,
+            sampleIntervals: sampleIntervals,
+            scoringGaps: scoringGaps,
+            longGapThresholdMilliseconds: threshold
+        )
     }
+}
+
+private struct SampleIntervalEntry: Identifiable, Equatable {
+    var id: Int { index }
+    var index: Int
+    var previousRelativeSeconds: Double
+    var relativeSeconds: Double
+    var intervalMilliseconds: Double
+    var severity: PacketSeverity
+
+    var color: Color {
+        switch severity {
+        case .penalty:
+            .red
+        case .warning:
+            .orange
+        case .info, .normal:
+            .blue.opacity(0.65)
+        }
+    }
+}
+
+private struct ScoringGap: Identifiable, Equatable {
+    var id: Int
+    var startRelativeSeconds: Double
+    var endRelativeSeconds: Double
+    var intervalMilliseconds: Double
 }
 
 private struct PacketTimelineEntry: Identifiable, Equatable {
@@ -1725,12 +2014,47 @@ private enum PacketLane: CaseIterable {
     }
 }
 
-private func packetLongGapThresholdMilliseconds(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> Double {
-    if let rate = metrics.effectiveSampleRateHz, rate > 0 {
-        let expected = 1_000 / rate
-        return max(recording.scoringProfile.minimumLongGapMilliseconds, expected * recording.scoringProfile.longGapMultiplier)
+private func packetLongGapThresholdMilliseconds(recording: ScaleRecording) -> Double {
+    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(recording.samples)
+    let typicalInterval = percentile(intervals, 0.50)
+    return ScaleQualityAnalyzer.longGapThresholdMilliseconds(
+        forTypicalIntervalMilliseconds: typicalInterval,
+        profile: recording.scoringProfile.normalized
+    )
+}
+
+private func sampleIntervalEntries(
+    samples inputSamples: [ScaleSample],
+    firstReferenceTime: Double,
+    thresholdMilliseconds: Double
+) -> [SampleIntervalEntry] {
+    let samples = inputSamples.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
+    guard samples.count >= 2 else { return [] }
+
+    return zip(samples, samples.dropFirst()).enumerated().map { index, pair in
+        let interval: Double
+        if let previousTimestamp = pair.0.deviceTimestampMilliseconds,
+           let currentTimestamp = pair.1.deviceTimestampMilliseconds {
+            interval = Double(deltaUInt24(previousTimestamp, currentTimestamp))
+        } else {
+            interval = max(0, pair.1.monotonicSeconds - pair.0.monotonicSeconds) * 1_000
+        }
+        let severity: PacketSeverity
+        if interval >= thresholdMilliseconds {
+            severity = .penalty
+        } else if interval >= thresholdMilliseconds * 0.66 {
+            severity = .warning
+        } else {
+            severity = .normal
+        }
+        return SampleIntervalEntry(
+            index: index,
+            previousRelativeSeconds: pair.0.monotonicSeconds - firstReferenceTime,
+            relativeSeconds: pair.1.monotonicSeconds - firstReferenceTime,
+            intervalMilliseconds: interval,
+            severity: severity
+        )
     }
-    return recording.scoringProfile.minimumLongGapMilliseconds
 }
 
 private func packetSeverity(
@@ -1739,9 +2063,6 @@ private func packetSeverity(
     longGapThresholdMilliseconds: Double
 ) -> PacketSeverity {
     if packet.rejectionReason != nil {
-        return .penalty
-    }
-    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
         return .penalty
     }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
@@ -1767,9 +2088,9 @@ private func packetEvidence(
         evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
     }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
-        evidence.append("Long gap before packet: \(formatMilliseconds(intervalMilliseconds)). This directly lowers transport quality.")
+        evidence.append("Raw packet interval before this packet: \(formatMilliseconds(intervalMilliseconds)). Scoring uses parsed sample intervals; see the cadence chart for direct gap penalties.")
     } else if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
-        evidence.append("Near-threshold interval before packet: \(formatMilliseconds(intervalMilliseconds)). Warning only.")
+        evidence.append("Near-threshold raw packet interval before this packet: \(formatMilliseconds(intervalMilliseconds)). Warning only.")
     }
     if packet.role == .unknown {
         evidence.append("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.")
@@ -1787,6 +2108,18 @@ private func packetEvidence(
         evidence.append("Normal parsed packet. No direct score penalty attached.")
     }
     return evidence
+}
+
+private func percentile(_ values: [Double], _ p: Double) -> Double? {
+    guard !values.isEmpty else { return nil }
+    let sorted = values.sorted()
+    let index = min(sorted.count - 1, max(0, Int(round(Double(sorted.count - 1) * p))))
+    return sorted[index]
+}
+
+private func deltaUInt24(_ previous: UInt32, _ current: UInt32) -> UInt32 {
+    let mask: UInt32 = 0x00FF_FFFF
+    return current >= previous ? current - previous : (mask - previous) + current + 1
 }
 
 private func formatRate(_ value: Double?) -> String {

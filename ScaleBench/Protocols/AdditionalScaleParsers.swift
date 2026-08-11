@@ -70,6 +70,7 @@ enum AcaiaParser {
         private func parseFrame(_ frame: [UInt8], arrivalTime: Date, monotonicSeconds: Double) -> ScaleParserEvent {
             guard frame.count >= 9, frame[0] == 0xEF, frame[1] == 0xDD else { return .rejected(.invalidHeader) }
             guard frame[2] == 0x0C else { return .rejected(.unsupportedFrame) }
+            guard hasValidChecksum(frame) else { return .rejected(.invalidChecksum) }
             let raw = Int16(bitPattern: UInt16(frame[4]) | (UInt16(frame[5]) << 8))
             let divisor = Int(frame[6])
             let isNegative = (frame[7] & 0x02) != 0
@@ -90,6 +91,25 @@ enum AcaiaParser {
                 statusFlags: nil,
                 diagnosticFlags: nil
             ))
+        }
+
+        private func hasValidChecksum(_ frame: [UInt8]) -> Bool {
+            guard frame.count >= 6 else { return false }
+            let payloadLength = Int(frame[3])
+            let payloadStart = 4
+            let checksumStart = payloadStart + payloadLength
+            guard frame.count >= checksumStart + 2 else { return false }
+
+            var even: UInt8 = 0
+            var odd: UInt8 = 0
+            for (index, byte) in frame[payloadStart..<checksumStart].enumerated() {
+                if index.isMultiple(of: 2) {
+                    even &+= byte
+                } else {
+                    odd &+= byte
+                }
+            }
+            return frame[checksumStart] == even && frame[checksumStart + 1] == odd
         }
     }
 }

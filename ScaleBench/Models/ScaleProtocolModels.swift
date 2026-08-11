@@ -191,7 +191,13 @@ struct ScoringProfile: Codable, Equatable {
 
     var normalized: ScoringProfile {
         var copy = self
-        let total = max(transportWeight + stabilityWeight + metadataWeight, 0.0001)
+        let total = transportWeight + stabilityWeight + metadataWeight
+        guard total > 0 else {
+            copy.transportWeight = ScoringProfile.standard.transportWeight
+            copy.stabilityWeight = ScoringProfile.standard.stabilityWeight
+            copy.metadataWeight = ScoringProfile.standard.metadataWeight
+            return copy
+        }
         copy.transportWeight = transportWeight / total
         copy.stabilityWeight = stabilityWeight / total
         copy.metadataWeight = metadataWeight / total
@@ -268,6 +274,14 @@ struct ScaleSample: Codable, Identifiable, Equatable {
     var diagnosticFlags: ScaleDiagnosticFlags?
 }
 
+struct ScaleBatteryEvent: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var arrivalTime: Date
+    var monotonicSeconds: Double
+    var scaleKind: ScaleKind
+    var percent: Int
+}
+
 struct ScaleStatusFlags: Codable, Equatable {
     var timerRunning: Bool
     var hx711Connected: Bool
@@ -334,12 +348,12 @@ struct WMBPlusCapabilities: Codable, Equatable {
 }
 
 struct ScaleRecording: Codable, Equatable {
-    static let schemaVersion = 2
+    static let schemaVersion = 3
 
-    var id = UUID()
-    var schemaVersion = Self.schemaVersion
-    var appName = "ScaleBench"
-    var appVersion = "0.1.1"
+    var id: UUID
+    var schemaVersion: Int
+    var appName: String
+    var appVersion: String
     var mode: RecordingMode
     var device: ScaleDeviceIdentity?
     var startedAt: Date
@@ -347,9 +361,44 @@ struct ScaleRecording: Codable, Equatable {
     var notes: String
     var rawPackets: [RawScalePacket]
     var samples: [ScaleSample]
+    var batteryEvents: [ScaleBatteryEvent]
     var capabilities: WMBPlusCapabilities?
     var scoringProfile: ScoringProfile
     var metrics: ScaleQualityMetrics
+
+    init(
+        id: UUID = UUID(),
+        schemaVersion: Int = Self.schemaVersion,
+        appName: String = "ScaleBench",
+        appVersion: String = "0.1.1",
+        mode: RecordingMode,
+        device: ScaleDeviceIdentity? = nil,
+        startedAt: Date,
+        endedAt: Date? = nil,
+        notes: String,
+        rawPackets: [RawScalePacket],
+        samples: [ScaleSample],
+        batteryEvents: [ScaleBatteryEvent] = [],
+        capabilities: WMBPlusCapabilities? = nil,
+        scoringProfile: ScoringProfile,
+        metrics: ScaleQualityMetrics
+    ) {
+        self.id = id
+        self.schemaVersion = schemaVersion
+        self.appName = appName
+        self.appVersion = appVersion
+        self.mode = mode
+        self.device = device
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.notes = notes
+        self.rawPackets = rawPackets
+        self.samples = samples
+        self.batteryEvents = batteryEvents
+        self.capabilities = capabilities
+        self.scoringProfile = scoringProfile
+        self.metrics = metrics
+    }
 
     static func empty(mode: RecordingMode = .idleStability, scoringProfile: ScoringProfile = .standard) -> ScaleRecording {
         ScaleRecording(
@@ -360,10 +409,48 @@ struct ScaleRecording: Codable, Equatable {
             notes: "",
             rawPackets: [],
             samples: [],
+            batteryEvents: [],
             capabilities: nil,
             scoringProfile: scoringProfile,
             metrics: .empty
         )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case schemaVersion
+        case appName
+        case appVersion
+        case mode
+        case device
+        case startedAt
+        case endedAt
+        case notes
+        case rawPackets
+        case samples
+        case batteryEvents
+        case capabilities
+        case scoringProfile
+        case metrics
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        appName = try container.decodeIfPresent(String.self, forKey: .appName) ?? "ScaleBench"
+        appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? "0.1.1"
+        mode = try container.decodeIfPresent(RecordingMode.self, forKey: .mode) ?? .shot
+        device = try container.decodeIfPresent(ScaleDeviceIdentity.self, forKey: .device)
+        startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
+        endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        rawPackets = try container.decodeIfPresent([RawScalePacket].self, forKey: .rawPackets) ?? []
+        samples = try container.decodeIfPresent([ScaleSample].self, forKey: .samples) ?? []
+        batteryEvents = try container.decodeIfPresent([ScaleBatteryEvent].self, forKey: .batteryEvents) ?? []
+        capabilities = try container.decodeIfPresent(WMBPlusCapabilities.self, forKey: .capabilities)
+        scoringProfile = try container.decodeIfPresent(ScoringProfile.self, forKey: .scoringProfile) ?? .standard
+        metrics = try container.decodeIfPresent(ScaleQualityMetrics.self, forKey: .metrics) ?? .empty
     }
 }
 

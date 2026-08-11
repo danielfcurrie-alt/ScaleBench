@@ -31,14 +31,18 @@ final class SavedRecordingStore: ObservableObject {
 
     private let directoryURL: URL
     private let fileManager: FileManager
+    private let seedExamples: Bool
 
     init(
         directoryURL: URL? = nil,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        seedExamples: Bool? = nil
     ) {
         self.fileManager = fileManager
         self.directoryURL = directoryURL ?? Self.defaultDirectoryURL(fileManager: fileManager)
+        self.seedExamples = seedExamples ?? (directoryURL == nil)
         load()
+        seedExampleRecordingsIfNeeded()
     }
 
     @discardableResult
@@ -98,12 +102,42 @@ final class SavedRecordingStore: ObservableObject {
         }
     }
 
+    func loadExampleRecordings() {
+        for example in SampleRecordingFactory.examples where !recordings.contains(where: { $0.title == example.title }) {
+            save(recording: example.recording, notes: example.notes, title: example.title)
+        }
+        markExamplesSeeded()
+    }
+
     var comparison: ProtocolComparison {
         ProtocolComparison.make(from: recordings)
     }
 
     private func fileURL(for id: UUID) -> URL {
         directoryURL.appendingPathComponent("\(id.uuidString).json")
+    }
+
+    private var examplesMarkerURL: URL {
+        directoryURL.appendingPathComponent(".examples-seeded-v1")
+    }
+
+    private func seedExampleRecordingsIfNeeded() {
+        guard seedExamples else { return }
+        if fileManager.fileExists(atPath: examplesMarkerURL.path) { return }
+        guard recordings.isEmpty else {
+            markExamplesSeeded()
+            return
+        }
+        loadExampleRecordings()
+    }
+
+    private func markExamplesSeeded() {
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            try Data("seeded\n".utf8).write(to: examplesMarkerURL, options: [.atomic])
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
     }
 
     private static func defaultDirectoryURL(fileManager: FileManager) -> URL {

@@ -90,6 +90,15 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(sample.weightGrams, 12.3, accuracy: 0.001)
     }
 
+    func testAcaiaPacketRejectsBadChecksum() throws {
+        let frame = Data([0xEF, 0xDD, 0x0C, 0x04, 0x7B, 0x00, 0x01, 0x00, 0x7D, 0x00])
+        let events = AcaiaParser.Codec().receive(frame, arrivalTime: Date(), monotonicSeconds: 1)
+
+        guard case .rejected(.invalidChecksum)? = events.first else {
+            return XCTFail("Expected invalid checksum rejection")
+        }
+    }
+
     func testDecentPacketParse() throws {
         let data = Data([0x03, 0xCE, 0x00, 0x7B, 0x00, 0x01, 0x02, 0x03, 0x00, 0x00])
         let result = DecentEspressiParser.parseWeightPacket(data, kind: .decent, arrivalTime: Date(), monotonicSeconds: 1)
@@ -203,6 +212,57 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(recording.scoringProfile.name, ScoringProfile.standard.name)
     }
 
+    func testShotScoringDoesNotTreatBeverageGrowthAsInstability() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 1.0, weight: 4.0),
+            makeSample(seconds: 2.0, weight: 12.0),
+            makeSample(seconds: 3.0, weight: 24.0),
+            makeSample(seconds: 4.0, weight: 36.0)
+        ]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.stabilityScore, 100)
+        XCTAssertNil(metrics.idleNoisePeakToPeakGrams)
+        XCTAssertNil(metrics.driftGramsPerMinute)
+    }
+
+    func testLongGapDetectionUsesTypicalCadenceInsteadOfWholeRecordingAverage() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.1),
+            makeSample(seconds: 0.2, weight: 0.2),
+            makeSample(seconds: 1.0, weight: 0.3)
+        ]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.longGapCount, 1)
+        XCTAssertEqual(metrics.packetIntervalMaxMilliseconds ?? 0, 800, accuracy: 0.001)
+    }
+
+    func testSeparateBatteryEventsCountTowardMetadataAndBatteryRange() {
+        var recording = ScaleRecording.empty(mode: .batteryStability)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.0),
+            makeSample(seconds: 0.2, weight: 0.0)
+        ]
+        recording.batteryEvents = [
+            ScaleBatteryEvent(arrivalTime: Date(timeIntervalSince1970: 0), monotonicSeconds: 0.05, scaleKind: .weighMyBruPlus, percent: 86),
+            ScaleBatteryEvent(arrivalTime: Date(timeIntervalSince1970: 1), monotonicSeconds: 1.05, scaleKind: .weighMyBruPlus, percent: 84)
+        ]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.batteryMinPercent, 84)
+        XCTAssertEqual(metrics.batteryMaxPercent, 86)
+        XCTAssertGreaterThanOrEqual(metrics.metadataScore ?? 0, 20)
+    }
+
     func testStandardScoringProfileUsesStableBenchmarkName() {
         XCTAssertEqual(ScoringProfile.standard.name, "ScaleBench Standard v1")
         XCTAssertEqual(ScoringPreset.standard.displayName, "ScaleBench Standard v1")
@@ -249,6 +309,27 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(reloaded.profiles.count, 1)
         XCTAssertEqual(reloaded.profiles.first?.id, saved.id)
         XCTAssertEqual(reloaded.profiles.first?.profile.name, "My Strict Profile")
+    }
+
+    func testCustomScoringProfileAllZeroWeightsFallBackToStandardWeights() {
+        var profile = ScoringProfile.standard
+        profile.transportWeight = 0
+        profile.stabilityWeight = 0
+        profile.metadataWeight = 0
+
+        let normalized = profile.normalized
+
+        XCTAssertEqual(normalized.transportWeight, ScoringProfile.standard.transportWeight, accuracy: 0.0001)
+        XCTAssertEqual(normalized.stabilityWeight, ScoringProfile.standard.stabilityWeight, accuracy: 0.0001)
+        XCTAssertEqual(normalized.metadataWeight, ScoringProfile.standard.metadataWeight, accuracy: 0.0001)
+    }
+
+    func testSampleRecordingFactoryProvidesBundledExamples() {
+        let examples = SampleRecordingFactory.examples
+
+        XCTAssertEqual(examples.count, 3)
+        XCTAssertEqual(Set(examples.map(\.title)).count, examples.count)
+        XCTAssertTrue(examples.allSatisfy { $0.recording.metrics.overallScore != nil })
     }
 
     func testSavedRecordingStoresNotesAndScoreSnapshot() throws {

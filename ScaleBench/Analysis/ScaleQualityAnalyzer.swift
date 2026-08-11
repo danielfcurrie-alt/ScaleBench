@@ -17,7 +17,7 @@ enum ScaleQualityAnalyzer {
         let maxInterval = intervals.max()
         let duration = samples.last!.monotonicSeconds - samples.first!.monotonicSeconds
         let effectiveRate = duration > 0 ? Double(samples.count - 1) / duration : nil
-        let longGapThreshold = longGapThresholdMilliseconds(for: effectiveRate, profile: profile)
+        let longGapThreshold = longGapThresholdMilliseconds(forTypicalIntervalMilliseconds: p50, profile: profile)
         let longGaps = intervals.filter { $0 >= longGapThreshold }.count
         let missingSequence = missingSequenceCount(samples)
         let timestampIssues = duplicateOrOutOfOrderDeviceTimestamps(samples)
@@ -25,7 +25,7 @@ enum ScaleQualityAnalyzer {
         let noisePeakToPeak = weights.max().flatMap { maxWeight in weights.min().map { maxWeight - $0 } }
         let standardDeviation = standardDeviation(weights)
         let drift = driftGramsPerMinute(samples)
-        let batteryValues = samples.compactMap(\.batteryPercent)
+        let batteryValues = samples.compactMap(\.batteryPercent) + recording.batteryEvents.map(\.percent)
         let firmwareQuality = samples.compactMap(\.firmwareQualityScore)
         let bumpCount = samples.filter { $0.diagnosticFlags?.recentBump == true }.count
 
@@ -37,13 +37,15 @@ enum ScaleQualityAnalyzer {
             sampleCount: samples.count,
             profile: profile
         )
-        let stabilityScore = scoreStability(
-            noisePeakToPeak: noisePeakToPeak,
-            standardDeviation: standardDeviation,
-            drift: drift,
-            profile: profile
-        )
-        let metadataScore = scoreMetadata(samples)
+        let stabilityScore = recording.mode == .idleStability
+            ? scoreIdleStability(
+                noisePeakToPeak: noisePeakToPeak,
+                standardDeviation: standardDeviation,
+                drift: drift,
+                profile: profile
+            )
+            : scoreDynamicStability(bumpCount: bumpCount)
+        let metadataScore = scoreMetadata(samples, batteryEventCount: recording.batteryEvents.count)
         let overall = Int(round(
             Double(transportScore) * profile.transportWeight
             + Double(stabilityScore) * profile.stabilityWeight
@@ -73,7 +75,7 @@ enum ScaleQualityAnalyzer {
         )
     }
 
-    private static func sampleIntervalsMilliseconds(_ samples: [ScaleSample]) -> [Double] {
+    static func sampleIntervalsMilliseconds(_ samples: [ScaleSample]) -> [Double] {
         samples.adjacentPairs().map { previous, current in
             if let previousTimestamp = previous.deviceTimestampMilliseconds,
                let currentTimestamp = current.deviceTimestampMilliseconds {
@@ -83,10 +85,9 @@ enum ScaleQualityAnalyzer {
         }
     }
 
-    private static func longGapThresholdMilliseconds(for sampleRate: Double?, profile: ScoringProfile) -> Double {
-        guard let sampleRate, sampleRate > 0 else { return 500 }
-        let expected = 1000.0 / sampleRate
-        return max(profile.minimumLongGapMilliseconds, expected * profile.longGapMultiplier)
+    static func longGapThresholdMilliseconds(forTypicalIntervalMilliseconds typicalInterval: Double?, profile: ScoringProfile) -> Double {
+        guard let typicalInterval, typicalInterval > 0 else { return profile.minimumLongGapMilliseconds }
+        return max(profile.minimumLongGapMilliseconds, typicalInterval * profile.longGapMultiplier)
     }
 
     private static func missingSequenceCount(_ samples: [ScaleSample]) -> Int {
@@ -152,7 +153,7 @@ enum ScaleQualityAnalyzer {
         return max(0, score)
     }
 
-    private static func scoreStability(
+    private static func scoreIdleStability(
         noisePeakToPeak: Double?,
         standardDeviation: Double?,
         drift: Double?,
@@ -171,11 +172,17 @@ enum ScaleQualityAnalyzer {
         return max(0, score)
     }
 
-    private static func scoreMetadata(_ samples: [ScaleSample]) -> Int {
+    private static func scoreDynamicStability(bumpCount: Int) -> Int {
+        max(0, 100 - min(40, bumpCount * 8))
+    }
+
+    private static func scoreMetadata(_ samples: [ScaleSample], batteryEventCount: Int) -> Int {
         let count = Double(max(samples.count, 1))
         let timestampCoverage = Double(samples.filter { $0.deviceTimestampMilliseconds != nil }.count) / count
         let sequenceCoverage = Double(samples.filter { $0.sequence != nil }.count) / count
-        let batteryCoverage = Double(samples.filter { $0.batteryPercent != nil }.count) / count
+        let sampleBatteryCoverage = Double(samples.filter { $0.batteryPercent != nil }.count) / count
+        let separateBatteryCoverage = batteryEventCount > 0 ? 1.0 : 0.0
+        let batteryCoverage = max(sampleBatteryCoverage, separateBatteryCoverage)
         let qualityCoverage = Double(samples.filter { $0.firmwareQualityScore != nil }.count) / count
         return Int(round(40 * timestampCoverage + 25 * sequenceCoverage + 20 * batteryCoverage + 15 * qualityCoverage))
     }
