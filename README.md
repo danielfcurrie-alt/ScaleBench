@@ -91,7 +91,7 @@ The JSON export includes:
 - scoring profile
 - calculated metrics
 
-The scorecard PNG export creates a shareable image with the overall score, sub-scores, sample-rate/gap/rejection metrics, protocol identity, recording mode, notes, and the `Standard v1` or `Custom` scoring badge.
+The scorecard PNG export always creates a shareable **official ScaleBench Standard v1** image, even when the current recording is being inspected with a custom scoring profile. It includes the official overall score, sub-scores, sample-rate/gap/rejection metrics, protocol identity, recording mode, notes, and the `Standard v1` badge.
 
 ## Build
 

@@ -3,12 +3,17 @@ import SwiftUI
 import UIKit
 
 enum ScoreCardExporter {
-    @MainActor
-    static func export(_ recording: ScaleRecording) throws -> URL {
+    static func officialRecording(from recording: ScaleRecording) -> ScaleRecording {
         var finalized = recording
         finalized.endedAt = finalized.endedAt ?? Date()
-        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+        finalized.scoringProfile = .standard
+        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized, profile: .standard)
+        return finalized
+    }
 
+    @MainActor
+    static func exportOfficial(_ recording: ScaleRecording) throws -> URL {
+        let finalized = officialRecording(from: recording)
         let renderer = ImageRenderer(content: ShareableScoreCard(recording: finalized))
         renderer.scale = 2
 
@@ -23,7 +28,7 @@ enum ScoreCardExporter {
             .replacingOccurrences(of: " ", with: "-")
             .replacingOccurrences(of: "/", with: "-") ?? "scale"
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ScaleBench-scorecard-\(safeName)-\(timestamp).png")
+            .appendingPathComponent("ScaleBench-official-scorecard-\(safeName)-\(timestamp).png")
         try pngData.write(to: url, options: [.atomic])
         return url
     }
@@ -99,7 +104,7 @@ private struct ShareableScoreCard: View {
 
             Spacer(minLength: 0)
 
-            Text("Scored with \(recording.scoringProfile.name). Raw recording export available from ScaleBench.")
+            Text("Official ScaleBench score. Scored with \(recording.scoringProfile.name). Raw recording export available from ScaleBench.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -117,10 +122,10 @@ private struct ShareableScoreCard: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("ScaleBench")
+                Text("ScaleBench Official Score")
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                 Spacer()
-                Text(recording.scoringProfile.name == ScoringProfile.standardBenchmarkName ? "Standard v1" : "Custom")
+                Text("Standard v1")
                     .font(.headline)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)

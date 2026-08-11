@@ -208,6 +208,23 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(ScoringPreset.standard.displayName, "ScaleBench Standard v1")
     }
 
+    func testOfficialScorecardRecordingUsesStandardProfile() {
+        var recording = ScaleRecording.empty(mode: .idleStability, scoringProfile: .strict)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.2),
+            makeSample(seconds: 0.2, weight: -0.2)
+        ]
+        recording.metrics = ScaleQualityAnalyzer.analyze(recording, profile: .strict)
+
+        let official = ScoreCardExporter.officialRecording(from: recording)
+        let expectedStandard = ScaleQualityAnalyzer.analyze(recording, profile: .standard)
+
+        XCTAssertEqual(official.scoringProfile.name, ScoringProfile.standardBenchmarkName)
+        XCTAssertEqual(official.metrics, expectedStandard)
+        XCTAssertNotNil(official.endedAt)
+    }
+
     func testCustomScoringProfileStoreRoundTripsJSONAndNormalizesWeights() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ScaleBenchScoringTests-\(UUID().uuidString)", isDirectory: true)

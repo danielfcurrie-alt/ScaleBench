@@ -141,7 +141,7 @@ struct ContentView: View {
 
                     if let scoreCardURL {
                         ShareLink(item: scoreCardURL) {
-                            Label("Share Scorecard \(scoreCardURL.lastPathComponent)", systemImage: "photo")
+                            Label("Share Official Scorecard \(scoreCardURL.lastPathComponent)", systemImage: "photo")
                         }
                     }
 
@@ -186,6 +186,10 @@ struct ContentView: View {
                             scorecardButtons
                         }
                     }
+
+                    Text("Shared scorecards always use ScaleBench Standard v1, even if a custom scoring profile is selected for analysis.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     if let scoreCardErrorMessage {
                         Text("Scorecard error: \(scoreCardErrorMessage)")
@@ -305,13 +309,13 @@ struct ContentView: View {
             bluetooth.applyScoringProfile(selectedScoringProfile)
             do {
                 let finalized = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
-                scoreCardURL = try ScoreCardExporter.export(finalized)
+                scoreCardURL = try ScoreCardExporter.exportOfficial(finalized)
                 scoreCardErrorMessage = nil
             } catch {
                 scoreCardErrorMessage = error.localizedDescription
             }
         } label: {
-            Label("Export Scorecard", systemImage: "photo")
+            Label("Export Official Scorecard", systemImage: "photo")
         }
         .buttonStyle(.borderedProminent)
         .disabled(bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty)
