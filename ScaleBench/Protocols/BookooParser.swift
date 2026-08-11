@@ -1,5 +1,11 @@
 import Foundation
 
+// BooKoo compatibility adapter.
+//
+// The fixed UUIDs, command opcodes, checksum rule, and packet offsets are
+// protocol facts. ScaleBench keeps the implementation intentionally small:
+// validate a frame, preserve the raw bytes in recordings, and emit one
+// canonical ScaleSample for cross-scale comparison.
 enum BookooParser {
     static let serviceUUID = "0FFE"
     static let notifyUUID = "FF11"

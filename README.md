@@ -4,6 +4,19 @@ ScaleBench is an open iOS Bluetooth scale analyzer for espresso-scale transport 
 
 The main goal is protocol and hardware comparison: WMB vs WMB+, BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
 
+## Project intent and provenance
+
+ScaleBench is a diagnostic and benchmarking tool, not a brew logger clone. It is meant to answer concrete hardware/protocol questions:
+
+- how fast a scale actually notifies under real conditions
+- how much packet jitter, long-gap behavior, and rejection noise each protocol produces
+- whether firmware extensions such as timestamps, sequence numbers, battery, flow, and scale-quality diagnostics improve the data stream
+- whether the same physical scale behaves differently through legacy, compatibility, and native/extended transports
+
+Protocol support necessarily includes exact BLE UUIDs, command bytes, packet lengths, checksums, and field offsets. Those values are interoperability facts required to communicate with existing devices. ScaleBench's Bluetooth manager, parser layout, canonical sample model, recording format, scoring model, and scorecard/export behavior are ScaleBench-native Swift implementations.
+
+Where protocol details come from public protocol documentation, upstream firmware behavior, or observed behavior from user-owned test hardware, keep that visible in code comments or README notes. Do not copy application architecture, control flow, comments, or implementation code from other apps.
+
 ## Current protocol support
 
 ScaleBench intentionally mirrors ScaleBench's scale protocol coverage and keeps protocol-specific fields in the exported raw packet stream.

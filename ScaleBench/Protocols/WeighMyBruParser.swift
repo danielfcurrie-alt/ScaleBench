@@ -1,5 +1,11 @@
 import Foundation
 
+// WeighMyBru/WMB+ compatibility adapter.
+//
+// UUIDs, command bytes, packet lengths, checksum bytes, and field offsets are
+// interoperability facts needed to talk to WMB-compatible firmware. The parser
+// itself is a ScaleBench-native Swift implementation that records raw packets
+// and maps accepted frames into the app's canonical ScaleSample model.
 enum WeighMyBruParser {
     static let serviceUUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
     static let weight20UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -129,4 +135,3 @@ func signedCentiValue(signByte: UInt8, high: UInt8, mid: UInt8, low: UInt8) -> D
 func xorChecksum<S: Sequence>(_ bytes: S) -> UInt8 where S.Element == UInt8 {
     bytes.reduce(UInt8(0), ^)
 }
-
