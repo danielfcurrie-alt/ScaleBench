@@ -339,7 +339,7 @@ struct ScaleRecording: Codable, Equatable {
     var id = UUID()
     var schemaVersion = Self.schemaVersion
     var appName = "ScaleBench"
-    var appVersion = "0.1.0"
+    var appVersion = "0.1.1"
     var mode: RecordingMode
     var device: ScaleDeviceIdentity?
     var startedAt: Date
