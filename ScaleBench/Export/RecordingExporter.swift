@@ -146,6 +146,9 @@ final class SavedRecordingStore: ObservableObject {
         guard saved.recording.schemaVersion < ScaleRecording.schemaVersion else { return saved }
         var migrated = saved
         migrated.recording.schemaVersion = ScaleRecording.schemaVersion
+        if migrated.recording.scoringProfile.name == ScoringProfile.standardBenchmarkName {
+            migrated.recording.scoringProfile = .standard
+        }
         migrated.recording.metrics = ScaleQualityAnalyzer.analyze(migrated.recording)
         migrated.scoreSnapshot = migrated.recording.metrics
         return migrated

@@ -29,6 +29,8 @@ Most users should start with **Shot / Pour**.
 
 The modes label the recording and select the appropriate stability calculation. Idle Stability scores noise and drift; the dynamic modes avoid treating normal weight movement as drift. They do not yet run fully guided test procedures.
 
+ScaleBench Standard v1 scores measured transport cadence and stability. Optional telemetry such as battery, sequence numbers, device timestamps, and firmware-side quality is reported as coverage, but it is not a Standard v1 score deduction by itself.
+
 ## What happens when I start recording?
 
 ScaleBench opens a live recording screen showing:

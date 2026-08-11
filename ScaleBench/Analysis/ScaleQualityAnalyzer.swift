@@ -9,7 +9,7 @@ enum ScaleQualityAnalyzer {
             samples.compactMap(\.batteryPercent) + recording.batteryEvents.map(\.percent)
         ).filter { (0...100).contains($0) }
         let firmwareQuality = samples.compactMap(\.firmwareQualityScore).filter { (0...100).contains($0) }
-        let bumpCount = firmwareBumpEventCount(samples)
+        let bumpCount = bumpEventCount(samples, mode: recording.mode)
         guard samples.count >= 2 else {
             var metrics = ScaleQualityMetrics.empty
             metrics.rejectedPacketCount = rejected
@@ -91,15 +91,6 @@ enum ScaleQualityAnalyzer {
 
     static func sampleIntervalsMilliseconds(_ samples: [ScaleSample]) -> [Double] {
         samples.adjacentPairs().map { previous, current in
-            if let previousTimestamp = previous.deviceTimestampMilliseconds,
-               let currentTimestamp = current.deviceTimestampMilliseconds,
-               previous.scaleKind == current.scaleKind {
-                return Double(deviceTimestampDelta(
-                    previousTimestamp,
-                    currentTimestamp,
-                    kind: current.scaleKind
-                ))
-            }
             return max(0, current.monotonicSeconds - previous.monotonicSeconds) * 1000.0
         }
     }
@@ -185,6 +176,51 @@ enum ScaleQualityAnalyzer {
             }
             bumpIsActive = hasBump
         }
+        return count
+    }
+
+    private static func bumpEventCount(_ samples: [ScaleSample], mode: RecordingMode) -> Int {
+        let firmwareCount = firmwareBumpEventCount(samples)
+        guard mode != .idleStability else { return firmwareCount }
+        return max(firmwareCount, inferredDynamicBumpEventCount(samples))
+    }
+
+    private static func inferredDynamicBumpEventCount(_ samples: [ScaleSample]) -> Int {
+        guard samples.count >= 3 else { return 0 }
+
+        var count = 0
+        var index = 1
+        while index < samples.count - 1 {
+            let previous = samples[index - 1]
+            let current = samples[index]
+            let next = samples[index + 1]
+            let incomingSeconds = current.monotonicSeconds - previous.monotonicSeconds
+            let outgoingSeconds = next.monotonicSeconds - current.monotonicSeconds
+
+            guard incomingSeconds > 0, outgoingSeconds > 0 else {
+                index += 1
+                continue
+            }
+
+            let incomingDelta = current.weightGrams - previous.weightGrams
+            let outgoingDelta = next.weightGrams - current.weightGrams
+            let recoveredDelta = next.weightGrams - previous.weightGrams
+            let largestDelta = max(abs(incomingDelta), abs(outgoingDelta))
+            let isTransientSpike = abs(incomingDelta) >= 1.5
+                && abs(outgoingDelta) >= 1.5
+                && incomingDelta.sign != outgoingDelta.sign
+                && abs(recoveredDelta) <= max(0.75, largestDelta * 0.35)
+            let hasImplausibleRate = abs(incomingDelta) / incomingSeconds >= 25
+                && abs(outgoingDelta) / outgoingSeconds >= 25
+
+            if isTransientSpike && hasImplausibleRate {
+                count += 1
+                index += 2
+            } else {
+                index += 1
+            }
+        }
+
         return count
     }
 

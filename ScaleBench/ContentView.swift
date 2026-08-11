@@ -491,7 +491,7 @@ private struct ScaleBenchHelpView: View {
                 }
 
                 Section("Score") {
-                    Text("ScaleBench Standard v1 combines transport quality, stability, and metadata coverage into a 0–100 score. Shot / Pour mode does not punish the normal rising beverage weight as idle drift.")
+                    Text("ScaleBench Standard v1 combines measured transport quality and stability into a 0–100 score. Optional telemetry coverage is reported separately so basic protocols are not pre-penalized.")
                     Text("Red evidence means a direct score penalty, such as a rejected packet, missing sequence, or parsed-sample long gap. Yellow/orange means warning context.")
                         .foregroundStyle(.secondary)
                 }
@@ -971,7 +971,7 @@ private struct ScoreDeductionsView: View {
     private func stabilityDeductionDetail(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
         if recording.mode != .idleStability {
             return metrics.firmwareBumpCount > 0
-                ? "\(metrics.firmwareBumpCount) firmware bump flag\(metrics.firmwareBumpCount == 1 ? "" : "s")"
+                ? "\(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? "" : "s")"
                 : "Dynamic stability subscore was below 100."
         }
 
@@ -1255,9 +1255,9 @@ private struct PacketEvidenceSummary: View {
             + dynamicBumps
         if directIssues == 0 {
             if metrics.firmwareBumpCount > 0 {
-                return "No direct score penalties are visible. Firmware bump flags are warning context in Idle Stability mode."
+                return "No direct score penalties are visible. Bump/disturbance flags are warning context in Idle Stability mode."
             }
-            return "No direct score penalties are visible in this recording. The score is mostly driven by cadence, stability, and metadata coverage."
+            return "No direct score penalties are visible in this recording. The score is mostly driven by arrival cadence and stability; optional telemetry is reported separately unless a custom profile weights it."
         }
 
         var parts: [String] = []
@@ -1274,7 +1274,7 @@ private struct PacketEvidenceSummary: View {
             parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
         }
         if dynamicBumps > 0 {
-            parts.append("\(metrics.firmwareBumpCount) bump flag\(metrics.firmwareBumpCount == 1 ? "" : "s")")
+            parts.append("\(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? "" : "s")")
         }
         return "Score-impacting evidence: \(parts.joined(separator: ", "))."
     }
@@ -1790,7 +1790,7 @@ private struct ScoreExplanationView: View {
                 }
 
                 Section("Formula") {
-                    Text("Overall score is the weighted sum of transport, stability, and metadata scores.")
+                    Text("Overall score is the weighted sum of transport, stability, and metadata scores. Standard v1 gives metadata zero weight and reports telemetry coverage separately.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     MetricRow(title: "Transport weight", value: formatPercent(normalizedProfile.transportWeight))
@@ -1825,7 +1825,7 @@ private struct ScoreExplanationView: View {
                     MetricRow(title: "Score", value: metrics.metadataScore.map { "\($0)/100" } ?? "—")
                     MetricRow(title: "Battery range", value: batteryRange(metrics))
                     MetricRow(title: "Firmware quality", value: metrics.firmwareQualityAverage.map { String(format: "%.1f/100", $0) } ?? "—")
-                    Text("Metadata rewards protocols that expose device timestamps, sequence numbers, battery, and firmware-side quality. It is intentionally modest in Standard v1 so good legacy scales are not crushed just for having a simpler packet.")
+                    Text("Metadata reports optional telemetry coverage such as device timestamps, sequence numbers, battery, and firmware-side quality. Standard v1 gives metadata zero weight so good legacy scales are not penalized just for having a simpler packet.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2600,7 +2600,7 @@ private func resultNarrative(for recording: ScaleRecording) -> String {
         }
     }
     if metrics.firmwareBumpCount > 0 {
-        parts.append("Firmware reported \(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? "" : "s").")
+        parts.append("\(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? " was" : "s were") detected.")
     }
 
     return parts.joined(separator: " ")

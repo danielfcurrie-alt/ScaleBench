@@ -16,6 +16,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     @Published private(set) var bluetoothStateTitle = "Bluetooth initializing"
 
     private var centralManager: CBCentralManager!
+    private let bluetoothQueue = DispatchQueue(label: "com.scalebench.bluetooth", qos: .userInitiated)
     private var peripheralsByID: [UUID: CBPeripheral] = [:]
     private var advertisedServicesByID: [UUID: [String]] = [:]
     private var writeCharacteristic: CBCharacteristic?
@@ -28,7 +29,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        centralManager = CBCentralManager(delegate: self, queue: .main)
+        centralManager = CBCentralManager(delegate: self, queue: bluetoothQueue)
     }
 
     func startScanning() {
@@ -165,6 +166,14 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         connectedDevice.flatMap { peripheralsByID[$0.id] }
     }
 
+    private func performOnMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
+
     private func recordRawPacket(
         data: Data,
         characteristic: CBCharacteristic,
@@ -283,10 +292,8 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         }
     }
 
-    private func handleValueUpdate(data: Data, characteristic: CBCharacteristic) {
+    private func handleValueUpdate(data: Data, characteristic: CBCharacteristic, arrival: Date, monotonic: Double) {
         let uuid = characteristic.uuid.uuidString.uppercased()
-        let arrival = Date()
-        let monotonic = CACurrentMediaTime()
 
         switch uuid {
         case BookooParser.notifyUUID:
@@ -449,14 +456,18 @@ private enum DecentProtocolNameMatcher {
 
 extension BluetoothScaleManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        let title: String
         switch central.state {
-        case .unknown: bluetoothStateTitle = "Bluetooth unknown"
-        case .resetting: bluetoothStateTitle = "Bluetooth resetting"
-        case .unsupported: bluetoothStateTitle = "Bluetooth unsupported"
-        case .unauthorized: bluetoothStateTitle = "Bluetooth unauthorized"
-        case .poweredOff: bluetoothStateTitle = "Bluetooth off"
-        case .poweredOn: bluetoothStateTitle = "Bluetooth on"
-        @unknown default: bluetoothStateTitle = "Bluetooth unknown"
+        case .unknown: title = "Bluetooth unknown"
+        case .resetting: title = "Bluetooth resetting"
+        case .unsupported: title = "Bluetooth unsupported"
+        case .unauthorized: title = "Bluetooth unauthorized"
+        case .poweredOff: title = "Bluetooth off"
+        case .poweredOn: title = "Bluetooth on"
+        @unknown default: title = "Bluetooth unknown"
+        }
+        performOnMain {
+            self.bluetoothStateTitle = title
         }
     }
 
@@ -469,140 +480,161 @@ extension BluetoothScaleManager: CBCentralManagerDelegate {
         let services = serviceUUIDs(from: advertisementData)
         let name = peripheral.name ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? "Unnamed Scale"
         let kind = identifyScale(name: name, services: services)
-        peripheralsByID[peripheral.identifier] = peripheral
-        advertisedServicesByID[peripheral.identifier] = services
-        appendOrUpdate(device: DiscoveredScale(
+        let device = DiscoveredScale(
             id: peripheral.identifier,
             name: name,
             kind: kind,
             rssi: RSSI.intValue
-        ))
+        )
+        performOnMain {
+            self.peripheralsByID[peripheral.identifier] = peripheral
+            self.advertisedServicesByID[peripheral.identifier] = services
+            self.appendOrUpdate(device: device)
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        statusMessage = "Connected to \(peripheral.name ?? "scale")"
-        peripheral.delegate = self
-        didSendInitialConfiguration = false
-        acaiaCodec = AcaiaParser.Codec()
-        timemoreDotCodec = TimemoreDotParser.Codec()
-        peripheral.discoverServices(nil)
+        performOnMain {
+            self.statusMessage = "Connected to \(peripheral.name ?? "scale")"
+            peripheral.delegate = self
+            self.didSendInitialConfiguration = false
+            self.acaiaCodec = AcaiaParser.Codec()
+            self.timemoreDotCodec = TimemoreDotParser.Codec()
+            peripheral.discoverServices(nil)
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        guard connectedDevice?.id == peripheral.identifier else { return }
-        statusMessage = "Connection failed: \(error?.localizedDescription ?? "unknown error")"
-        connectedDevice = nil
-        activeProtocol = .unknown
-        writeCharacteristic = nil
-        latestSample = nil
-        latestBatteryPercent = nil
+        performOnMain {
+            guard self.connectedDevice?.id == peripheral.identifier else { return }
+            self.statusMessage = "Connection failed: \(error?.localizedDescription ?? "unknown error")"
+            self.connectedDevice = nil
+            self.activeProtocol = .unknown
+            self.writeCharacteristic = nil
+            self.latestSample = nil
+            self.latestBatteryPercent = nil
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        guard connectedDevice?.id == peripheral.identifier else { return }
-        if isRecording {
-            stopRecording()
-            statusMessage = "Disconnected; recording stopped"
-        } else {
-            statusMessage = "Disconnected"
+        performOnMain {
+            guard self.connectedDevice?.id == peripheral.identifier else { return }
+            if self.isRecording {
+                self.stopRecording()
+                self.statusMessage = "Disconnected; recording stopped"
+            } else {
+                self.statusMessage = "Disconnected"
+            }
+            self.connectedDevice = nil
+            self.activeProtocol = .unknown
+            self.writeCharacteristic = nil
+            self.wmbPlusCapabilities = nil
+            self.latestSample = nil
+            self.latestBatteryPercent = nil
+            self.didSendInitialConfiguration = false
+            self.acaiaCodec = AcaiaParser.Codec()
+            self.timemoreDotCodec = TimemoreDotParser.Codec()
         }
-        connectedDevice = nil
-        activeProtocol = .unknown
-        writeCharacteristic = nil
-        wmbPlusCapabilities = nil
-        latestSample = nil
-        latestBatteryPercent = nil
-        didSendInitialConfiguration = false
-        acaiaCodec = AcaiaParser.Codec()
-        timemoreDotCodec = TimemoreDotParser.Codec()
     }
 }
 
 extension BluetoothScaleManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        if let error {
-            statusMessage = "Service discovery failed: \(error.localizedDescription)"
-            return
-        }
+        performOnMain {
+            if let error {
+                self.statusMessage = "Service discovery failed: \(error.localizedDescription)"
+                return
+            }
 
-        peripheral.services?.forEach { service in
-            switch service.uuid.uuidString.uppercased() {
-            case BookooParser.serviceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: BookooParser.notifyUUID), CBUUID(string: BookooParser.writeUUID)], for: service)
-            case WeighMyBruParser.serviceUUID:
-                peripheral.discoverCharacteristics([
-                    CBUUID(string: WeighMyBruParser.weight20UUID),
-                    CBUUID(string: WeighMyBruParser.float32UUID),
-                    CBUUID(string: WeighMyBruParser.commandUUID),
-                    CBUUID(string: WeighMyBruParser.capabilitiesUUID)
-                ], for: service)
-            case WeighMyBruParser.batteryServiceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: WeighMyBruParser.batteryLevelUUID)], for: service)
-            case AcaiaParser.serviceUUID, AcaiaParser.fullServiceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: AcaiaParser.fullModernCharUUID)], for: service)
-            case AcaiaParser.legacyServiceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: AcaiaParser.legacyNotifyUUID), CBUUID(string: AcaiaParser.legacyWriteUUID)], for: service)
-            case FelicitaParser.serviceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: FelicitaParser.charUUID)], for: service)
-            case Skale2Parser.serviceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: Skale2Parser.notifyUUID), CBUUID(string: Skale2Parser.writeUUID)], for: service)
-            case DecentEspressiParser.serviceUUID:
-                peripheral.discoverCharacteristics([
-                    CBUUID(string: DecentEspressiParser.notifyUUID),
-                    CBUUID(string: DecentEspressiParser.writeUUID),
-                    CBUUID(string: EurekaPrecisaParser.notifyUUID),
-                    CBUUID(string: EurekaPrecisaParser.writeUUID),
-                    CBUUID(string: FutulaParser.writeUUID)
-                ], for: service)
-            case DiFluidParser.serviceUUID, DiFluidParser.tiServiceUUID:
-                peripheral.discoverCharacteristics([CBUUID(string: DiFluidParser.charUUID)], for: service)
-            default:
-                break
+            peripheral.services?.forEach { service in
+                switch service.uuid.uuidString.uppercased() {
+                case BookooParser.serviceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: BookooParser.notifyUUID), CBUUID(string: BookooParser.writeUUID)], for: service)
+                case WeighMyBruParser.serviceUUID:
+                    peripheral.discoverCharacteristics([
+                        CBUUID(string: WeighMyBruParser.weight20UUID),
+                        CBUUID(string: WeighMyBruParser.float32UUID),
+                        CBUUID(string: WeighMyBruParser.commandUUID),
+                        CBUUID(string: WeighMyBruParser.capabilitiesUUID)
+                    ], for: service)
+                case WeighMyBruParser.batteryServiceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: WeighMyBruParser.batteryLevelUUID)], for: service)
+                case AcaiaParser.serviceUUID, AcaiaParser.fullServiceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: AcaiaParser.fullModernCharUUID)], for: service)
+                case AcaiaParser.legacyServiceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: AcaiaParser.legacyNotifyUUID), CBUUID(string: AcaiaParser.legacyWriteUUID)], for: service)
+                case FelicitaParser.serviceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: FelicitaParser.charUUID)], for: service)
+                case Skale2Parser.serviceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: Skale2Parser.notifyUUID), CBUUID(string: Skale2Parser.writeUUID)], for: service)
+                case DecentEspressiParser.serviceUUID:
+                    peripheral.discoverCharacteristics([
+                        CBUUID(string: DecentEspressiParser.notifyUUID),
+                        CBUUID(string: DecentEspressiParser.writeUUID),
+                        CBUUID(string: EurekaPrecisaParser.notifyUUID),
+                        CBUUID(string: EurekaPrecisaParser.writeUUID),
+                        CBUUID(string: FutulaParser.writeUUID)
+                    ], for: service)
+                case DiFluidParser.serviceUUID, DiFluidParser.tiServiceUUID:
+                    peripheral.discoverCharacteristics([CBUUID(string: DiFluidParser.charUUID)], for: service)
+                default:
+                    break
+                }
             }
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        if let error {
-            statusMessage = "Characteristic discovery failed: \(error.localizedDescription)"
-            return
-        }
-
-        service.characteristics?.forEach { characteristic in
-            let uuid = characteristic.uuid.uuidString.uppercased()
-
-            if isWritableCharacteristic(uuid) && (characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse)) {
-                writeCharacteristic = characteristic
+        performOnMain {
+            if let error {
+                self.statusMessage = "Characteristic discovery failed: \(error.localizedDescription)"
+                return
             }
 
-            if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
-                peripheral.setNotifyValue(true, for: characteristic)
-            }
+            service.characteristics?.forEach { characteristic in
+                let uuid = characteristic.uuid.uuidString.uppercased()
 
-            if characteristic.properties.contains(.read)
-                && (uuid == WeighMyBruParser.capabilitiesUUID || uuid == WeighMyBruParser.batteryLevelUUID) {
-                peripheral.readValue(for: characteristic)
+                if self.isWritableCharacteristic(uuid) && (characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse)) {
+                    self.writeCharacteristic = characteristic
+                }
+
+                if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
+                    peripheral.setNotifyValue(true, for: characteristic)
+                }
+
+                if characteristic.properties.contains(.read)
+                    && (uuid == WeighMyBruParser.capabilitiesUUID || uuid == WeighMyBruParser.batteryLevelUUID) {
+                    peripheral.readValue(for: characteristic)
+                }
             }
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        if let error {
-            statusMessage = "Notification setup failed: \(error.localizedDescription)"
-            return
-        }
-        if characteristic.isNotifying {
-            sendInitialConfigurationIfNeeded()
+        performOnMain {
+            if let error {
+                self.statusMessage = "Notification setup failed: \(error.localizedDescription)"
+                return
+            }
+            if characteristic.isNotifying {
+                self.sendInitialConfigurationIfNeeded()
+            }
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        let arrival = Date()
+        let monotonic = CACurrentMediaTime()
         if let error {
-            statusMessage = "Value update failed: \(error.localizedDescription)"
+            performOnMain {
+                self.statusMessage = "Value update failed: \(error.localizedDescription)"
+            }
             return
         }
         guard let data = characteristic.value else { return }
-        handleValueUpdate(data: data, characteristic: characteristic)
+        performOnMain {
+            self.handleValueUpdate(data: data, characteristic: characteristic, arrival: arrival, monotonic: monotonic)
+        }
     }
 }
 

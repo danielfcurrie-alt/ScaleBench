@@ -4,7 +4,7 @@
   <img src="ScaleBench/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png" alt="ScaleBench app icon" width="120" height="120">
 </p>
 
-ScaleBench is an open iOS and MacOS Bluetooth scale analyzer for coffee-scale transport quality. It records raw BLE packets, parses supported scale protocols into a canonical sample stream, scores transport/stability/metadata quality, and exports a JSON recording for external analysis.
+ScaleBench is an open iOS and MacOS Bluetooth scale analyzer for coffee-scale transport quality. It records raw BLE packets, parses supported scale protocols into a canonical sample stream, scores transport/stability quality, reports telemetry coverage, and exports a JSON recording for external analysis.
 
 The main goal is protocol and hardware comparison: WMB vs BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
 
@@ -64,6 +64,8 @@ ScaleBench records the same raw packet stream in every mode; the mode labels wha
 ## Scoring
 
 The default score is **ScaleBench Standard v1**. Treat that as the public benchmark profile for apples-to-apples tester comparisons.
+
+Standard v1 intentionally does not deduct points for optional telemetry coverage such as battery, sequence numbers, device timestamps, or firmware-side quality fields. Those fields are still reported and exported, but the official score is based on measured arrival cadence/transport behavior and stability so simpler protocols are not handicapped before the first packet is timed.
 
 The app also includes configurable scoring profiles so the same recording can be judged with different weights and thresholds:
 

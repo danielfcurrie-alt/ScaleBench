@@ -134,7 +134,8 @@ enum DecentEspressiParser {
         let timestamp: UInt32?
         if bytes.count >= 10, bytes[6] < 60, bytes[7] < 10 {
             let seconds = Double(bytes[5]) * 60.0 + Double(bytes[6]) + Double(bytes[7]) / 10.0
-            timestamp = UInt32((seconds * 1_000.0).rounded())
+            let milliseconds = UInt32((seconds * 1_000.0).rounded())
+            timestamp = milliseconds > 0 ? milliseconds : nil
         } else {
             timestamp = nil
         }

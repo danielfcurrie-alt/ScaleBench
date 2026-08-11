@@ -137,9 +137,9 @@ struct ScoringProfile: Codable, Equatable {
 
     static let standard = ScoringProfile(
         name: standardBenchmarkName,
-        transportWeight: 0.50,
+        transportWeight: 0.65,
         stabilityWeight: 0.35,
-        metadataWeight: 0.15,
+        metadataWeight: 0.00,
         minimumLongGapMilliseconds: 300,
         longGapMultiplier: 3,
         longGapPenalty: 5,
@@ -399,7 +399,7 @@ struct WMBPlusCapabilities: Codable, Equatable {
 }
 
 struct ScaleRecording: Codable, Equatable {
-    static let schemaVersion = 4
+    static let schemaVersion = 5
 
     var id: UUID
     var schemaVersion: Int

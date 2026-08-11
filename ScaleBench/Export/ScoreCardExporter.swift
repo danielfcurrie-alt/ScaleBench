@@ -79,7 +79,7 @@ private struct ShareableScoreCard: View {
             HStack(spacing: 14) {
                 scorePill(title: "Transport", value: metrics.transportScore)
                 scorePill(title: "Stability", value: metrics.stabilityScore)
-                scorePill(title: "Metadata", value: metrics.metadataScore)
+                scorePill(title: "Telemetry", value: metrics.metadataScore)
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
@@ -105,7 +105,7 @@ private struct ShareableScoreCard: View {
 
             Spacer(minLength: 0)
 
-            Text("Official ScaleBench score. Scored with \(recording.scoringProfile.name). Raw recording export available from ScaleBench.")
+            Text("Official ScaleBench score. Scored with \(recording.scoringProfile.name). Telemetry coverage is shown for context and is not weighted in Standard v1. Raw recording export available from ScaleBench.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

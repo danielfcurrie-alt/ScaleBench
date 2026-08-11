@@ -118,6 +118,13 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(sample.deviceTimestampMilliseconds, 62_300)
     }
 
+    func testDecentZeroTimerTimestampIsIgnored() throws {
+        let data = Data([0x03, 0xCE, 0x00, 0x7B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        let result = DecentEspressiParser.parseWeightPacket(data, kind: .decent, arrivalTime: Date(), monotonicSeconds: 1)
+        guard case let .success(sample) = result else { return XCTFail("Expected Decent sample") }
+        XCTAssertNil(sample.deviceTimestampMilliseconds)
+    }
+
     func testDiFluidSensorAndBatteryPacketsParse() throws {
         var sensor: [UInt8] = [
             0xDF, 0xDF, 0x03, 0x00, 0x0D,
@@ -205,6 +212,37 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(metrics.duplicateOrOutOfOrderTimestampCount, 0)
         XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 10, accuracy: 0.01)
         XCTAssertEqual(metrics.metadataScore, 100)
+    }
+
+    func testTransportScoringUsesHostArrivalIntervalsEvenWhenDeviceTimestampsArePerfect() throws {
+        let hostTimes = [0.00, 0.01, 0.02, 0.03, 0.04, 0.52, 0.53, 0.54, 0.55, 0.56]
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = hostTimes.enumerated().map { index, seconds in
+            var sample = makePlusSample(index: index)
+            sample.monotonicSeconds = seconds
+            sample.arrivalTime = Date(timeIntervalSince1970: seconds)
+            sample.deviceTimestampMilliseconds = UInt32(index * 100)
+            return sample
+        }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(try XCTUnwrap(metrics.packetIntervalP50Milliseconds), 10, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(metrics.packetIntervalMaxMilliseconds), 480, accuracy: 0.001)
+        XCTAssertEqual(metrics.longGapCount, 1)
+        XCTAssertLessThan(try XCTUnwrap(metrics.transportScore), 100)
+    }
+
+    func testStandardScoreDoesNotDeductMissingOptionalMetadata() throws {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = (0..<12).map { index in
+            makeSample(seconds: Double(index) * 0.1, weight: Double(index) * 0.2)
+        }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.metadataScore, 0)
+        XCTAssertEqual(metrics.overallScore, 100)
     }
 
     func testStrictScoringCanBeAppliedWithoutChangingStandardProfile() {
@@ -302,6 +340,22 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(metrics.stabilityScore, 84)
     }
 
+    func testDynamicStabilityInfersTransientWeightSpikeAsBump() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.2),
+            makeSample(seconds: 0.2, weight: 5.4),
+            makeSample(seconds: 0.3, weight: 0.4),
+            makeSample(seconds: 0.4, weight: 0.6)
+        ]
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.firmwareBumpCount, 1)
+        XCTAssertEqual(metrics.stabilityScore, 92)
+    }
+
     func testDuplicateAndReverseSequenceValuesDoNotInflateMissingCount() {
         var first = makePlusSample(index: 0)
         var second = makePlusSample(index: 1)
@@ -356,7 +410,7 @@ final class ScaleBenchTests: XCTestCase {
 
         XCTAssertEqual(metrics.longGapCount, 0)
         XCTAssertLessThan(try XCTUnwrap(metrics.transportScore), 100)
-        XCTAssertLessThan(try XCTUnwrap(metrics.overallScore), 85)
+        XCTAssertLessThan(try XCTUnwrap(metrics.overallScore), 90)
     }
 
     func testFullWidthDeviceTimestampRolloverUsesUInt32Range() throws {
@@ -533,6 +587,23 @@ final class ScaleBenchTests: XCTestCase {
 
         var recording = ScaleRecording.empty(mode: .shot)
         recording.schemaVersion = 3
+        recording.scoringProfile = ScoringProfile(
+            name: ScoringProfile.standardBenchmarkName,
+            transportWeight: 0.50,
+            stabilityWeight: 0.35,
+            metadataWeight: 0.15,
+            minimumLongGapMilliseconds: 300,
+            longGapMultiplier: 3,
+            longGapPenalty: 5,
+            missingSequencePenalty: 3,
+            timestampIssuePenalty: 4,
+            rejectedPacketRatePenaltyScale: 100,
+            idleNoiseFreePeakToPeakGrams: 0.20,
+            idleNoisePeakToPeakPenaltyScale: 10,
+            idleStandardDeviationFreeGrams: 0.05,
+            idleStandardDeviationPenaltyScale: 50,
+            driftPenaltyScale: 4
+        )
         recording.samples = [
             makeSample(seconds: 0, weight: 0),
             makeSample(seconds: 1, weight: 10)
@@ -555,8 +626,9 @@ final class ScaleBenchTests: XCTestCase {
         let migrated = try XCTUnwrap(SavedRecordingStore(directoryURL: directory).recordings.first)
 
         XCTAssertEqual(migrated.recording.schemaVersion, ScaleRecording.schemaVersion)
+        XCTAssertEqual(migrated.recording.scoringProfile, .standard)
         XCTAssertEqual(migrated.scoreSnapshot, ScaleQualityAnalyzer.analyze(migrated.recording))
-        XCTAssertNotNil(migrated.scoreSnapshot.overallScore)
+        XCTAssertEqual(migrated.scoreSnapshot.overallScore, 100)
     }
 
     func testProtocolComparisonRanksSavedRecordingsByScore() throws {
