@@ -203,6 +203,37 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(recording.scoringProfile.name, ScoringProfile.standard.name)
     }
 
+    func testStandardScoringProfileUsesStableBenchmarkName() {
+        XCTAssertEqual(ScoringProfile.standard.name, "ScaleBench Standard v1")
+        XCTAssertEqual(ScoringPreset.standard.displayName, "ScaleBench Standard v1")
+    }
+
+    func testCustomScoringProfileStoreRoundTripsJSONAndNormalizesWeights() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchScoringTests-\(UUID().uuidString)", isDirectory: true)
+        let fileURL = directory.appendingPathComponent("profiles.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var profile = ScoringProfile.strict
+        profile.name = "My Strict Profile"
+        profile.transportWeight = 2
+        profile.stabilityWeight = 1
+        profile.metadataWeight = 1
+
+        let store = CustomScoringProfileStore(fileURL: fileURL)
+        let saved = try XCTUnwrap(store.save(profile: profile))
+
+        XCTAssertEqual(saved.profile.name, "My Strict Profile")
+        XCTAssertEqual(saved.profile.transportWeight, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(saved.profile.stabilityWeight, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(saved.profile.metadataWeight, 0.25, accuracy: 0.0001)
+
+        let reloaded = CustomScoringProfileStore(fileURL: fileURL)
+        XCTAssertEqual(reloaded.profiles.count, 1)
+        XCTAssertEqual(reloaded.profiles.first?.id, saved.id)
+        XCTAssertEqual(reloaded.profiles.first?.profile.name, "My Strict Profile")
+    }
+
     func testSavedRecordingStoresNotesAndScoreSnapshot() throws {
         var recording = ScaleRecording.empty(mode: .shot)
         recording.device = ScaleDeviceIdentity(

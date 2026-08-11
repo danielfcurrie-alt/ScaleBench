@@ -71,7 +71,7 @@ enum ScoringPreset: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .standard: "Standard"
+        case .standard: ScoringProfile.standardBenchmarkName
         case .strict: "Strict"
         case .transportFocused: "Transport Focused"
         }
@@ -87,6 +87,8 @@ enum ScoringPreset: String, Codable, CaseIterable, Identifiable {
 }
 
 struct ScoringProfile: Codable, Equatable {
+    static let standardBenchmarkName = "ScaleBench Standard v1"
+
     var name: String
     var transportWeight: Double
     var stabilityWeight: Double
@@ -104,7 +106,7 @@ struct ScoringProfile: Codable, Equatable {
     var driftPenaltyScale: Double
 
     static let standard = ScoringProfile(
-        name: "Standard",
+        name: standardBenchmarkName,
         transportWeight: 0.50,
         stabilityWeight: 0.35,
         metadataWeight: 0.15,

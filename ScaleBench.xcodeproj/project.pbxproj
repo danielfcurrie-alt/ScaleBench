@@ -16,6 +16,8 @@
 		000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000012 /* AdditionalScaleParsers.swift */; };
 		000000000000000000000107 /* ScaleQualityAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000007 /* ScaleQualityAnalyzer.swift */; };
 		000000000000000000000108 /* RecordingExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000008 /* RecordingExporter.swift */; };
+		000000000000000000000112 /* ScoringProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000015 /* ScoringProfileStore.swift */; };
+		000000000000000000000113 /* ScoreCardExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000016 /* ScoreCardExporter.swift */; };
 		000000000000000000000201 /* ScaleBenchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000009 /* ScaleBenchTests.swift */; };
 		000000000000000000000111 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000014 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -45,6 +47,8 @@
 		000000000000000000000011 /* ScaleBenchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ScaleBenchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000013 /* ScaleBenchMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScaleBenchMac.entitlements; sourceTree = "<group>"; };
 		000000000000000000000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000015 /* ScoringProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoringProfileStore.swift; sourceTree = "<group>"; };
+		000000000000000000000016 /* ScoreCardExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCardExporter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000004 /* ScaleProtocolModels.swift */,
+				000000000000000000000015 /* ScoringProfileStore.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -145,6 +150,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000008 /* RecordingExporter.swift */,
+				000000000000000000000016 /* ScoreCardExporter.swift */,
 			);
 			path = Export;
 			sourceTree = "<group>";
@@ -256,6 +262,8 @@
 				000000000000000000000109 /* AdditionalScaleParsers.swift in Sources */,
 				000000000000000000000107 /* ScaleQualityAnalyzer.swift in Sources */,
 				000000000000000000000108 /* RecordingExporter.swift in Sources */,
+				000000000000000000000112 /* ScoringProfileStore.swift in Sources */,
+				000000000000000000000113 /* ScoreCardExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -28,13 +28,18 @@ BooKoo Mini/Ultra details are based on the public OpenSourceBooKoo protocol docs
 
 ## Scoring
 
-The default score is the standard ScaleBench score. The app also includes configurable scoring profiles so the same recording can be judged with different weights and thresholds:
+The default score is **ScaleBench Standard v1**. Treat that as the public benchmark profile for apples-to-apples tester comparisons.
 
-- Standard
+The app also includes configurable scoring profiles so the same recording can be judged with different weights and thresholds:
+
+- ScaleBench Standard v1
 - Strict
 - Transport Focused
+- locally saved custom profiles
 
-The selected scoring profile is embedded into every exported JSON recording so results can be reproduced.
+The selected scoring profile is embedded into every exported JSON recording so results can be reproduced. Custom profiles are useful for experimentation, but scores from custom profiles should not be compared directly against Standard v1 claims.
+
+The score explanation screen shows the active profile, benchmark/custom status, transport/stability/metadata weights, and the metrics feeding each subscore.
 
 ## Saved recordings and comparison
 
@@ -66,6 +71,8 @@ The JSON export includes:
 - parsed canonical samples
 - scoring profile
 - calculated metrics
+
+The scorecard PNG export creates a shareable image with the overall score, sub-scores, sample-rate/gap/rejection metrics, protocol identity, recording mode, notes, and the `Standard v1` or `Custom` scoring badge.
 
 ## Build
 

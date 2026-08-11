@@ -96,6 +96,12 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         statusMessage = connectedDevice == nil ? "Idle" : "Connected"
     }
 
+    func applyScoringProfile(_ profile: ScoringProfile) {
+        currentRecording.scoringProfile = profile
+        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
+        currentMetrics = currentRecording.metrics
+    }
+
     func finalizedCurrentRecording(notes: String = "") -> ScaleRecording {
         var finalized = currentRecording
         finalized.endedAt = finalized.endedAt ?? Date()
