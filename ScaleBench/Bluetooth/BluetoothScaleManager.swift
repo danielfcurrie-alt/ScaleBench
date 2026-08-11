@@ -96,11 +96,20 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         statusMessage = connectedDevice == nil ? "Idle" : "Connected"
     }
 
-    func exportCurrentRecording() -> URL? {
+    func finalizedCurrentRecording(notes: String = "") -> ScaleRecording {
+        var finalized = currentRecording
+        finalized.endedAt = finalized.endedAt ?? Date()
+        finalized.notes = notes
+        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+        return finalized
+    }
+
+    func exportCurrentRecording(notes: String = "") -> URL? {
         do {
-            currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
-            currentMetrics = currentRecording.metrics
-            return try RecordingExporter.export(currentRecording)
+            let finalized = finalizedCurrentRecording(notes: notes)
+            currentRecording = finalized
+            currentMetrics = finalized.metrics
+            return try RecordingExporter.export(finalized)
         } catch {
             statusMessage = "Export failed: \(error.localizedDescription)"
             return nil

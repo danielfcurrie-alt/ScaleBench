@@ -302,8 +302,9 @@ struct WMBPlusCapabilities: Codable, Equatable {
 }
 
 struct ScaleRecording: Codable, Equatable {
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
+    var id = UUID()
     var schemaVersion = Self.schemaVersion
     var appName = "ScaleBench"
     var appVersion = "0.1.0"
@@ -311,6 +312,7 @@ struct ScaleRecording: Codable, Equatable {
     var device: ScaleDeviceIdentity?
     var startedAt: Date
     var endedAt: Date?
+    var notes: String
     var rawPackets: [RawScalePacket]
     var samples: [ScaleSample]
     var capabilities: WMBPlusCapabilities?
@@ -323,12 +325,113 @@ struct ScaleRecording: Codable, Equatable {
             device: nil,
             startedAt: Date(),
             endedAt: nil,
+            notes: "",
             rawPackets: [],
             samples: [],
             capabilities: nil,
             scoringProfile: scoringProfile,
             metrics: .empty
         )
+    }
+}
+
+struct SavedScaleRecording: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var savedAt: Date
+    var title: String
+    var notes: String
+    var recording: ScaleRecording
+    var scoreSnapshot: ScaleQualityMetrics
+
+    var protocolKind: ScaleKind {
+        recording.device?.kind ?? recording.samples.last?.scaleKind ?? .unknown
+    }
+
+    static func make(
+        recording inputRecording: ScaleRecording,
+        title inputTitle: String? = nil,
+        notes inputNotes: String
+    ) -> SavedScaleRecording {
+        var finalized = inputRecording
+        finalized.endedAt = finalized.endedAt ?? Date()
+        finalized.notes = inputNotes
+        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+
+        let title = inputTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? inputTitle!
+            : defaultTitle(for: finalized)
+
+        return SavedScaleRecording(
+            savedAt: Date(),
+            title: title,
+            notes: inputNotes,
+            recording: finalized,
+            scoreSnapshot: finalized.metrics
+        )
+    }
+
+    private static func defaultTitle(for recording: ScaleRecording) -> String {
+        let protocolName = recording.device?.kind.displayName
+            ?? recording.samples.last?.scaleKind.displayName
+            ?? "Unknown Scale"
+        return "\(protocolName) · \(recording.mode.displayName)"
+    }
+}
+
+struct ProtocolComparisonRow: Identifiable, Equatable {
+    var id: UUID
+    var title: String
+    var protocolKind: ScaleKind
+    var mode: RecordingMode
+    var score: Int?
+    var sampleRateHz: Double?
+    var p95IntervalMilliseconds: Double?
+    var maxGapMilliseconds: Double?
+    var longGapCount: Int
+    var rejectedPacketCount: Int
+    var sampleCount: Int
+    var notes: String
+}
+
+struct ProtocolComparison: Equatable {
+    var rows: [ProtocolComparisonRow]
+
+    var bestOverall: ProtocolComparisonRow? {
+        rows.max { lhs, rhs in
+            (lhs.score ?? -1) < (rhs.score ?? -1)
+        }
+    }
+
+    var groupedByProtocol: [(ScaleKind, [ProtocolComparisonRow])] {
+        Dictionary(grouping: rows, by: \.protocolKind)
+            .map { ($0.key, $0.value.sorted(by: Self.compareRows)) }
+            .sorted { $0.0.displayName < $1.0.displayName }
+    }
+
+    static func make(from recordings: [SavedScaleRecording]) -> ProtocolComparison {
+        ProtocolComparison(rows: recordings.map { saved in
+            ProtocolComparisonRow(
+                id: saved.id,
+                title: saved.title,
+                protocolKind: saved.protocolKind,
+                mode: saved.recording.mode,
+                score: saved.scoreSnapshot.overallScore,
+                sampleRateHz: saved.scoreSnapshot.effectiveSampleRateHz,
+                p95IntervalMilliseconds: saved.scoreSnapshot.packetIntervalP95Milliseconds,
+                maxGapMilliseconds: saved.scoreSnapshot.packetIntervalMaxMilliseconds,
+                longGapCount: saved.scoreSnapshot.longGapCount,
+                rejectedPacketCount: saved.scoreSnapshot.rejectedPacketCount,
+                sampleCount: saved.recording.samples.count,
+                notes: saved.notes
+            )
+        }.sorted(by: compareRows))
+    }
+
+    private static func compareRows(_ lhs: ProtocolComparisonRow, _ rhs: ProtocolComparisonRow) -> Bool {
+        if (lhs.score ?? -1) != (rhs.score ?? -1) {
+            return (lhs.score ?? -1) > (rhs.score ?? -1)
+        }
+        return lhs.title < rhs.title
     }
 }
 

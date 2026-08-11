@@ -203,6 +203,68 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(recording.scoringProfile.name, ScoringProfile.standard.name)
     }
 
+    func testSavedRecordingStoresNotesAndScoreSnapshot() throws {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.device = ScaleDeviceIdentity(
+            name: "WeighMyBru+",
+            identifier: UUID(),
+            kind: .weighMyBruPlus,
+            advertisedServices: [WeighMyBruParser.serviceUUID]
+        )
+        recording.samples = [
+            makePlusSample(index: 0),
+            makePlusSample(index: 1),
+            makePlusSample(index: 2),
+            makePlusSample(index: 3),
+            makePlusSample(index: 4)
+        ]
+
+        let saved = SavedScaleRecording.make(
+            recording: recording,
+            title: "WMB+ bench shot",
+            notes: "80 SPS reference unit, no visible bumps"
+        )
+
+        XCTAssertEqual(saved.title, "WMB+ bench shot")
+        XCTAssertEqual(saved.notes, "80 SPS reference unit, no visible bumps")
+        XCTAssertEqual(saved.recording.notes, saved.notes)
+        XCTAssertEqual(saved.protocolKind, .weighMyBruPlus)
+        XCTAssertEqual(saved.scoreSnapshot.overallScore, saved.recording.metrics.overallScore)
+        XCTAssertNotNil(saved.scoreSnapshot.effectiveSampleRateHz)
+    }
+
+    func testSavedRecordingStoreRoundTripsJSON() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var recording = ScaleRecording.empty(mode: .idleStability)
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.01),
+            makeSample(seconds: 0.2, weight: 0.0)
+        ]
+
+        let store = SavedRecordingStore(directoryURL: directory)
+        let saved = try XCTUnwrap(store.save(recording: recording, notes: "quiet table"))
+
+        let reloaded = SavedRecordingStore(directoryURL: directory)
+        XCTAssertEqual(reloaded.recordings.count, 1)
+        XCTAssertEqual(reloaded.recordings.first?.id, saved.id)
+        XCTAssertEqual(reloaded.recordings.first?.notes, "quiet table")
+        XCTAssertEqual(reloaded.recordings.first?.scoreSnapshot.overallScore, saved.scoreSnapshot.overallScore)
+    }
+
+    func testProtocolComparisonRanksSavedRecordingsByScore() throws {
+        let low = savedRecording(kind: .eureka, score: 68, title: "Eureka")
+        let high = savedRecording(kind: .weighMyBruPlus, score: 95, title: "WMB+")
+        let comparison = ProtocolComparison.make(from: [low, high])
+
+        XCTAssertEqual(comparison.rows.first?.protocolKind, .weighMyBruPlus)
+        XCTAssertEqual(comparison.bestOverall?.score, 95)
+        XCTAssertEqual(comparison.groupedByProtocol.count, 2)
+    }
+
     private func makeSample(seconds: Double, weight: Double) -> ScaleSample {
         ScaleSample(
             arrivalTime: Date(timeIntervalSince1970: seconds),
@@ -234,6 +296,48 @@ final class ScaleBenchTests: XCTestCase {
             detectedSampleRateHz: 10,
             statusFlags: nil,
             diagnosticFlags: ScaleDiagnosticFlags(byte: 0xA4)
+        )
+    }
+
+    private func savedRecording(kind: ScaleKind, score: Int, title: String) -> SavedScaleRecording {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.device = ScaleDeviceIdentity(
+            name: title,
+            identifier: UUID(),
+            kind: kind,
+            advertisedServices: []
+        )
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.1)
+        ]
+        recording.metrics = ScaleQualityMetrics(
+            overallScore: score,
+            transportScore: score,
+            stabilityScore: score,
+            metadataScore: score,
+            effectiveSampleRateHz: 10,
+            packetIntervalP50Milliseconds: 100,
+            packetIntervalP95Milliseconds: 100,
+            packetIntervalMaxMilliseconds: 100,
+            longGapCount: 0,
+            missingSequenceCount: 0,
+            duplicateOrOutOfOrderTimestampCount: 0,
+            rejectedPacketCount: 0,
+            idleNoisePeakToPeakGrams: nil,
+            idleNoiseStandardDeviationGrams: nil,
+            driftGramsPerMinute: nil,
+            batteryMinPercent: nil,
+            batteryMaxPercent: nil,
+            firmwareQualityAverage: nil,
+            firmwareBumpCount: 0
+        )
+        return SavedScaleRecording(
+            savedAt: Date(),
+            title: title,
+            notes: "",
+            recording: recording,
+            scoreSnapshot: recording.metrics
         )
     }
 }

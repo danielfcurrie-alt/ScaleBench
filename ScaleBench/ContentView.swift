@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
+    @StateObject private var savedStore = SavedRecordingStore()
     @State private var selectedMode: RecordingMode = .idleStability
     @State private var selectedScoringPreset: ScoringPreset = .standard
+    @State private var recordingNotes = ""
     @State private var exportURL: URL?
 
     var body: some View {
@@ -65,6 +67,18 @@ struct ContentView: View {
                         }
                     }
 
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Notes")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextEditor(text: $recordingNotes)
+                            .frame(minHeight: 72)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.quaternary)
+                            }
+                    }
+
                     HStack {
                         Button(bluetooth.isRecording ? "Stop Recording" : "Start Recording") {
                             if bluetooth.isRecording {
@@ -77,16 +91,31 @@ struct ContentView: View {
                         .disabled(bluetooth.connectedDevice == nil)
 
                         Button("Export JSON") {
-                            exportURL = bluetooth.exportCurrentRecording()
+                            exportURL = bluetooth.exportCurrentRecording(notes: recordingNotes)
                         }
                         .buttonStyle(.bordered)
                         .disabled(bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty)
                     }
 
+                    Button {
+                        let snapshot = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
+                        _ = savedStore.save(recording: snapshot, notes: recordingNotes)
+                    } label: {
+                        Label("Save Recording", systemImage: "tray.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(bluetooth.isRecording || (bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty))
+
                     if let exportURL {
                         ShareLink(item: exportURL) {
                             Label("Share \(exportURL.lastPathComponent)", systemImage: "square.and.arrow.up")
                         }
+                    }
+
+                    if let error = savedStore.lastErrorMessage {
+                        Text("Save error: \(error)")
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                 }
 
@@ -113,6 +142,33 @@ struct ContentView: View {
                     MetricRow(title: "Rejected", value: "\(metrics.rejectedPacketCount)")
                     MetricRow(title: "Idle noise", value: metrics.idleNoisePeakToPeakGrams.map { String(format: "%.2f g p-p", $0) } ?? "—")
                     MetricRow(title: "Drift", value: metrics.driftGramsPerMinute.map { String(format: "%.3f g/min", $0) } ?? "—")
+                }
+
+                Section("Protocol comparison") {
+                    let comparison = savedStore.comparison
+                    if comparison.rows.count < 2 {
+                        ContentUnavailableView("Save two recordings", systemImage: "chart.bar.xaxis", description: Text("Record WMB, WMB+, BooKoo standard, or native BooKoo sessions, then compare their scores side by side."))
+                    } else {
+                        if let best = comparison.bestOverall {
+                            MetricRow(title: "Best overall", value: "\(best.protocolKind.displayName) · \(best.score.map { "\($0)" } ?? "—")")
+                        }
+                        ForEach(comparison.rows) { row in
+                            ComparisonRow(row: row)
+                        }
+                    }
+                }
+
+                Section("Saved recordings") {
+                    if savedStore.recordings.isEmpty {
+                        ContentUnavailableView("No saved recordings", systemImage: "tray", description: Text("Saved recordings keep the raw packets, score snapshot, scoring profile, and your notes."))
+                    } else {
+                        ForEach(savedStore.recordings) { saved in
+                            SavedRecordingRow(saved: saved)
+                        }
+                        .onDelete { offsets in
+                            offsets.map { savedStore.recordings[$0] }.forEach(savedStore.delete)
+                        }
+                    }
                 }
             }
             .navigationTitle("ScaleBench")
@@ -141,6 +197,62 @@ private struct MetricRow: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
+
+private struct ComparisonRow: View {
+    let row: ProtocolComparisonRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(row.protocolKind.displayName)
+                    .font(.headline)
+                Spacer()
+                Text(row.score.map { "\($0)/100" } ?? "—")
+                    .monospacedDigit()
+            }
+            Text("\(row.mode.displayName) · \(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("gaps \(row.longGapCount) · rejected \(row.rejectedPacketCount) · max \(formatMilliseconds(row.maxGapMilliseconds))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct SavedRecordingRow: View {
+    let saved: SavedScaleRecording
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(saved.title)
+                    .font(.headline)
+                Spacer()
+                Text(saved.scoreSnapshot.overallScore.map { "\($0)/100" } ?? "—")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(saved.protocolKind.displayName) · \(saved.recording.samples.count) samples · \(formatRate(saved.scoreSnapshot.effectiveSampleRateHz))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(saved.notes)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+}
+
+private func formatRate(_ value: Double?) -> String {
+    value.map { String(format: "%.1f Hz", $0) } ?? "—"
+}
+
+private func formatMilliseconds(_ value: Double?) -> String {
+    value.map { String(format: "%.0f ms", $0) } ?? "—"
 }
 
 #Preview {
