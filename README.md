@@ -9,7 +9,7 @@ ScaleBench is an open Bluetooth coffee-scale analyzer for iPhone, iPad, macOS Ca
 ScaleBench is a diagnostic benchmark, not a brew log. Its purpose is to compare scale hardware and protocols under controlled procedures.
 
 <p align="center">
-  <img src="docs/images/scalebench-v1-macos.png" alt="ScaleBench Standard v1 recording analysis on macOS" width="900">
+  <img src="docs/images/scalebench-v1-android.jpg" alt="ScaleBench Standard v1 weight and packet-cadence analysis on Android" width="440">
 </p>
 
 For recording procedures, scoring explanations, diagnostics, and troubleshooting, see [HELP.md](HELP.md).
