@@ -3,16 +3,12 @@ import Foundation
 
 enum RecordingExporter {
     static func export(_ recording: ScaleRecording) throws -> URL {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-
         var finalized = recording
         finalized.schemaVersion = ScaleRecording.schemaVersion
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
 
-        let data = try encoder.encode(finalized)
+        let data = try SharedRecordingCodec.exportData(from: finalized)
         let timestamp = ISO8601DateFormatter()
             .string(from: finalized.startedAt)
             .replacingOccurrences(of: ":", with: "-")
@@ -53,11 +49,10 @@ final class SavedRecordingStore: ObservableObject {
             let saved = SavedScaleRecording.make(recording: recording, title: title, notes: notes)
             let url = fileURL(for: saved.id)
 
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            try encoder.encode(saved).write(to: url, options: [.atomic])
+            try backupExistingFileIfNeeded(at: url)
+            try SharedRecordingCodec.exportData(from: saved.recording).write(to: url, options: [.atomic])
 
+            recordings.removeAll { $0.id == saved.id }
             recordings.insert(saved, at: 0)
             recordings = recordings.sorted { $0.savedAt > $1.savedAt }
             lastErrorMessage = nil
@@ -76,19 +71,36 @@ final class SavedRecordingStore: ObservableObject {
                 return
             }
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            recordings = try fileManager.contentsOfDirectory(
+            let recordingFiles = try fileManager.contentsOfDirectory(
                 at: directoryURL,
-                includingPropertiesForKeys: nil
+                includingPropertiesForKeys: [.isRegularFileKey]
             )
             .filter { $0.pathExtension == "json" }
-            .compactMap { url in
-                try? decoder.decode(SavedScaleRecording.self, from: Data(contentsOf: url))
+
+            var failedFileCount = 0
+            let decoded = recordingFiles
+            .compactMap { url -> (saved: SavedScaleRecording, url: URL)? in
+                guard let saved = Self.decodeSavedRecordingFile(at: url) else {
+                    failedFileCount += 1
+                    return nil
+                }
+                return (saved, url)
             }
-            .map(Self.migratingScoreIfNeeded)
+
+            var winnersByID: [UUID: (saved: SavedScaleRecording, url: URL)] = [:]
+            for entry in decoded {
+                if let existing = winnersByID[entry.saved.id], existing.saved.savedAt >= entry.saved.savedAt {
+                    continue
+                }
+                winnersByID[entry.saved.id] = entry
+            }
+
+            recordings = winnersByID.values
+                .map { $0.saved }
             .sorted { $0.savedAt > $1.savedAt }
-            lastErrorMessage = nil
+            lastErrorMessage = failedFileCount == 0
+                ? nil
+                : "\(failedFileCount) saved recording file\(failedFileCount == 1 ? "" : "s") could not be read. Files were left in place."
         } catch {
             lastErrorMessage = error.localizedDescription
         }
@@ -96,11 +108,38 @@ final class SavedRecordingStore: ObservableObject {
 
     func delete(_ saved: SavedScaleRecording) {
         do {
-            try fileManager.removeItem(at: fileURL(for: saved.id))
+            try deleteBackupFiles(for: saved.id)
+            let url = fileURL(for: saved.id)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
             recordings.removeAll { $0.id == saved.id }
             lastErrorMessage = nil
         } catch {
             lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func importRecording(from url: URL) -> SavedScaleRecording? {
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try Self.decodeImportedRecording(from: data)
+            let embeddedTitle = imported.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = embeddedTitle?.isEmpty == false
+                ? embeddedTitle
+                : "Imported \(url.deletingPathExtension().lastPathComponent)"
+            return save(recording: imported, notes: imported.notes, title: title)
+        } catch {
+            lastErrorMessage = "Import failed: \(error.localizedDescription)"
+            return nil
         }
     }
 
@@ -123,9 +162,16 @@ final class SavedRecordingStore: ObservableObject {
         directoryURL.appendingPathComponent(".examples-seeded-v1")
     }
 
+    private var backupDirectoryURL: URL {
+        directoryURL.appendingPathComponent(".backups", isDirectory: true)
+    }
+
     private func seedExampleRecordingsIfNeeded() {
         guard seedExamples else { return }
         if fileManager.fileExists(atPath: examplesMarkerURL.path) { return }
+        if hasAnyRecordingFiles() {
+            return
+        }
         guard recordings.isEmpty else {
             markExamplesSeeded()
             return
@@ -142,16 +188,67 @@ final class SavedRecordingStore: ObservableObject {
         }
     }
 
-    private static func migratingScoreIfNeeded(_ saved: SavedScaleRecording) -> SavedScaleRecording {
-        guard saved.recording.schemaVersion < ScaleRecording.schemaVersion else { return saved }
-        var migrated = saved
-        migrated.recording.schemaVersion = ScaleRecording.schemaVersion
-        if migrated.recording.scoringProfile.name == ScoringProfile.standardBenchmarkName {
-            migrated.recording.scoringProfile = .standard
+    private func hasAnyRecordingFiles() -> Bool {
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey]
+        ) else {
+            return false
         }
-        migrated.recording.metrics = ScaleQualityAnalyzer.analyze(migrated.recording)
-        migrated.scoreSnapshot = migrated.recording.metrics
-        return migrated
+        return files.contains { $0.pathExtension == "json" }
+    }
+
+    private func backupExistingFileIfNeeded(at url: URL) throws {
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        try fileManager.createDirectory(at: backupDirectoryURL, withIntermediateDirectories: true)
+        let timestamp = Int(Date().timeIntervalSince1970 * 1_000)
+        let backupURL = backupDirectoryURL
+            .appendingPathComponent("\(url.deletingPathExtension().lastPathComponent)-\(timestamp)")
+            .appendingPathExtension(url.pathExtension)
+        if fileManager.fileExists(atPath: backupURL.path) {
+            try fileManager.removeItem(at: backupURL)
+        }
+        try fileManager.copyItem(at: url, to: backupURL)
+    }
+
+    private func deleteBackupFiles(for id: UUID) throws {
+        guard fileManager.fileExists(atPath: backupDirectoryURL.path) else { return }
+        let prefix = "\(id.uuidString)-"
+        let backups = try fileManager.contentsOfDirectory(
+            at: backupDirectoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey]
+        )
+        for backup in backups where backup.lastPathComponent.hasPrefix(prefix) {
+            try fileManager.removeItem(at: backup)
+        }
+    }
+
+    private static func savedRecording(from recording: ScaleRecording, savedAt: Date) -> SavedScaleRecording {
+        var refreshed = recording
+        refreshed.schemaVersion = ScaleRecording.schemaVersion
+        refreshed.scoringModelVersion = ScaleRecording.scoringModelVersion
+        if refreshed.scoringProfile.name == ScoringProfile.standardBenchmarkName {
+            refreshed.scoringProfile = .standard
+        }
+        refreshed.metrics = ScaleQualityAnalyzer.analyze(refreshed)
+        let title = refreshed.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? refreshed.title!.trimmingCharacters(in: .whitespacesAndNewlines)
+            : defaultTitle(for: refreshed)
+        refreshed.title = title
+        return SavedScaleRecording(
+            id: refreshed.id,
+            savedAt: savedAt,
+            title: title,
+            notes: refreshed.notes,
+            recording: refreshed,
+            scoreSnapshot: refreshed.metrics
+        )
+    }
+
+    private static func decodeSavedRecordingFile(at url: URL) -> SavedScaleRecording? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let recording = try? SharedRecordingCodec.decodeRecording(from: data) else { return nil }
+        return savedRecording(from: recording, savedAt: savedAt(for: url))
     }
 
     private static func defaultDirectoryURL(fileManager: FileManager) -> URL {
@@ -160,5 +257,21 @@ final class SavedRecordingStore: ObservableObject {
         return base
             .appendingPathComponent("ScaleBench", isDirectory: true)
             .appendingPathComponent("Recordings", isDirectory: true)
+    }
+
+    private static func decodeImportedRecording(from data: Data) throws -> ScaleRecording {
+        try SharedRecordingCodec.decodeRecording(from: data)
+    }
+
+    private static func defaultTitle(for recording: ScaleRecording) -> String {
+        let protocolName = recording.device?.kind.displayName
+            ?? recording.samples.last?.scaleKind.displayName
+            ?? "Unknown Scale"
+        return "\(protocolName) · \(recording.mode.displayName)"
+    }
+
+    private static func savedAt(for url: URL) -> Date {
+        let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+        return values?.creationDate ?? values?.contentModificationDate ?? Date()
     }
 }

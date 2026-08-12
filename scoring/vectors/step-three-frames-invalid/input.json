@@ -1,0 +1,25 @@
+{
+  "description": "Three frames spanning 10 s cannot prove rise time or a one-second settling hold.",
+  "events": [],
+  "frames": [
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.0,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.0,
+      "weightGrams": 100.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.9,
+      "weightGrams": 100.0
+    }
+  ],
+  "mode": "stepResponse",
+  "recordingEndMonotonicSeconds": 10.0,
+  "recordingStartMonotonicSeconds": 0.0,
+  "vectorId": "step-three-frames-invalid"
+}

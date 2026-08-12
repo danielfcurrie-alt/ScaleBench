@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "title": "ScaleBench Help",
+  "sections": [
+    {
+      "title": "Quick start",
+      "items": [
+        { "type": "step", "number": "1", "title": "Scan and connect", "text": "Power on a supported Bluetooth scale, tap Scan, then select the scale." },
+        { "type": "step", "number": "2", "title": "Choose a mode", "text": "Use Shot / Pour for normal public comparisons. Use the other modes only when testing a specific behavior." },
+        { "type": "step", "number": "3", "title": "Record", "text": "Tap Start Recording and keep ScaleBench in the foreground. The app keeps the screen awake while capture is running." },
+        { "type": "step", "number": "4", "title": "Stop and inspect", "text": "Tap Stop and View Results. ScaleBench saves the recording automatically; export JSON or make an official scorecard only when you want a file copy." }
+      ]
+    },
+    {
+      "title": "Official test procedures",
+      "items": [
+        { "type": "row", "title": "Shot / Pour", "value": "20 s; tare and settle before Start; stop before removing the vessel. Result: Delivery." },
+        { "type": "row", "title": "Transport Stress", "value": "120 s; deliberately stress the BLE link with range, motion, or interference. Result: Delivery." },
+        { "type": "row", "title": "Idle Stability", "value": "60 s untouched on a stable surface; first 5 s are settling. Result: Idle Stability." },
+        { "type": "row", "title": "Step Response", "value": "10 s; start empty, wait at least 2 s, add at least 5 g once, then hold through the final window. Result: metrics only." },
+        { "type": "row", "title": "Tare Latency", "value": "5 s around one tare action. Result: metrics only." },
+        { "type": "row", "title": "Battery Logging", "value": "60 s while capturing exposed battery telemetry. Result: telemetry only." },
+        { "type": "text", "text": "If a validity gate fails, ScaleBench keeps the diagnostics and shows the reason, but does not issue an official score." },
+        { "type": "text", "text": "All official tests must stay in the foreground. Switching apps records an app-state event and invalidates the official result, while keeping the recording available for diagnosis." }
+      ]
+    },
+    {
+      "title": "Delivery score",
+      "items": [
+        { "type": "text", "text": "Shot / Pour and Transport Stress show the score math directly: delivered packets, usable readings, then score." },
+        { "type": "text", "text": "Delivered packets compares received updates against the 20-per-second Shot / Pour target. A clean 9 Hz stream delivers only about 45% of the expected updates." },
+        { "type": "text", "text": "Usable readings counts how many received weight readings could be trusted for scoring. Status, battery, capability, and other non-weight frames are excluded." },
+        { "type": "text", "text": "Score = round(100 x delivered ratio x usable ratio). Example: round(100 x 0.448 x 0.856) = 38." },
+        { "type": "text", "text": "Packet checks shows how many defect checks were active. It depends on both the scale protocol and the selected mode; Transport Stress intentionally disables weight-physics and duplicate checks." }
+      ]
+    },
+    {
+      "title": "What causes deductions",
+      "items": [
+        { "type": "bullet", "text": "Missing or late usable frames leave 50 ms slots empty and reduce coverage." },
+        { "type": "bullet", "text": "Checksum, CRC, length, header, or unit failures reduce purity when the protocol exposes them." },
+        { "type": "bullet", "text": "Sequence numbers can expose out-of-order frames; free-running device clocks can expose stale frames." },
+        { "type": "bullet", "text": "Isolated implausible weight spikes reduce purity in Shot / Pour and Idle Stability. Sustained Shot / Pour motion is not treated as packet corruption." },
+        { "type": "bullet", "text": "Avoidable duplicate weight values reduce purity in Shot / Pour only when a distinct value should have been achievable." },
+        { "type": "bullet", "text": "A disconnect invalidates normal modes; Transport Stress records disconnects without invalidating because provoking link trouble is the point." },
+        { "type": "bullet", "text": "Leaving ScaleBench during a recording invalidates every official mode because iOS and Android schedule background Bluetooth differently." },
+        { "type": "text", "text": "If the packet inspector shows no bad packets but the score is still low, check Delivered packets and Usable readings first." }
+      ]
+    },
+    {
+      "title": "Other results",
+      "items": [
+        { "type": "text", "text": "Idle Stability scores detrended residual noise and drift after discarding the first 5 seconds. Noise and drift are combined geometrically so one bad term cannot be hidden by one good term." },
+        { "type": "text", "text": "Step Response reports onset, rise time, settling time, and overshoot. It is not a 0-100 score because real hardware data is still needed before thresholds are credible." },
+        { "type": "text", "text": "Tare Latency and Battery Logging are metrics-only modes." }
+      ]
+    },
+    {
+      "title": "Visualizer",
+      "items": [
+        { "type": "bullet", "text": "Weight stream shows parsed sample weight over time." },
+        { "type": "bullet", "text": "Packet cadence shows arrival intervals and gap behavior." },
+        { "type": "bullet", "text": "Scorecard shows coverage, purity, protocol detail, validity, and frame-class counts." },
+        { "type": "bullet", "text": "Packet inspector lists packets by time and event. Tap one to see selectable raw hex; matching colors connect byte ranges to parser-decoded fields." },
+        { "type": "bullet", "text": "Signal diagnostics compare a scale's reported flow with smoothed weight change, estimate drift for genuine free-running BooKoo and WMB+ clocks, and show how many weight frames occupy each 50 ms scoring slot." },
+        { "type": "text", "text": "Signal diagnostics explain behavior but do not add or remove score points. Decent's shot timer is intentionally not treated as a free-running device clock." },
+        { "type": "text", "text": "Color and emphasis are diagnostic, not a separate score. The official numbers always come from Standard v1." }
+      ]
+    },
+    {
+      "title": "Saved recordings",
+      "items": [
+        { "type": "text", "text": "Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported, using the current ScaleBench Standard v1 analyzer." },
+        { "type": "text", "text": "Compare only recordings made with the same mode and platform. Keep the scoring model version, platform, and available protocol checks with any published result." }
+      ]
+    },
+    {
+      "title": "Device Utility",
+      "items": [
+        { "type": "text", "text": "Device Utility, or DU, is separate from scoring. Use it to inspect connected-device update capability and export a device report." },
+        { "type": "bullet", "text": "Android can start classic Nordic nRF5 Secure/Legacy DFU from a firmware ZIP package when the connected device exposes a compatible DFU bootloader." },
+        { "type": "bullet", "text": "SMP/McuManager update support is detected but not active yet." },
+        { "type": "bullet", "text": "Device Utility is not exposed in the iOS/iPadOS app." },
+        { "type": "bullet", "text": "macOS Catalyst can scan cabled USB serial devices and run ESP32 backup/app-binary flash through local esptool when available." },
+        { "type": "bullet", "text": "Android detects attached USB devices and includes them in DU reports. Android ESP32 backup/flash needs a native esp-serial-flasher bridge before destructive operations are enabled." }
+      ]
+    },
+    {
+      "title": "Exports",
+      "items": [
+        { "type": "text", "text": "JSON is the complete evidence record: raw packets, parsed samples, recording boundaries, app-state events, link setup, protocol capabilities, validity, score details, and diagnostics." },
+        { "type": "text", "text": "Scorecard images are available only for valid scored modes and always use ScaleBench Standard v1." }
+      ]
+    },
+    {
+      "title": "Source & legal",
+      "items": [
+        { "type": "text", "text": "ScaleBench is open source. The repository includes the app code, shared schemas, test fixtures, scoring documentation, privacy policy, and MIT license." },
+        { "type": "link", "title": "GitHub repository", "value": "https://github.com/danielfcurrie-alt/ScaleBench" },
+        { "type": "link", "title": "Privacy policy", "value": "https://github.com/danielfcurrie-alt/ScaleBench/blob/main/PRIVACY.md" },
+        { "type": "link", "title": "MIT license", "value": "https://github.com/danielfcurrie-alt/ScaleBench/blob/main/LICENSE" }
+      ]
+    },
+    {
+      "title": "Troubleshooting",
+      "items": [
+        { "type": "text", "text": "If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and Protocol detail." },
+        { "type": "text", "text": "Backgrounding the app invalidates an official result. Low-power mode, distance, interference, and unstable Bluetooth conditions can affect the captured data." },
+        { "type": "text", "text": "If battery or flow is missing, the connected protocol probably did not expose it. ScaleBench records only what the scale sends." },
+        { "type": "text", "text": "Saved recordings are local to the device until exported as JSON." }
+      ]
+    }
+  ]
+}

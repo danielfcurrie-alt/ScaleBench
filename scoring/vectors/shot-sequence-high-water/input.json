@@ -1,0 +1,3620 @@
+{
+  "description": "Two backward sequence values in a row. Both must be outOfOrder; the first must not reset the accepted sequence high-water mark.",
+  "events": [],
+  "frames": [
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.0,
+      "sequence": 0,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.05,
+      "sequence": 1,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.1,
+      "sequence": 2,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.15,
+      "sequence": 3,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.2,
+      "sequence": 4,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.25,
+      "sequence": 5,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.3,
+      "sequence": 6,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.35,
+      "sequence": 7,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.4,
+      "sequence": 8,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.45,
+      "sequence": 9,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.5,
+      "sequence": 10,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.55,
+      "sequence": 11,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.6,
+      "sequence": 12,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.65,
+      "sequence": 13,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.7,
+      "sequence": 14,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.75,
+      "sequence": 15,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.8,
+      "sequence": 16,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.85,
+      "sequence": 17,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.9,
+      "sequence": 18,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.95,
+      "sequence": 19,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.0,
+      "sequence": 20,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.05,
+      "sequence": 21,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.1,
+      "sequence": 22,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.15,
+      "sequence": 23,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.2,
+      "sequence": 24,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.25,
+      "sequence": 25,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.3,
+      "sequence": 26,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.35,
+      "sequence": 27,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.4,
+      "sequence": 28,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.45,
+      "sequence": 29,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.5,
+      "sequence": 30,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.55,
+      "sequence": 31,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.6,
+      "sequence": 32,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.65,
+      "sequence": 33,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.7,
+      "sequence": 34,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.75,
+      "sequence": 35,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.8,
+      "sequence": 36,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.85,
+      "sequence": 37,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.9,
+      "sequence": 38,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 1.95,
+      "sequence": 39,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.0,
+      "sequence": 40,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.05,
+      "sequence": 41,
+      "weightGrams": 0.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.1,
+      "sequence": 42,
+      "weightGrams": 0.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.15,
+      "sequence": 43,
+      "weightGrams": 0.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.2,
+      "sequence": 44,
+      "weightGrams": 0.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.25,
+      "sequence": 45,
+      "weightGrams": 0.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.3,
+      "sequence": 46,
+      "weightGrams": 0.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.35,
+      "sequence": 47,
+      "weightGrams": 0.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.4,
+      "sequence": 48,
+      "weightGrams": 0.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.45,
+      "sequence": 49,
+      "weightGrams": 0.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.5,
+      "sequence": 50,
+      "weightGrams": 1.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.55,
+      "sequence": 51,
+      "weightGrams": 1.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.6,
+      "sequence": 52,
+      "weightGrams": 1.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.65,
+      "sequence": 53,
+      "weightGrams": 1.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.7,
+      "sequence": 54,
+      "weightGrams": 1.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.75,
+      "sequence": 55,
+      "weightGrams": 1.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.8,
+      "sequence": 56,
+      "weightGrams": 1.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.85,
+      "sequence": 57,
+      "weightGrams": 1.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.9,
+      "sequence": 58,
+      "weightGrams": 1.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 2.95,
+      "sequence": 59,
+      "weightGrams": 1.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.0,
+      "sequence": 60,
+      "weightGrams": 2.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.05,
+      "sequence": 61,
+      "weightGrams": 2.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.1,
+      "sequence": 62,
+      "weightGrams": 2.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.15,
+      "sequence": 63,
+      "weightGrams": 2.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.2,
+      "sequence": 64,
+      "weightGrams": 2.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.25,
+      "sequence": 65,
+      "weightGrams": 2.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.3,
+      "sequence": 66,
+      "weightGrams": 2.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.35,
+      "sequence": 67,
+      "weightGrams": 2.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.4,
+      "sequence": 68,
+      "weightGrams": 2.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.45,
+      "sequence": 69,
+      "weightGrams": 2.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.5,
+      "sequence": 70,
+      "weightGrams": 3.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.55,
+      "sequence": 71,
+      "weightGrams": 3.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.6,
+      "sequence": 72,
+      "weightGrams": 3.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.65,
+      "sequence": 73,
+      "weightGrams": 3.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.7,
+      "sequence": 74,
+      "weightGrams": 3.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.75,
+      "sequence": 75,
+      "weightGrams": 3.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.8,
+      "sequence": 76,
+      "weightGrams": 3.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.85,
+      "sequence": 77,
+      "weightGrams": 3.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.9,
+      "sequence": 78,
+      "weightGrams": 3.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 3.95,
+      "sequence": 79,
+      "weightGrams": 3.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.0,
+      "sequence": 80,
+      "weightGrams": 4.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.05,
+      "sequence": 81,
+      "weightGrams": 4.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.1,
+      "sequence": 82,
+      "weightGrams": 4.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.15,
+      "sequence": 83,
+      "weightGrams": 4.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.2,
+      "sequence": 84,
+      "weightGrams": 4.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.25,
+      "sequence": 85,
+      "weightGrams": 4.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.3,
+      "sequence": 86,
+      "weightGrams": 4.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.35,
+      "sequence": 87,
+      "weightGrams": 4.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.4,
+      "sequence": 88,
+      "weightGrams": 4.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.45,
+      "sequence": 89,
+      "weightGrams": 4.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.5,
+      "sequence": 90,
+      "weightGrams": 5.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.55,
+      "sequence": 91,
+      "weightGrams": 5.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.6,
+      "sequence": 92,
+      "weightGrams": 5.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.65,
+      "sequence": 93,
+      "weightGrams": 5.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.7,
+      "sequence": 94,
+      "weightGrams": 5.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.75,
+      "sequence": 95,
+      "weightGrams": 5.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.8,
+      "sequence": 96,
+      "weightGrams": 5.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.85,
+      "sequence": 97,
+      "weightGrams": 5.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.9,
+      "sequence": 98,
+      "weightGrams": 5.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 4.95,
+      "sequence": 99,
+      "weightGrams": 5.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.0,
+      "sequence": 90,
+      "weightGrams": 6.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.05,
+      "sequence": 95,
+      "weightGrams": 6.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.1,
+      "sequence": 102,
+      "weightGrams": 6.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.15,
+      "sequence": 103,
+      "weightGrams": 6.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.2,
+      "sequence": 104,
+      "weightGrams": 6.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.25,
+      "sequence": 105,
+      "weightGrams": 6.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.3,
+      "sequence": 106,
+      "weightGrams": 6.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.35,
+      "sequence": 107,
+      "weightGrams": 6.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.4,
+      "sequence": 108,
+      "weightGrams": 6.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.45,
+      "sequence": 109,
+      "weightGrams": 6.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.5,
+      "sequence": 110,
+      "weightGrams": 7.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.55,
+      "sequence": 111,
+      "weightGrams": 7.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.6,
+      "sequence": 112,
+      "weightGrams": 7.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.65,
+      "sequence": 113,
+      "weightGrams": 7.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.7,
+      "sequence": 114,
+      "weightGrams": 7.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.75,
+      "sequence": 115,
+      "weightGrams": 7.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.8,
+      "sequence": 116,
+      "weightGrams": 7.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.85,
+      "sequence": 117,
+      "weightGrams": 7.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.9,
+      "sequence": 118,
+      "weightGrams": 7.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 5.95,
+      "sequence": 119,
+      "weightGrams": 7.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.0,
+      "sequence": 120,
+      "weightGrams": 8.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.05,
+      "sequence": 121,
+      "weightGrams": 8.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.1,
+      "sequence": 122,
+      "weightGrams": 8.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.15,
+      "sequence": 123,
+      "weightGrams": 8.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.2,
+      "sequence": 124,
+      "weightGrams": 8.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.25,
+      "sequence": 125,
+      "weightGrams": 8.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.3,
+      "sequence": 126,
+      "weightGrams": 8.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.35,
+      "sequence": 127,
+      "weightGrams": 8.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.4,
+      "sequence": 128,
+      "weightGrams": 8.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.45,
+      "sequence": 129,
+      "weightGrams": 8.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.5,
+      "sequence": 130,
+      "weightGrams": 9.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.55,
+      "sequence": 131,
+      "weightGrams": 9.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.6,
+      "sequence": 132,
+      "weightGrams": 9.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.65,
+      "sequence": 133,
+      "weightGrams": 9.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.7,
+      "sequence": 134,
+      "weightGrams": 9.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.75,
+      "sequence": 135,
+      "weightGrams": 9.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.8,
+      "sequence": 136,
+      "weightGrams": 9.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.85,
+      "sequence": 137,
+      "weightGrams": 9.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.9,
+      "sequence": 138,
+      "weightGrams": 9.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.95,
+      "sequence": 139,
+      "weightGrams": 9.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.0,
+      "sequence": 140,
+      "weightGrams": 10.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.05,
+      "sequence": 141,
+      "weightGrams": 10.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.1,
+      "sequence": 142,
+      "weightGrams": 10.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.15,
+      "sequence": 143,
+      "weightGrams": 10.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.2,
+      "sequence": 144,
+      "weightGrams": 10.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.25,
+      "sequence": 145,
+      "weightGrams": 10.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.3,
+      "sequence": 146,
+      "weightGrams": 10.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.35,
+      "sequence": 147,
+      "weightGrams": 10.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.4,
+      "sequence": 148,
+      "weightGrams": 10.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.45,
+      "sequence": 149,
+      "weightGrams": 10.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.5,
+      "sequence": 150,
+      "weightGrams": 11.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.55,
+      "sequence": 151,
+      "weightGrams": 11.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.6,
+      "sequence": 152,
+      "weightGrams": 11.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.65,
+      "sequence": 153,
+      "weightGrams": 11.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.7,
+      "sequence": 154,
+      "weightGrams": 11.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.75,
+      "sequence": 155,
+      "weightGrams": 11.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.8,
+      "sequence": 156,
+      "weightGrams": 11.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.85,
+      "sequence": 157,
+      "weightGrams": 11.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.9,
+      "sequence": 158,
+      "weightGrams": 11.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 7.95,
+      "sequence": 159,
+      "weightGrams": 11.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.0,
+      "sequence": 160,
+      "weightGrams": 12.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.05,
+      "sequence": 161,
+      "weightGrams": 12.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.1,
+      "sequence": 162,
+      "weightGrams": 12.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.15,
+      "sequence": 163,
+      "weightGrams": 12.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.2,
+      "sequence": 164,
+      "weightGrams": 12.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.25,
+      "sequence": 165,
+      "weightGrams": 12.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.3,
+      "sequence": 166,
+      "weightGrams": 12.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.35,
+      "sequence": 167,
+      "weightGrams": 12.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.4,
+      "sequence": 168,
+      "weightGrams": 12.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.45,
+      "sequence": 169,
+      "weightGrams": 12.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.5,
+      "sequence": 170,
+      "weightGrams": 13.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.55,
+      "sequence": 171,
+      "weightGrams": 13.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.6,
+      "sequence": 172,
+      "weightGrams": 13.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.65,
+      "sequence": 173,
+      "weightGrams": 13.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.7,
+      "sequence": 174,
+      "weightGrams": 13.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.75,
+      "sequence": 175,
+      "weightGrams": 13.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.8,
+      "sequence": 176,
+      "weightGrams": 13.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.85,
+      "sequence": 177,
+      "weightGrams": 13.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.9,
+      "sequence": 178,
+      "weightGrams": 13.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 8.95,
+      "sequence": 179,
+      "weightGrams": 13.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.0,
+      "sequence": 180,
+      "weightGrams": 14.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.05,
+      "sequence": 181,
+      "weightGrams": 14.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.1,
+      "sequence": 182,
+      "weightGrams": 14.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.15,
+      "sequence": 183,
+      "weightGrams": 14.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.2,
+      "sequence": 184,
+      "weightGrams": 14.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.25,
+      "sequence": 185,
+      "weightGrams": 14.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.3,
+      "sequence": 186,
+      "weightGrams": 14.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.35,
+      "sequence": 187,
+      "weightGrams": 14.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.4,
+      "sequence": 188,
+      "weightGrams": 14.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.45,
+      "sequence": 189,
+      "weightGrams": 14.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.5,
+      "sequence": 190,
+      "weightGrams": 15.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.55,
+      "sequence": 191,
+      "weightGrams": 15.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.6,
+      "sequence": 192,
+      "weightGrams": 15.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.65,
+      "sequence": 193,
+      "weightGrams": 15.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.7,
+      "sequence": 194,
+      "weightGrams": 15.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.75,
+      "sequence": 195,
+      "weightGrams": 15.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.8,
+      "sequence": 196,
+      "weightGrams": 15.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.85,
+      "sequence": 197,
+      "weightGrams": 15.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.9,
+      "sequence": 198,
+      "weightGrams": 15.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 9.95,
+      "sequence": 199,
+      "weightGrams": 15.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.0,
+      "sequence": 200,
+      "weightGrams": 16.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.05,
+      "sequence": 201,
+      "weightGrams": 16.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.1,
+      "sequence": 202,
+      "weightGrams": 16.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.15,
+      "sequence": 203,
+      "weightGrams": 16.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.2,
+      "sequence": 204,
+      "weightGrams": 16.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.25,
+      "sequence": 205,
+      "weightGrams": 16.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.3,
+      "sequence": 206,
+      "weightGrams": 16.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.35,
+      "sequence": 207,
+      "weightGrams": 16.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.4,
+      "sequence": 208,
+      "weightGrams": 16.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.45,
+      "sequence": 209,
+      "weightGrams": 16.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.5,
+      "sequence": 210,
+      "weightGrams": 17.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.55,
+      "sequence": 211,
+      "weightGrams": 17.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.6,
+      "sequence": 212,
+      "weightGrams": 17.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.65,
+      "sequence": 213,
+      "weightGrams": 17.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.7,
+      "sequence": 214,
+      "weightGrams": 17.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.75,
+      "sequence": 215,
+      "weightGrams": 17.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.8,
+      "sequence": 216,
+      "weightGrams": 17.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.85,
+      "sequence": 217,
+      "weightGrams": 17.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.9,
+      "sequence": 218,
+      "weightGrams": 17.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 10.95,
+      "sequence": 219,
+      "weightGrams": 17.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.0,
+      "sequence": 220,
+      "weightGrams": 18.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.05,
+      "sequence": 221,
+      "weightGrams": 18.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.1,
+      "sequence": 222,
+      "weightGrams": 18.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.15,
+      "sequence": 223,
+      "weightGrams": 18.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.2,
+      "sequence": 224,
+      "weightGrams": 18.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.25,
+      "sequence": 225,
+      "weightGrams": 18.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.3,
+      "sequence": 226,
+      "weightGrams": 18.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.35,
+      "sequence": 227,
+      "weightGrams": 18.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.4,
+      "sequence": 228,
+      "weightGrams": 18.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.45,
+      "sequence": 229,
+      "weightGrams": 18.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.5,
+      "sequence": 230,
+      "weightGrams": 19.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.55,
+      "sequence": 231,
+      "weightGrams": 19.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.6,
+      "sequence": 232,
+      "weightGrams": 19.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.65,
+      "sequence": 233,
+      "weightGrams": 19.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.7,
+      "sequence": 234,
+      "weightGrams": 19.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.75,
+      "sequence": 235,
+      "weightGrams": 19.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.8,
+      "sequence": 236,
+      "weightGrams": 19.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.85,
+      "sequence": 237,
+      "weightGrams": 19.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.9,
+      "sequence": 238,
+      "weightGrams": 19.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 11.95,
+      "sequence": 239,
+      "weightGrams": 19.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.0,
+      "sequence": 240,
+      "weightGrams": 20.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.05,
+      "sequence": 241,
+      "weightGrams": 20.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.1,
+      "sequence": 242,
+      "weightGrams": 20.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.15,
+      "sequence": 243,
+      "weightGrams": 20.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.2,
+      "sequence": 244,
+      "weightGrams": 20.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.25,
+      "sequence": 245,
+      "weightGrams": 20.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.3,
+      "sequence": 246,
+      "weightGrams": 20.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.35,
+      "sequence": 247,
+      "weightGrams": 20.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.4,
+      "sequence": 248,
+      "weightGrams": 20.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.45,
+      "sequence": 249,
+      "weightGrams": 20.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.5,
+      "sequence": 250,
+      "weightGrams": 21.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.55,
+      "sequence": 251,
+      "weightGrams": 21.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.6,
+      "sequence": 252,
+      "weightGrams": 21.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.65,
+      "sequence": 253,
+      "weightGrams": 21.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.7,
+      "sequence": 254,
+      "weightGrams": 21.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.75,
+      "sequence": 255,
+      "weightGrams": 21.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.8,
+      "sequence": 0,
+      "weightGrams": 21.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.85,
+      "sequence": 1,
+      "weightGrams": 21.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.9,
+      "sequence": 2,
+      "weightGrams": 21.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 12.95,
+      "sequence": 3,
+      "weightGrams": 21.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.0,
+      "sequence": 4,
+      "weightGrams": 22.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.05,
+      "sequence": 5,
+      "weightGrams": 22.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.1,
+      "sequence": 6,
+      "weightGrams": 22.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.15,
+      "sequence": 7,
+      "weightGrams": 22.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.2,
+      "sequence": 8,
+      "weightGrams": 22.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.25,
+      "sequence": 9,
+      "weightGrams": 22.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.3,
+      "sequence": 10,
+      "weightGrams": 22.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.35,
+      "sequence": 11,
+      "weightGrams": 22.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.4,
+      "sequence": 12,
+      "weightGrams": 22.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.45,
+      "sequence": 13,
+      "weightGrams": 22.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.5,
+      "sequence": 14,
+      "weightGrams": 23.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.55,
+      "sequence": 15,
+      "weightGrams": 23.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.6,
+      "sequence": 16,
+      "weightGrams": 23.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.65,
+      "sequence": 17,
+      "weightGrams": 23.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.7,
+      "sequence": 18,
+      "weightGrams": 23.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.75,
+      "sequence": 19,
+      "weightGrams": 23.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.8,
+      "sequence": 20,
+      "weightGrams": 23.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.85,
+      "sequence": 21,
+      "weightGrams": 23.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.9,
+      "sequence": 22,
+      "weightGrams": 23.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 13.95,
+      "sequence": 23,
+      "weightGrams": 23.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.0,
+      "sequence": 24,
+      "weightGrams": 24.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.05,
+      "sequence": 25,
+      "weightGrams": 24.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.1,
+      "sequence": 26,
+      "weightGrams": 24.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.15,
+      "sequence": 27,
+      "weightGrams": 24.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.2,
+      "sequence": 28,
+      "weightGrams": 24.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.25,
+      "sequence": 29,
+      "weightGrams": 24.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.3,
+      "sequence": 30,
+      "weightGrams": 24.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.35,
+      "sequence": 31,
+      "weightGrams": 24.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.4,
+      "sequence": 32,
+      "weightGrams": 24.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.45,
+      "sequence": 33,
+      "weightGrams": 24.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.5,
+      "sequence": 34,
+      "weightGrams": 25.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.55,
+      "sequence": 35,
+      "weightGrams": 25.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.6,
+      "sequence": 36,
+      "weightGrams": 25.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.65,
+      "sequence": 37,
+      "weightGrams": 25.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.7,
+      "sequence": 38,
+      "weightGrams": 25.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.75,
+      "sequence": 39,
+      "weightGrams": 25.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.8,
+      "sequence": 40,
+      "weightGrams": 25.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.85,
+      "sequence": 41,
+      "weightGrams": 25.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.9,
+      "sequence": 42,
+      "weightGrams": 25.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 14.95,
+      "sequence": 43,
+      "weightGrams": 25.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.0,
+      "sequence": 44,
+      "weightGrams": 26.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.05,
+      "sequence": 45,
+      "weightGrams": 26.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.1,
+      "sequence": 46,
+      "weightGrams": 26.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.15,
+      "sequence": 47,
+      "weightGrams": 26.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.2,
+      "sequence": 48,
+      "weightGrams": 26.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.25,
+      "sequence": 49,
+      "weightGrams": 26.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.3,
+      "sequence": 50,
+      "weightGrams": 26.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.35,
+      "sequence": 51,
+      "weightGrams": 26.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.4,
+      "sequence": 52,
+      "weightGrams": 26.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.45,
+      "sequence": 53,
+      "weightGrams": 26.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.5,
+      "sequence": 54,
+      "weightGrams": 27.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.55,
+      "sequence": 55,
+      "weightGrams": 27.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.6,
+      "sequence": 56,
+      "weightGrams": 27.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.65,
+      "sequence": 57,
+      "weightGrams": 27.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.7,
+      "sequence": 58,
+      "weightGrams": 27.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.75,
+      "sequence": 59,
+      "weightGrams": 27.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.8,
+      "sequence": 60,
+      "weightGrams": 27.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.85,
+      "sequence": 61,
+      "weightGrams": 27.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.9,
+      "sequence": 62,
+      "weightGrams": 27.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 15.95,
+      "sequence": 63,
+      "weightGrams": 27.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.0,
+      "sequence": 64,
+      "weightGrams": 28.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.05,
+      "sequence": 65,
+      "weightGrams": 28.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.1,
+      "sequence": 66,
+      "weightGrams": 28.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.15,
+      "sequence": 67,
+      "weightGrams": 28.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.2,
+      "sequence": 68,
+      "weightGrams": 28.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.25,
+      "sequence": 69,
+      "weightGrams": 28.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.3,
+      "sequence": 70,
+      "weightGrams": 28.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.35,
+      "sequence": 71,
+      "weightGrams": 28.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.4,
+      "sequence": 72,
+      "weightGrams": 28.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.45,
+      "sequence": 73,
+      "weightGrams": 28.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.5,
+      "sequence": 74,
+      "weightGrams": 29.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.55,
+      "sequence": 75,
+      "weightGrams": 29.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.6,
+      "sequence": 76,
+      "weightGrams": 29.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.65,
+      "sequence": 77,
+      "weightGrams": 29.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.7,
+      "sequence": 78,
+      "weightGrams": 29.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.75,
+      "sequence": 79,
+      "weightGrams": 29.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.8,
+      "sequence": 80,
+      "weightGrams": 29.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.85,
+      "sequence": 81,
+      "weightGrams": 29.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.9,
+      "sequence": 82,
+      "weightGrams": 29.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 16.95,
+      "sequence": 83,
+      "weightGrams": 29.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.0,
+      "sequence": 84,
+      "weightGrams": 30.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.05,
+      "sequence": 85,
+      "weightGrams": 30.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.1,
+      "sequence": 86,
+      "weightGrams": 30.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.15,
+      "sequence": 87,
+      "weightGrams": 30.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.2,
+      "sequence": 88,
+      "weightGrams": 30.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.25,
+      "sequence": 89,
+      "weightGrams": 30.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.3,
+      "sequence": 90,
+      "weightGrams": 30.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.35,
+      "sequence": 91,
+      "weightGrams": 30.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.4,
+      "sequence": 92,
+      "weightGrams": 30.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.45,
+      "sequence": 93,
+      "weightGrams": 30.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.5,
+      "sequence": 94,
+      "weightGrams": 31.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.55,
+      "sequence": 95,
+      "weightGrams": 31.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.6,
+      "sequence": 96,
+      "weightGrams": 31.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.65,
+      "sequence": 97,
+      "weightGrams": 31.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.7,
+      "sequence": 98,
+      "weightGrams": 31.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.75,
+      "sequence": 99,
+      "weightGrams": 31.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.8,
+      "sequence": 100,
+      "weightGrams": 31.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.85,
+      "sequence": 101,
+      "weightGrams": 31.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.9,
+      "sequence": 102,
+      "weightGrams": 31.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 17.95,
+      "sequence": 103,
+      "weightGrams": 31.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.0,
+      "sequence": 104,
+      "weightGrams": 32.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.05,
+      "sequence": 105,
+      "weightGrams": 32.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.1,
+      "sequence": 106,
+      "weightGrams": 32.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.15,
+      "sequence": 107,
+      "weightGrams": 32.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.2,
+      "sequence": 108,
+      "weightGrams": 32.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.25,
+      "sequence": 109,
+      "weightGrams": 32.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.3,
+      "sequence": 110,
+      "weightGrams": 32.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.35,
+      "sequence": 111,
+      "weightGrams": 32.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.4,
+      "sequence": 112,
+      "weightGrams": 32.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.45,
+      "sequence": 113,
+      "weightGrams": 32.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.5,
+      "sequence": 114,
+      "weightGrams": 33.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.55,
+      "sequence": 115,
+      "weightGrams": 33.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.6,
+      "sequence": 116,
+      "weightGrams": 33.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.65,
+      "sequence": 117,
+      "weightGrams": 33.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.7,
+      "sequence": 118,
+      "weightGrams": 33.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.75,
+      "sequence": 119,
+      "weightGrams": 33.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.8,
+      "sequence": 120,
+      "weightGrams": 33.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.85,
+      "sequence": 121,
+      "weightGrams": 33.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.9,
+      "sequence": 122,
+      "weightGrams": 33.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 18.95,
+      "sequence": 123,
+      "weightGrams": 33.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.0,
+      "sequence": 124,
+      "weightGrams": 34.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.05,
+      "sequence": 125,
+      "weightGrams": 34.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.1,
+      "sequence": 126,
+      "weightGrams": 34.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.15,
+      "sequence": 127,
+      "weightGrams": 34.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.2,
+      "sequence": 128,
+      "weightGrams": 34.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.25,
+      "sequence": 129,
+      "weightGrams": 34.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.3,
+      "sequence": 130,
+      "weightGrams": 34.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.35,
+      "sequence": 131,
+      "weightGrams": 34.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.4,
+      "sequence": 132,
+      "weightGrams": 34.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.45,
+      "sequence": 133,
+      "weightGrams": 34.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.5,
+      "sequence": 134,
+      "weightGrams": 35.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.55,
+      "sequence": 135,
+      "weightGrams": 35.1
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.6,
+      "sequence": 136,
+      "weightGrams": 35.2
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.65,
+      "sequence": 137,
+      "weightGrams": 35.3
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.7,
+      "sequence": 138,
+      "weightGrams": 35.4
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.75,
+      "sequence": 139,
+      "weightGrams": 35.5
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.8,
+      "sequence": 140,
+      "weightGrams": 35.6
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.85,
+      "sequence": 141,
+      "weightGrams": 35.7
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.9,
+      "sequence": 142,
+      "weightGrams": 35.8
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 19.95,
+      "sequence": 143,
+      "weightGrams": 35.9
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.0,
+      "sequence": 144,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.05,
+      "sequence": 145,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.1,
+      "sequence": 146,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.15,
+      "sequence": 147,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.2,
+      "sequence": 148,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.25,
+      "sequence": 149,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.3,
+      "sequence": 150,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.35,
+      "sequence": 151,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.4,
+      "sequence": 152,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.45,
+      "sequence": 153,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.5,
+      "sequence": 154,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.55,
+      "sequence": 155,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.6,
+      "sequence": 156,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.65,
+      "sequence": 157,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.7,
+      "sequence": 158,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.75,
+      "sequence": 159,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.8,
+      "sequence": 160,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.85,
+      "sequence": 161,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.9,
+      "sequence": 162,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 20.95,
+      "sequence": 163,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.0,
+      "sequence": 164,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.05,
+      "sequence": 165,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.1,
+      "sequence": 166,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.15,
+      "sequence": 167,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.2,
+      "sequence": 168,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.25,
+      "sequence": 169,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.3,
+      "sequence": 170,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.35,
+      "sequence": 171,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.4,
+      "sequence": 172,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.45,
+      "sequence": 173,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.5,
+      "sequence": 174,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.55,
+      "sequence": 175,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.6,
+      "sequence": 176,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.65,
+      "sequence": 177,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.7,
+      "sequence": 178,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.75,
+      "sequence": 179,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.8,
+      "sequence": 180,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.85,
+      "sequence": 181,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.9,
+      "sequence": 182,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 21.95,
+      "sequence": 183,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.0,
+      "sequence": 184,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.05,
+      "sequence": 185,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.1,
+      "sequence": 186,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.15,
+      "sequence": 187,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.2,
+      "sequence": 188,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.25,
+      "sequence": 189,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.3,
+      "sequence": 190,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.35,
+      "sequence": 191,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.4,
+      "sequence": 192,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.45,
+      "sequence": 193,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.5,
+      "sequence": 194,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.55,
+      "sequence": 195,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.6,
+      "sequence": 196,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.65,
+      "sequence": 197,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.7,
+      "sequence": 198,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.75,
+      "sequence": 199,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.8,
+      "sequence": 200,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.85,
+      "sequence": 201,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.9,
+      "sequence": 202,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 22.95,
+      "sequence": 203,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.0,
+      "sequence": 204,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.05,
+      "sequence": 205,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.1,
+      "sequence": 206,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.15,
+      "sequence": 207,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.2,
+      "sequence": 208,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.25,
+      "sequence": 209,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.3,
+      "sequence": 210,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.35,
+      "sequence": 211,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.4,
+      "sequence": 212,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.45,
+      "sequence": 213,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.5,
+      "sequence": 214,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.55,
+      "sequence": 215,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.6,
+      "sequence": 216,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.65,
+      "sequence": 217,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.7,
+      "sequence": 218,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.75,
+      "sequence": 219,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.8,
+      "sequence": 220,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.85,
+      "sequence": 221,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.9,
+      "sequence": 222,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 23.95,
+      "sequence": 223,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.0,
+      "sequence": 224,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.05,
+      "sequence": 225,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.1,
+      "sequence": 226,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.15,
+      "sequence": 227,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.2,
+      "sequence": 228,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.25,
+      "sequence": 229,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.3,
+      "sequence": 230,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.35,
+      "sequence": 231,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.4,
+      "sequence": 232,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.45,
+      "sequence": 233,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.5,
+      "sequence": 234,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.55,
+      "sequence": 235,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.6,
+      "sequence": 236,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.65,
+      "sequence": 237,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.7,
+      "sequence": 238,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.75,
+      "sequence": 239,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.8,
+      "sequence": 240,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.85,
+      "sequence": 241,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.9,
+      "sequence": 242,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 24.95,
+      "sequence": 243,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.0,
+      "sequence": 244,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.05,
+      "sequence": 245,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.1,
+      "sequence": 246,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.15,
+      "sequence": 247,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.2,
+      "sequence": 248,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.25,
+      "sequence": 249,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.3,
+      "sequence": 250,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.35,
+      "sequence": 251,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.4,
+      "sequence": 252,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.45,
+      "sequence": 253,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.5,
+      "sequence": 254,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.55,
+      "sequence": 255,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.6,
+      "sequence": 0,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.65,
+      "sequence": 1,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.7,
+      "sequence": 2,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.75,
+      "sequence": 3,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.8,
+      "sequence": 4,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.85,
+      "sequence": 5,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.9,
+      "sequence": 6,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 25.95,
+      "sequence": 7,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.0,
+      "sequence": 8,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.05,
+      "sequence": 9,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.1,
+      "sequence": 10,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.15,
+      "sequence": 11,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.2,
+      "sequence": 12,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.25,
+      "sequence": 13,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.3,
+      "sequence": 14,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.35,
+      "sequence": 15,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.4,
+      "sequence": 16,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.45,
+      "sequence": 17,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.5,
+      "sequence": 18,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.55,
+      "sequence": 19,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.6,
+      "sequence": 20,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.65,
+      "sequence": 21,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.7,
+      "sequence": 22,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.75,
+      "sequence": 23,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.8,
+      "sequence": 24,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.85,
+      "sequence": 25,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.9,
+      "sequence": 26,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 26.95,
+      "sequence": 27,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.0,
+      "sequence": 28,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.05,
+      "sequence": 29,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.1,
+      "sequence": 30,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.15,
+      "sequence": 31,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.2,
+      "sequence": 32,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.25,
+      "sequence": 33,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.3,
+      "sequence": 34,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.35,
+      "sequence": 35,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.4,
+      "sequence": 36,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.45,
+      "sequence": 37,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.5,
+      "sequence": 38,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.55,
+      "sequence": 39,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.6,
+      "sequence": 40,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.65,
+      "sequence": 41,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.7,
+      "sequence": 42,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.75,
+      "sequence": 43,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.8,
+      "sequence": 44,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.85,
+      "sequence": 45,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.9,
+      "sequence": 46,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 27.95,
+      "sequence": 47,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.0,
+      "sequence": 48,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.05,
+      "sequence": 49,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.1,
+      "sequence": 50,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.15,
+      "sequence": 51,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.2,
+      "sequence": 52,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.25,
+      "sequence": 53,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.3,
+      "sequence": 54,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.35,
+      "sequence": 55,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.4,
+      "sequence": 56,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.45,
+      "sequence": 57,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.5,
+      "sequence": 58,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.55,
+      "sequence": 59,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.6,
+      "sequence": 60,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.65,
+      "sequence": 61,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.7,
+      "sequence": 62,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.75,
+      "sequence": 63,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.8,
+      "sequence": 64,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.85,
+      "sequence": 65,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.9,
+      "sequence": 66,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 28.95,
+      "sequence": 67,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.0,
+      "sequence": 68,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.05,
+      "sequence": 69,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.1,
+      "sequence": 70,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.15,
+      "sequence": 71,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.2,
+      "sequence": 72,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.25,
+      "sequence": 73,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.3,
+      "sequence": 74,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.35,
+      "sequence": 75,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.4,
+      "sequence": 76,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.45,
+      "sequence": 77,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.5,
+      "sequence": 78,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.55,
+      "sequence": 79,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.6,
+      "sequence": 80,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.65,
+      "sequence": 81,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.7,
+      "sequence": 82,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.75,
+      "sequence": 83,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.8,
+      "sequence": 84,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.85,
+      "sequence": 85,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.9,
+      "sequence": 86,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 29.95,
+      "sequence": 87,
+      "weightGrams": 36.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 30.0,
+      "sequence": 88,
+      "weightGrams": 36.0
+    }
+  ],
+  "mode": "shot",
+  "protocolCapabilities": {
+    "hasSequence": true,
+    "sequenceModulus": 256
+  },
+  "recordingEndMonotonicSeconds": 30.0,
+  "recordingStartMonotonicSeconds": 0.0,
+  "vectorId": "shot-sequence-high-water"
+}

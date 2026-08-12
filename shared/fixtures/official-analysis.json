@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "appName": "ScaleBench",
+  "scoringModelVersion": "standard-1.0.0",
+  "scoringProfileName": "ScaleBench Standard v1",
+  "recordingId": "44444444-4444-4444-8444-444444444444",
+  "generatedAtMillis": 1785600005000,
+  "platform": "ios",
+  "mode": "shot",
+  "protocolKind": "weighMyBruPlus",
+  "deviceName": "Fixture iOS WMB+",
+  "metrics": {
+    "overallScore": 100,
+    "effectiveSampleRateHz": 20.0,
+    "packetIntervalP50Milliseconds": 50.0,
+    "packetIntervalP95Milliseconds": 50.0,
+    "packetIntervalMaxMilliseconds": 50.0,
+    "longGapCount": 0,
+    "missingSequenceCount": 0,
+    "duplicateOrOutOfOrderTimestampCount": 0,
+    "rejectedPacketCount": 0,
+    "firmwareBumpCount": 0,
+    "scoringModelVersion": "standard-1.0.0",
+    "scoringProfileName": "ScaleBench Standard v1",
+    "validity": {
+      "isValid": true,
+      "reasons": []
+    },
+    "delivery": {
+      "applicable": true,
+      "deliveryScore": 100,
+      "coverage": 1.0,
+      "purity": 1.0,
+      "purityIsUpperBound": false
+    },
+    "frameClassification": {
+      "usable": 2,
+      "parseFailure": 0,
+      "outOfOrder": 0,
+      "stale": 0,
+      "duplicate": 0,
+      "implausible": 0
+    },
+    "protocolVerification": {
+      "verifiableClasses": ["parseFailure", "outOfOrder", "stale", "duplicate", "implausible"],
+      "unverifiableClasses": [],
+      "verificationCoveragePercent": 100,
+      "purityIsUpperBound": false
+    },
+    "signalUnreconstructable": false,
+    "relevantWeightFrameCount": 2,
+    "excludedFrameCount": 0,
+    "usableSampleCount": 2,
+    "recordingSpanSeconds": 0.1,
+    "recordingBoundaryInferred": false,
+    "frameRateHz": 20.0,
+    "usableRateHz": 20.0,
+    "estimatedResolutionGrams": 0.1,
+    "slotCount": 2,
+    "servedSlots": 2,
+    "longestUnservedRunMilliseconds": 0.0,
+    "robustCoefficientOfVariation": 0.0,
+    "disconnectCount": 0
+  },
+  "chartAnalysis": {
+    "schemaVersion": 1,
+    "weightPoints": [
+      { "seconds": 0.0, "value": 0.0 },
+      { "seconds": 0.1, "value": 0.2 }
+    ],
+    "flowPoints": [],
+    "packetTimeline": {
+      "entries": [
+        {
+          "index": 0,
+          "relativeSeconds": 0.0,
+          "previousRelativeSeconds": null,
+          "intervalMilliseconds": null,
+          "role": "weight",
+          "bytesHex": "03 0B 00",
+          "rejectionReason": null,
+          "sequence": 0,
+          "weightGrams": 0.0,
+          "severity": "normal",
+          "lane": "weight",
+          "evidence": ["Normal parsed packet. No direct score penalty attached."],
+          "fields": []
+        },
+        {
+          "index": 1,
+          "relativeSeconds": 0.1,
+          "previousRelativeSeconds": 0.0,
+          "intervalMilliseconds": 100.0,
+          "role": "weight",
+          "bytesHex": "03 0B 01",
+          "rejectionReason": null,
+          "sequence": 1,
+          "weightGrams": 0.2,
+          "severity": "normal",
+          "lane": "weight",
+          "evidence": ["Normal parsed packet. No direct score penalty attached."],
+          "fields": []
+        }
+      ],
+      "sampleIntervals": [
+        {
+          "index": 0,
+          "previousRelativeSeconds": 0.0,
+          "relativeSeconds": 0.1,
+          "intervalMilliseconds": 100.0,
+          "severity": "normal"
+        }
+      ],
+      "scoringGaps": [],
+      "longGapThresholdMilliseconds": 300.0,
+      "durationSeconds": 0.1
+    },
+    "problemWindows": [],
+    "deductionBreakdown": [],
+    "signalDiagnostics": {
+      "packetCoalescing": {
+        "observedFrameRateHz": 20.0,
+        "servedSlotRateHz": 20.0,
+        "framesPerServedSlot": 1.0
+      }
+    }
+  }
+}

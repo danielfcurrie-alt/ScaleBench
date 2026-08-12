@@ -249,13 +249,320 @@ final class ScaleParsers {
     }
 
     static String hex(byte[] bytes) {
-        StringBuilder builder = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) builder.append(String.format(Locale.US, "%02X", u(b)));
+        StringBuilder builder = new StringBuilder(Math.max(0, bytes.length * 3 - 1));
+        for (int index = 0; index < bytes.length; index++) {
+            if (index > 0) builder.append(' ');
+            builder.append(String.format(Locale.US, "%02X", u(bytes[index])));
+        }
         return builder.toString();
     }
 
+    static byte[] parseHex(String value) {
+        if (value == null) return null;
+        String compact = value.replaceAll("\\s", "");
+        if (compact.isEmpty() || compact.length() % 2 != 0) return null;
+        byte[] result = new byte[compact.length() / 2];
+        try {
+            for (int index = 0; index < result.length; index++) {
+                result[index] = (byte) Integer.parseInt(compact.substring(index * 2, index * 2 + 2), 16);
+            }
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+        return result;
+    }
+
+    static String normalizeHex(String value) {
+        byte[] bytes = parseHex(value);
+        return bytes == null ? value : hex(bytes);
+    }
+
+    static List<PacketFieldAnnotation> packetFields(
+            ScaleKind kind,
+            String characteristicUuid,
+            byte[] bytes
+    ) {
+        if (bytes == null || bytes.length == 0) return new ArrayList<>();
+        String uuid = shortUuid(characteristicUuid == null ? "" : characteristicUuid);
+        if (uuid.equals(shortUuid(BATTERY_LEVEL_UUID))) {
+            return fields(field(0, 1, "Battery", u(bytes[0]) + "%", PacketFieldSemantic.BATTERY));
+        }
+        if (uuid.equals(shortUuid(WMB_CAPABILITIES_UUID)) && bytes.length == 16) return wmbCapabilitiesFields(bytes);
+        if (uuid.equals(shortUuid(WMB_FLOAT32_UUID)) && bytes.length == 4) {
+            float value = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+            return fields(field(0, 4, "Weight", Float.isFinite(value) ? grams(value) : "invalid float", PacketFieldSemantic.WEIGHT));
+        }
+        if (uuid.equals(shortUuid(WMB_WEIGHT20_UUID)) && bytes.length == 20) {
+            return wmbWeightFields(bytes, kind == ScaleKind.WEIGH_MY_BRU_PLUS);
+        }
+        if (kind == null) kind = ScaleKind.UNKNOWN;
+        switch (kind) {
+            case BOOKOO:
+            case BOOKOO_MINI:
+            case BOOKOO_ULTRA:
+                return bytes.length == 20 ? bookooFields(bytes) : new ArrayList<>();
+            case WEIGH_MY_BRU:
+            case WEIGH_MY_BRU_PLUS:
+                return bytes.length == 20 ? wmbWeightFields(bytes, kind == ScaleKind.WEIGH_MY_BRU_PLUS) : new ArrayList<>();
+            case EUREKA:
+                return eurekaFields(bytes);
+            case DECENT:
+            case ESPRESSI:
+                return decentFields(bytes);
+            case DIFLUID:
+            case DIFLUID_TI:
+                return diFluidFields(bytes);
+            case FELICITA:
+                return felicitaFields(bytes);
+            case FUTULA:
+                return futulaFields(bytes);
+            case SKALE2:
+                return skale2Fields(bytes);
+            case ACAIA:
+                return acaiaFields(bytes);
+            case TIMEMORE_DOT:
+                return timemoreFields(bytes);
+            case UNKNOWN:
+            default:
+                return new ArrayList<>();
+        }
+    }
+
+    static List<PacketFieldAnnotation> packetFields(RawScalePacket packet) {
+        if (packet == null) return new ArrayList<>();
+        if (!packet.fields.isEmpty()) return new ArrayList<>(packet.fields);
+        byte[] bytes = parseHex(packet.bytesHex);
+        return bytes == null
+                ? new ArrayList<>()
+                : packetFields(packet.scaleKind, packet.characteristicUuid, bytes);
+    }
+
+    private static List<PacketFieldAnnotation> wmbWeightFields(byte[] bytes, boolean extended) {
+        double weight = signedCentiValue(u(bytes[6]), u(bytes[7]), u(bytes[8]), u(bytes[9]));
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 5, extended ? "Timestamp" : "Protocol data", extended ? uint24(u(bytes[2]), u(bytes[3]), u(bytes[4])) + " ms" : rangeHex(bytes, 2, 5), extended ? PacketFieldSemantic.TIMESTAMP : PacketFieldSemantic.PAYLOAD),
+                field(5, 6, extended ? "Packet version" : "Protocol data", extended ? Integer.toString(u(bytes[5])) : rangeHex(bytes, 5, 6), PacketFieldSemantic.PAYLOAD),
+                field(6, 10, "Weight", grams(weight), PacketFieldSemantic.WEIGHT)
+        );
+        if (extended) {
+            double flow = signedCentiValue(u(bytes[10]), 0, u(bytes[11]), u(bytes[12]));
+            result.add(field(10, 13, "Flow", rate(flow), PacketFieldSemantic.FLOW));
+            result.add(field(13, 14, "Battery", u(bytes[13]) + "%", PacketFieldSemantic.BATTERY));
+            result.add(field(14, 15, "Sequence", Integer.toString(u(bytes[14])), PacketFieldSemantic.SEQUENCE));
+            result.add(field(15, 16, "Status", rangeHex(bytes, 15, 16), PacketFieldSemantic.STATUS));
+            result.add(field(16, 17, "Quality", u(bytes[16]) + "%", PacketFieldSemantic.QUALITY));
+            result.add(field(17, 18, "Sample rate", u(bytes[17]) + " Hz", PacketFieldSemantic.SAMPLE_RATE));
+            result.add(field(18, 19, "Diagnostics", rangeHex(bytes, 18, 19), PacketFieldSemantic.STATUS));
+        } else {
+            result.add(field(10, 19, "Protocol data", rangeHex(bytes, 10, 19), PacketFieldSemantic.PAYLOAD));
+        }
+        result.add(field(19, 20, "Checksum", rangeHex(bytes, 19, 20), PacketFieldSemantic.CHECKSUM));
+        return result;
+    }
+
+    private static List<PacketFieldAnnotation> wmbCapabilitiesFields(byte[] bytes) {
+        long featureMask = u(bytes[6]) | (long) u(bytes[7]) << 8 | (long) u(bytes[8]) << 16 | (long) u(bytes[9]) << 24;
+        return fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 3, "Payload version", Integer.toString(u(bytes[2])), PacketFieldSemantic.PAYLOAD),
+                field(3, 4, "Reserved", rangeHex(bytes, 3, 4), PacketFieldSemantic.PAYLOAD),
+                field(4, 6, "Protocol version", u(bytes[4]) + "." + u(bytes[5]), PacketFieldSemantic.PAYLOAD),
+                field(6, 10, "Feature mask", String.format(Locale.US, "0x%08X", featureMask), PacketFieldSemantic.STATUS),
+                field(10, 12, "Atomic command", rangeHex(bytes, 10, 12), PacketFieldSemantic.PAYLOAD),
+                field(12, 13, "Extension version", Integer.toString(u(bytes[12])), PacketFieldSemantic.PAYLOAD),
+                field(13, 14, "Extension length", u(bytes[13]) + " bytes", PacketFieldSemantic.PAYLOAD),
+                field(14, 15, "Reserved", rangeHex(bytes, 14, 15), PacketFieldSemantic.PAYLOAD),
+                field(15, 16, "Checksum", rangeHex(bytes, 15, 16), PacketFieldSemantic.CHECKSUM)
+        );
+    }
+
+    private static List<PacketFieldAnnotation> bookooFields(byte[] bytes) {
+        double weight = signedCentiValue(u(bytes[6]), u(bytes[7]), u(bytes[8]), u(bytes[9]));
+        double flow = signedCentiValue(u(bytes[10]), 0, u(bytes[11]), u(bytes[12]));
+        return fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 5, "Timestamp", uint24(u(bytes[2]), u(bytes[3]), u(bytes[4])) + " ms", PacketFieldSemantic.TIMESTAMP),
+                field(5, 6, "Protocol data", rangeHex(bytes, 5, 6), PacketFieldSemantic.PAYLOAD),
+                field(6, 10, "Weight", grams(weight), PacketFieldSemantic.WEIGHT),
+                field(10, 13, "Flow", rate(flow), PacketFieldSemantic.FLOW),
+                field(13, 14, "Battery", u(bytes[13]) + "%", PacketFieldSemantic.BATTERY),
+                field(14, 19, "Protocol data", rangeHex(bytes, 14, 19), PacketFieldSemantic.PAYLOAD),
+                field(19, 20, "Checksum", rangeHex(bytes, 19, 20), PacketFieldSemantic.CHECKSUM)
+        );
+    }
+
+    private static List<PacketFieldAnnotation> eurekaFields(byte[] bytes) {
+        if (bytes.length != 11) return new ArrayList<>();
+        int raw = u(bytes[7]) | u(bytes[8]) << 8;
+        double weight = (u(bytes[6]) == 0 ? 1.0 : -1.0) * raw / 10.0;
+        return fields(
+                field(0, 3, "Header", rangeHex(bytes, 0, 3), PacketFieldSemantic.HEADER),
+                field(3, 6, "Protocol data", rangeHex(bytes, 3, 6), PacketFieldSemantic.PAYLOAD),
+                field(6, 7, "Sign", u(bytes[6]) == 0 ? "positive" : "negative", PacketFieldSemantic.WEIGHT),
+                field(7, 9, "Weight", grams(weight), PacketFieldSemantic.WEIGHT),
+                field(9, 11, "Protocol data", rangeHex(bytes, 9, 11), PacketFieldSemantic.PAYLOAD)
+        );
+    }
+
+    private static List<PacketFieldAnnotation> decentFields(byte[] bytes) {
+        if (bytes.length < 4) return new ArrayList<>();
+        short raw = (short) (u(bytes[2]) << 8 | u(bytes[3]));
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 2, "Message", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 4, "Weight", grams(raw / 10.0), PacketFieldSemantic.WEIGHT)
+        );
+        if (bytes.length >= 8 && u(bytes[6]) < 60 && u(bytes[7]) < 10) {
+            if (bytes.length > 4) result.add(field(4, 5, "Protocol data", rangeHex(bytes, 4, 5), PacketFieldSemantic.PAYLOAD));
+            double seconds = u(bytes[5]) * 60.0 + u(bytes[6]) + u(bytes[7]) / 10.0;
+            result.add(field(5, 8, "Timer", String.format(Locale.US, "%.1f s", seconds), PacketFieldSemantic.TIMESTAMP));
+            if (bytes.length > 8) result.add(field(8, bytes.length, "Protocol data", rangeHex(bytes, 8, bytes.length), PacketFieldSemantic.PAYLOAD));
+        } else if (bytes.length > 4) {
+            result.add(field(4, bytes.length, "Protocol data", rangeHex(bytes, 4, bytes.length), PacketFieldSemantic.PAYLOAD));
+        }
+        return result;
+    }
+
+    private static List<PacketFieldAnnotation> diFluidFields(byte[] bytes) {
+        if (bytes.length < 6) return new ArrayList<>();
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 4, "Message", rangeHex(bytes, 2, 4), PacketFieldSemantic.PAYLOAD),
+                field(4, 5, "Payload length", u(bytes[4]) + " bytes", PacketFieldSemantic.PAYLOAD)
+        );
+        if (u(bytes[2]) == 0x03 && u(bytes[3]) == 0x00 && bytes.length >= 19) {
+            int raw = u(bytes[5]) << 24 | u(bytes[6]) << 16 | u(bytes[7]) << 8 | u(bytes[8]);
+            short rawFlow = (short) (u(bytes[9]) << 8 | u(bytes[10]));
+            long timestamp = (long) u(bytes[13]) << 24 | (long) u(bytes[14]) << 16 | (long) u(bytes[15]) << 8 | u(bytes[16]);
+            result.add(field(5, 9, "Weight", grams(raw / 10.0), PacketFieldSemantic.WEIGHT));
+            result.add(field(9, 11, "Flow", rate(rawFlow / 10.0), PacketFieldSemantic.FLOW));
+            result.add(field(11, 13, "Protocol data", rangeHex(bytes, 11, 13), PacketFieldSemantic.PAYLOAD));
+            result.add(field(13, 17, "Timestamp", timestamp + " ms", PacketFieldSemantic.TIMESTAMP));
+            result.add(field(17, 18, "Unit", u(bytes[17]) == 0 ? "grams" : rangeHex(bytes, 17, 18), PacketFieldSemantic.UNIT));
+            if (bytes.length > 19) result.add(field(18, bytes.length - 1, "Protocol data", rangeHex(bytes, 18, bytes.length - 1), PacketFieldSemantic.PAYLOAD));
+        } else if (u(bytes[2]) == 0x03 && u(bytes[3]) == 0x05 && bytes.length >= 14) {
+            result.add(field(5, 6, "Protocol data", rangeHex(bytes, 5, 6), PacketFieldSemantic.PAYLOAD));
+            result.add(field(6, 7, "Battery", u(bytes[6]) + "%", PacketFieldSemantic.BATTERY));
+            if (bytes.length > 8) result.add(field(7, bytes.length - 1, "Protocol data", rangeHex(bytes, 7, bytes.length - 1), PacketFieldSemantic.PAYLOAD));
+        } else if (bytes.length > 6) {
+            result.add(field(5, bytes.length - 1, "Protocol data", rangeHex(bytes, 5, bytes.length - 1), PacketFieldSemantic.PAYLOAD));
+        }
+        result.add(field(bytes.length - 1, bytes.length, "Checksum", rangeHex(bytes, bytes.length - 1, bytes.length), PacketFieldSemantic.CHECKSUM));
+        return result;
+    }
+
+    private static List<PacketFieldAnnotation> felicitaFields(byte[] bytes) {
+        if (bytes.length != 18) return new ArrayList<>();
+        int raw = 0;
+        boolean hasValidDigits = true;
+        for (int index = 3; index <= 8; index++) {
+            hasValidDigits &= u(bytes[index]) >= 0x30 && u(bytes[index]) <= 0x39;
+            raw = raw * 10 + Math.max(0, u(bytes[index]) - 0x30);
+        }
+        double weight = (u(bytes[2]) == 0x2D ? -1.0 : 1.0) * raw / 100.0;
+        return fields(
+                field(0, 2, "Protocol data", rangeHex(bytes, 0, 2), PacketFieldSemantic.PAYLOAD),
+                field(2, 3, "Sign", u(bytes[2]) == 0x2D ? "negative" : "positive", PacketFieldSemantic.WEIGHT),
+                field(3, 9, "Weight", hasValidDigits ? grams(weight) : "invalid digits", PacketFieldSemantic.WEIGHT),
+                field(9, 18, "Protocol data", rangeHex(bytes, 9, 18), PacketFieldSemantic.PAYLOAD)
+        );
+    }
+
+    private static List<PacketFieldAnnotation> futulaFields(byte[] bytes) {
+        if (bytes.length < 9) return new ArrayList<>();
+        int raw = u(bytes[3]) | u(bytes[4]) << 8;
+        double weight = (u(bytes[5]) == 0 ? 1.0 : -1.0) * raw / 10.0;
+        return fields(
+                field(0, 3, "Protocol data", rangeHex(bytes, 0, 3), PacketFieldSemantic.PAYLOAD),
+                field(3, 5, "Weight", grams(weight), PacketFieldSemantic.WEIGHT),
+                field(5, 6, "Sign", u(bytes[5]) == 0 ? "positive" : "negative", PacketFieldSemantic.WEIGHT),
+                field(6, bytes.length, "Protocol data", rangeHex(bytes, 6, bytes.length), PacketFieldSemantic.PAYLOAD)
+        );
+    }
+
+    private static List<PacketFieldAnnotation> skale2Fields(byte[] bytes) {
+        if (bytes.length < 3) return new ArrayList<>();
+        short raw = (short) (u(bytes[1]) | u(bytes[2]) << 8);
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 1, "Message", rangeHex(bytes, 0, 1), PacketFieldSemantic.HEADER),
+                field(1, 3, "Weight", grams(raw / 10.0), PacketFieldSemantic.WEIGHT)
+        );
+        if (bytes.length > 3) result.add(field(3, bytes.length, "Protocol data", rangeHex(bytes, 3, bytes.length), PacketFieldSemantic.PAYLOAD));
+        return result;
+    }
+
+    private static List<PacketFieldAnnotation> acaiaFields(byte[] bytes) {
+        if (bytes.length < 6 || u(bytes[0]) != 0xEF || u(bytes[1]) != 0xDD) return new ArrayList<>();
+        int payloadLength = u(bytes[3]);
+        if (bytes.length != payloadLength + 6) return new ArrayList<>();
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 3, "Message", rangeHex(bytes, 2, 3), PacketFieldSemantic.PAYLOAD),
+                field(3, 4, "Payload length", payloadLength + " bytes", PacketFieldSemantic.PAYLOAD)
+        );
+        if (u(bytes[2]) == 0x0C && payloadLength >= 4) {
+            short raw = (short) (u(bytes[4]) | u(bytes[5]) << 8);
+            double value = Math.abs((double) raw) / Math.pow(10.0, u(bytes[6]));
+            if ((u(bytes[7]) & 0x02) != 0) value = -value;
+            result.add(field(4, 6, "Weight", grams(value), PacketFieldSemantic.WEIGHT));
+            result.add(field(6, 7, "Decimal places", Integer.toString(u(bytes[6])), PacketFieldSemantic.UNIT));
+            result.add(field(7, 8, "Status", rangeHex(bytes, 7, 8), PacketFieldSemantic.STATUS));
+            if (payloadLength > 4) result.add(field(8, 4 + payloadLength, "Protocol data", rangeHex(bytes, 8, 4 + payloadLength), PacketFieldSemantic.PAYLOAD));
+        } else if (payloadLength > 0) {
+            result.add(field(4, 4 + payloadLength, "Payload", rangeHex(bytes, 4, 4 + payloadLength), PacketFieldSemantic.PAYLOAD));
+        }
+        result.add(field(bytes.length - 2, bytes.length, "Checksum", rangeHex(bytes, bytes.length - 2, bytes.length), PacketFieldSemantic.CHECKSUM));
+        return result;
+    }
+
+    private static List<PacketFieldAnnotation> timemoreFields(byte[] bytes) {
+        if (bytes.length < 8 || u(bytes[0]) != 0xA5 || u(bytes[1]) != 0x5A) return new ArrayList<>();
+        int payloadLength = u(bytes[4]) << 8 | u(bytes[5]);
+        if (bytes.length != payloadLength + 8) return new ArrayList<>();
+        List<PacketFieldAnnotation> result = fields(
+                field(0, 2, "Header", rangeHex(bytes, 0, 2), PacketFieldSemantic.HEADER),
+                field(2, 3, "Opcode", rangeHex(bytes, 2, 3), PacketFieldSemantic.PAYLOAD),
+                field(3, 4, "Command", rangeHex(bytes, 3, 4), PacketFieldSemantic.PAYLOAD),
+                field(4, 6, "Payload length", payloadLength + " bytes", PacketFieldSemantic.PAYLOAD)
+        );
+        if (u(bytes[3]) == 0x01 && payloadLength >= 4) {
+            int raw = u(bytes[6]) << 24 | u(bytes[7]) << 16 | u(bytes[8]) << 8 | u(bytes[9]);
+            result.add(field(6, 10, "Weight", grams(raw / 10.0), PacketFieldSemantic.WEIGHT));
+            if (payloadLength > 4) result.add(field(10, 6 + payloadLength, "Protocol data", rangeHex(bytes, 10, 6 + payloadLength), PacketFieldSemantic.PAYLOAD));
+        } else if (u(bytes[3]) == 0x05 && payloadLength >= 2) {
+            result.add(field(6, 7, "Protocol data", rangeHex(bytes, 6, 7), PacketFieldSemantic.PAYLOAD));
+            result.add(field(7, 8, "Battery", u(bytes[7]) + "%", PacketFieldSemantic.BATTERY));
+            if (payloadLength > 2) result.add(field(8, 6 + payloadLength, "Protocol data", rangeHex(bytes, 8, 6 + payloadLength), PacketFieldSemantic.PAYLOAD));
+        } else if (payloadLength > 0) {
+            result.add(field(6, 6 + payloadLength, "Payload", rangeHex(bytes, 6, 6 + payloadLength), PacketFieldSemantic.PAYLOAD));
+        }
+        result.add(field(bytes.length - 2, bytes.length, "CRC", rangeHex(bytes, bytes.length - 2, bytes.length), PacketFieldSemantic.CHECKSUM));
+        return result;
+    }
+
+    private static PacketFieldAnnotation field(int start, int end, String label, String value, PacketFieldSemantic semantic) {
+        return PacketFieldAnnotation.of(start, end, label, value, semantic);
+    }
+
+    private static List<PacketFieldAnnotation> fields(PacketFieldAnnotation... fields) {
+        return new ArrayList<>(Arrays.asList(fields));
+    }
+
+    private static String rangeHex(byte[] bytes, int start, int end) {
+        if (start < 0 || end > bytes.length || start >= end) return "";
+        return hex(Arrays.copyOfRange(bytes, start, end));
+    }
+
+    private static String grams(double value) {
+        return String.format(Locale.US, "%.2f g", value);
+    }
+
+    private static String rate(double value) {
+        return String.format(Locale.US, "%.2f g/s", value);
+    }
+
     static String shortUuid(String uuid) {
-        String upper = uuid.toUpperCase(Locale.US);
+        String upper = uuid == null ? "" : uuid.toUpperCase(Locale.US);
         String suffix = "-0000-1000-8000-00805F9B34FB";
         if (upper.startsWith("0000") && upper.endsWith(suffix)) {
             return upper.substring(4, 8);

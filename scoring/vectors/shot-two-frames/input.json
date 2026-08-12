@@ -1,0 +1,20 @@
+{
+  "description": "Degenerate case the pre-v1 model scored happily.",
+  "events": [],
+  "frames": [
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.0,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.05,
+      "weightGrams": 0.5
+    }
+  ],
+  "mode": "shot",
+  "recordingEndMonotonicSeconds": 0.05,
+  "recordingStartMonotonicSeconds": 0.0,
+  "vectorId": "shot-two-frames"
+}

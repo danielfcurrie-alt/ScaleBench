@@ -1,0 +1,3219 @@
+{
+  "description": "Shared numerical oracle for reported-flow validation, free-running device-clock skew, and packet coalescing. The reported flow trails the centered weight derivative by 200 ms and the device clock runs approximately 100 ppm fast.",
+  "deviceKind": "weighMyBruPlus",
+  "events": [],
+  "frames": [
+    {
+      "deviceTimestampMs": 0,
+      "flowGramsPerSecond": 2.579564,
+      "kind": "weight",
+      "monotonicSeconds": 0.0,
+      "sequence": 0,
+      "weightGrams": 20.0
+    },
+    {
+      "deviceTimestampMs": 50,
+      "flowGramsPerSecond": 2.588494,
+      "kind": "weight",
+      "monotonicSeconds": 0.05,
+      "sequence": 1,
+      "weightGrams": 20.129979
+    },
+    {
+      "deviceTimestampMs": 100,
+      "flowGramsPerSecond": 2.594883,
+      "kind": "weight",
+      "monotonicSeconds": 0.1,
+      "sequence": 2,
+      "weightGrams": 20.259829
+    },
+    {
+      "deviceTimestampMs": 150,
+      "flowGramsPerSecond": 2.59872,
+      "kind": "weight",
+      "monotonicSeconds": 0.15,
+      "sequence": 3,
+      "weightGrams": 20.389424
+    },
+    {
+      "deviceTimestampMs": 200,
+      "flowGramsPerSecond": 2.6,
+      "kind": "weight",
+      "monotonicSeconds": 0.2,
+      "sequence": 4,
+      "weightGrams": 20.518636
+    },
+    {
+      "deviceTimestampMs": 250,
+      "flowGramsPerSecond": 2.59872,
+      "kind": "weight",
+      "monotonicSeconds": 0.25,
+      "sequence": 5,
+      "weightGrams": 20.647339
+    },
+    {
+      "deviceTimestampMs": 300,
+      "flowGramsPerSecond": 2.594883,
+      "kind": "weight",
+      "monotonicSeconds": 0.3,
+      "sequence": 6,
+      "weightGrams": 20.775405
+    },
+    {
+      "deviceTimestampMs": 350,
+      "flowGramsPerSecond": 2.588494,
+      "kind": "weight",
+      "monotonicSeconds": 0.35,
+      "sequence": 7,
+      "weightGrams": 20.902711
+    },
+    {
+      "deviceTimestampMs": 400,
+      "flowGramsPerSecond": 2.579564,
+      "kind": "weight",
+      "monotonicSeconds": 0.4,
+      "sequence": 8,
+      "weightGrams": 21.029133
+    },
+    {
+      "deviceTimestampMs": 450,
+      "flowGramsPerSecond": 2.568107,
+      "kind": "weight",
+      "monotonicSeconds": 0.45,
+      "sequence": 9,
+      "weightGrams": 21.154548
+    },
+    {
+      "deviceTimestampMs": 500,
+      "flowGramsPerSecond": 2.554141,
+      "kind": "weight",
+      "monotonicSeconds": 0.5,
+      "sequence": 10,
+      "weightGrams": 21.278837
+    },
+    {
+      "deviceTimestampMs": 550,
+      "flowGramsPerSecond": 2.537689,
+      "kind": "weight",
+      "monotonicSeconds": 0.55,
+      "sequence": 11,
+      "weightGrams": 21.401879
+    },
+    {
+      "deviceTimestampMs": 600,
+      "flowGramsPerSecond": 2.518777,
+      "kind": "weight",
+      "monotonicSeconds": 0.6,
+      "sequence": 12,
+      "weightGrams": 21.523558
+    },
+    {
+      "deviceTimestampMs": 650,
+      "flowGramsPerSecond": 2.497435,
+      "kind": "weight",
+      "monotonicSeconds": 0.65,
+      "sequence": 13,
+      "weightGrams": 21.64376
+    },
+    {
+      "deviceTimestampMs": 700,
+      "flowGramsPerSecond": 2.473698,
+      "kind": "weight",
+      "monotonicSeconds": 0.7,
+      "sequence": 14,
+      "weightGrams": 21.762372
+    },
+    {
+      "deviceTimestampMs": 750,
+      "flowGramsPerSecond": 2.447603,
+      "kind": "weight",
+      "monotonicSeconds": 0.75,
+      "sequence": 15,
+      "weightGrams": 21.879285
+    },
+    {
+      "deviceTimestampMs": 800,
+      "flowGramsPerSecond": 2.419192,
+      "kind": "weight",
+      "monotonicSeconds": 0.8,
+      "sequence": 16,
+      "weightGrams": 21.994391
+    },
+    {
+      "deviceTimestampMs": 850,
+      "flowGramsPerSecond": 2.388511,
+      "kind": "weight",
+      "monotonicSeconds": 0.85,
+      "sequence": 17,
+      "weightGrams": 22.107586
+    },
+    {
+      "deviceTimestampMs": 900,
+      "flowGramsPerSecond": 2.355608,
+      "kind": "weight",
+      "monotonicSeconds": 0.9,
+      "sequence": 18,
+      "weightGrams": 22.218769
+    },
+    {
+      "deviceTimestampMs": 950,
+      "flowGramsPerSecond": 2.320537,
+      "kind": "weight",
+      "monotonicSeconds": 0.95,
+      "sequence": 19,
+      "weightGrams": 22.327843
+    },
+    {
+      "deviceTimestampMs": 1000,
+      "flowGramsPerSecond": 2.283353,
+      "kind": "weight",
+      "monotonicSeconds": 1.0,
+      "sequence": 20,
+      "weightGrams": 22.434712
+    },
+    {
+      "deviceTimestampMs": 1050,
+      "flowGramsPerSecond": 2.244116,
+      "kind": "weight",
+      "monotonicSeconds": 1.05,
+      "sequence": 21,
+      "weightGrams": 22.539286
+    },
+    {
+      "deviceTimestampMs": 1100,
+      "flowGramsPerSecond": 2.202889,
+      "kind": "weight",
+      "monotonicSeconds": 1.1,
+      "sequence": 22,
+      "weightGrams": 22.641478
+    },
+    {
+      "deviceTimestampMs": 1150,
+      "flowGramsPerSecond": 2.159738,
+      "kind": "weight",
+      "monotonicSeconds": 1.15,
+      "sequence": 23,
+      "weightGrams": 22.741203
+    },
+    {
+      "deviceTimestampMs": 1200,
+      "flowGramsPerSecond": 2.114731,
+      "kind": "weight",
+      "monotonicSeconds": 1.2,
+      "sequence": 24,
+      "weightGrams": 22.838383
+    },
+    {
+      "deviceTimestampMs": 1250,
+      "flowGramsPerSecond": 2.067941,
+      "kind": "weight",
+      "monotonicSeconds": 1.25,
+      "sequence": 25,
+      "weightGrams": 22.932942
+    },
+    {
+      "deviceTimestampMs": 1300,
+      "flowGramsPerSecond": 2.019442,
+      "kind": "weight",
+      "monotonicSeconds": 1.3,
+      "sequence": 26,
+      "weightGrams": 23.024808
+    },
+    {
+      "deviceTimestampMs": 1350,
+      "flowGramsPerSecond": 1.969312,
+      "kind": "weight",
+      "monotonicSeconds": 1.35,
+      "sequence": 27,
+      "weightGrams": 23.113916
+    },
+    {
+      "deviceTimestampMs": 1400,
+      "flowGramsPerSecond": 1.917632,
+      "kind": "weight",
+      "monotonicSeconds": 1.4,
+      "sequence": 28,
+      "weightGrams": 23.200201
+    },
+    {
+      "deviceTimestampMs": 1450,
+      "flowGramsPerSecond": 1.864484,
+      "kind": "weight",
+      "monotonicSeconds": 1.45,
+      "sequence": 29,
+      "weightGrams": 23.283606
+    },
+    {
+      "deviceTimestampMs": 1500,
+      "flowGramsPerSecond": 1.809952,
+      "kind": "weight",
+      "monotonicSeconds": 1.5,
+      "sequence": 30,
+      "weightGrams": 23.364078
+    },
+    {
+      "deviceTimestampMs": 1550,
+      "flowGramsPerSecond": 1.754125,
+      "kind": "weight",
+      "monotonicSeconds": 1.55,
+      "sequence": 31,
+      "weightGrams": 23.441568
+    },
+    {
+      "deviceTimestampMs": 1600,
+      "flowGramsPerSecond": 1.697092,
+      "kind": "weight",
+      "monotonicSeconds": 1.6,
+      "sequence": 32,
+      "weightGrams": 23.516032
+    },
+    {
+      "deviceTimestampMs": 1650,
+      "flowGramsPerSecond": 1.638943,
+      "kind": "weight",
+      "monotonicSeconds": 1.65,
+      "sequence": 33,
+      "weightGrams": 23.58743
+    },
+    {
+      "deviceTimestampMs": 1700,
+      "flowGramsPerSecond": 1.579772,
+      "kind": "weight",
+      "monotonicSeconds": 1.7,
+      "sequence": 34,
+      "weightGrams": 23.655729
+    },
+    {
+      "deviceTimestampMs": 1750,
+      "flowGramsPerSecond": 1.519674,
+      "kind": "weight",
+      "monotonicSeconds": 1.75,
+      "sequence": 35,
+      "weightGrams": 23.720899
+    },
+    {
+      "deviceTimestampMs": 1800,
+      "flowGramsPerSecond": 1.458744,
+      "kind": "weight",
+      "monotonicSeconds": 1.8,
+      "sequence": 36,
+      "weightGrams": 23.782917
+    },
+    {
+      "deviceTimestampMs": 1850,
+      "flowGramsPerSecond": 1.397081,
+      "kind": "weight",
+      "monotonicSeconds": 1.85,
+      "sequence": 37,
+      "weightGrams": 23.841762
+    },
+    {
+      "deviceTimestampMs": 1900,
+      "flowGramsPerSecond": 1.334782,
+      "kind": "weight",
+      "monotonicSeconds": 1.9,
+      "sequence": 38,
+      "weightGrams": 23.89742
+    },
+    {
+      "deviceTimestampMs": 1950,
+      "flowGramsPerSecond": 1.271947,
+      "kind": "weight",
+      "monotonicSeconds": 1.95,
+      "sequence": 39,
+      "weightGrams": 23.949883
+    },
+    {
+      "deviceTimestampMs": 2000,
+      "flowGramsPerSecond": 1.208678,
+      "kind": "weight",
+      "monotonicSeconds": 2.0,
+      "sequence": 40,
+      "weightGrams": 23.999147
+    },
+    {
+      "deviceTimestampMs": 2050,
+      "flowGramsPerSecond": 1.145075,
+      "kind": "weight",
+      "monotonicSeconds": 2.05,
+      "sequence": 41,
+      "weightGrams": 24.045213
+    },
+    {
+      "deviceTimestampMs": 2100,
+      "flowGramsPerSecond": 1.081239,
+      "kind": "weight",
+      "monotonicSeconds": 2.1,
+      "sequence": 42,
+      "weightGrams": 24.088086
+    },
+    {
+      "deviceTimestampMs": 2150,
+      "flowGramsPerSecond": 1.017274,
+      "kind": "weight",
+      "monotonicSeconds": 2.15,
+      "sequence": 43,
+      "weightGrams": 24.12778
+    },
+    {
+      "deviceTimestampMs": 2200,
+      "flowGramsPerSecond": 0.953281,
+      "kind": "weight",
+      "monotonicSeconds": 2.2,
+      "sequence": 44,
+      "weightGrams": 24.164309
+    },
+    {
+      "deviceTimestampMs": 2250,
+      "flowGramsPerSecond": 0.889362,
+      "kind": "weight",
+      "monotonicSeconds": 2.25,
+      "sequence": 45,
+      "weightGrams": 24.197695
+    },
+    {
+      "deviceTimestampMs": 2300,
+      "flowGramsPerSecond": 0.825621,
+      "kind": "weight",
+      "monotonicSeconds": 2.3,
+      "sequence": 46,
+      "weightGrams": 24.227966
+    },
+    {
+      "deviceTimestampMs": 2350,
+      "flowGramsPerSecond": 0.762159,
+      "kind": "weight",
+      "monotonicSeconds": 2.35,
+      "sequence": 47,
+      "weightGrams": 24.255152
+    },
+    {
+      "deviceTimestampMs": 2400,
+      "flowGramsPerSecond": 0.699077,
+      "kind": "weight",
+      "monotonicSeconds": 2.4,
+      "sequence": 48,
+      "weightGrams": 24.279291
+    },
+    {
+      "deviceTimestampMs": 2450,
+      "flowGramsPerSecond": 0.636477,
+      "kind": "weight",
+      "monotonicSeconds": 2.45,
+      "sequence": 49,
+      "weightGrams": 24.300423
+    },
+    {
+      "deviceTimestampMs": 2500,
+      "flowGramsPerSecond": 0.574458,
+      "kind": "weight",
+      "monotonicSeconds": 2.5,
+      "sequence": 50,
+      "weightGrams": 24.318595
+    },
+    {
+      "deviceTimestampMs": 2550,
+      "flowGramsPerSecond": 0.51312,
+      "kind": "weight",
+      "monotonicSeconds": 2.55,
+      "sequence": 51,
+      "weightGrams": 24.333857
+    },
+    {
+      "deviceTimestampMs": 2600,
+      "flowGramsPerSecond": 0.452561,
+      "kind": "weight",
+      "monotonicSeconds": 2.6,
+      "sequence": 52,
+      "weightGrams": 24.346266
+    },
+    {
+      "deviceTimestampMs": 2650,
+      "flowGramsPerSecond": 0.392877,
+      "kind": "weight",
+      "monotonicSeconds": 2.65,
+      "sequence": 53,
+      "weightGrams": 24.355881
+    },
+    {
+      "deviceTimestampMs": 2700,
+      "flowGramsPerSecond": 0.334165,
+      "kind": "weight",
+      "monotonicSeconds": 2.7,
+      "sequence": 54,
+      "weightGrams": 24.362767
+    },
+    {
+      "deviceTimestampMs": 2750,
+      "flowGramsPerSecond": 0.276518,
+      "kind": "weight",
+      "monotonicSeconds": 2.75,
+      "sequence": 55,
+      "weightGrams": 24.366993
+    },
+    {
+      "deviceTimestampMs": 2800,
+      "flowGramsPerSecond": 0.220029,
+      "kind": "weight",
+      "monotonicSeconds": 2.8,
+      "sequence": 56,
+      "weightGrams": 24.368632
+    },
+    {
+      "deviceTimestampMs": 2850,
+      "flowGramsPerSecond": 0.164787,
+      "kind": "weight",
+      "monotonicSeconds": 2.85,
+      "sequence": 57,
+      "weightGrams": 24.367761
+    },
+    {
+      "deviceTimestampMs": 2900,
+      "flowGramsPerSecond": 0.110881,
+      "kind": "weight",
+      "monotonicSeconds": 2.9,
+      "sequence": 58,
+      "weightGrams": 24.364463
+    },
+    {
+      "deviceTimestampMs": 2950,
+      "flowGramsPerSecond": 0.058398,
+      "kind": "weight",
+      "monotonicSeconds": 2.95,
+      "sequence": 59,
+      "weightGrams": 24.358822
+    },
+    {
+      "deviceTimestampMs": 3000,
+      "flowGramsPerSecond": 0.007421,
+      "kind": "weight",
+      "monotonicSeconds": 3.0,
+      "sequence": 60,
+      "weightGrams": 24.350926
+    },
+    {
+      "deviceTimestampMs": 3050,
+      "flowGramsPerSecond": -0.041967,
+      "kind": "weight",
+      "monotonicSeconds": 3.05,
+      "sequence": 61,
+      "weightGrams": 24.34087
+    },
+    {
+      "deviceTimestampMs": 3100,
+      "flowGramsPerSecond": -0.089689,
+      "kind": "weight",
+      "monotonicSeconds": 3.1,
+      "sequence": 62,
+      "weightGrams": 24.328749
+    },
+    {
+      "deviceTimestampMs": 3150,
+      "flowGramsPerSecond": -0.135668,
+      "kind": "weight",
+      "monotonicSeconds": 3.15,
+      "sequence": 63,
+      "weightGrams": 24.314661
+    },
+    {
+      "deviceTimestampMs": 3200,
+      "flowGramsPerSecond": -0.17983,
+      "kind": "weight",
+      "monotonicSeconds": 3.2,
+      "sequence": 64,
+      "weightGrams": 24.298711
+    },
+    {
+      "deviceTimestampMs": 3250,
+      "flowGramsPerSecond": -0.222104,
+      "kind": "weight",
+      "monotonicSeconds": 3.25,
+      "sequence": 65,
+      "weightGrams": 24.281003
+    },
+    {
+      "deviceTimestampMs": 3300,
+      "flowGramsPerSecond": -0.262424,
+      "kind": "weight",
+      "monotonicSeconds": 3.3,
+      "sequence": 66,
+      "weightGrams": 24.261645
+    },
+    {
+      "deviceTimestampMs": 3350,
+      "flowGramsPerSecond": -0.300723,
+      "kind": "weight",
+      "monotonicSeconds": 3.35,
+      "sequence": 67,
+      "weightGrams": 24.240749
+    },
+    {
+      "deviceTimestampMs": 3400,
+      "flowGramsPerSecond": -0.336942,
+      "kind": "weight",
+      "monotonicSeconds": 3.4,
+      "sequence": 68,
+      "weightGrams": 24.218428
+    },
+    {
+      "deviceTimestampMs": 3450,
+      "flowGramsPerSecond": -0.371022,
+      "kind": "weight",
+      "monotonicSeconds": 3.45,
+      "sequence": 69,
+      "weightGrams": 24.194798
+    },
+    {
+      "deviceTimestampMs": 3500,
+      "flowGramsPerSecond": -0.402909,
+      "kind": "weight",
+      "monotonicSeconds": 3.5,
+      "sequence": 70,
+      "weightGrams": 24.169976
+    },
+    {
+      "deviceTimestampMs": 3550,
+      "flowGramsPerSecond": -0.432551,
+      "kind": "weight",
+      "monotonicSeconds": 3.55,
+      "sequence": 71,
+      "weightGrams": 24.144083
+    },
+    {
+      "deviceTimestampMs": 3600,
+      "flowGramsPerSecond": -0.459901,
+      "kind": "weight",
+      "monotonicSeconds": 3.6,
+      "sequence": 72,
+      "weightGrams": 24.117239
+    },
+    {
+      "deviceTimestampMs": 3650,
+      "flowGramsPerSecond": -0.484916,
+      "kind": "weight",
+      "monotonicSeconds": 3.65,
+      "sequence": 73,
+      "weightGrams": 24.089567
+    },
+    {
+      "deviceTimestampMs": 3700,
+      "flowGramsPerSecond": -0.507556,
+      "kind": "weight",
+      "monotonicSeconds": 3.7,
+      "sequence": 74,
+      "weightGrams": 24.061193
+    },
+    {
+      "deviceTimestampMs": 3750,
+      "flowGramsPerSecond": -0.527783,
+      "kind": "weight",
+      "monotonicSeconds": 3.75,
+      "sequence": 75,
+      "weightGrams": 24.03224
+    },
+    {
+      "deviceTimestampMs": 3800,
+      "flowGramsPerSecond": -0.545567,
+      "kind": "weight",
+      "monotonicSeconds": 3.8,
+      "sequence": 76,
+      "weightGrams": 24.002836
+    },
+    {
+      "deviceTimestampMs": 3850,
+      "flowGramsPerSecond": -0.560878,
+      "kind": "weight",
+      "monotonicSeconds": 3.85,
+      "sequence": 77,
+      "weightGrams": 23.973107
+    },
+    {
+      "deviceTimestampMs": 3900,
+      "flowGramsPerSecond": -0.573692,
+      "kind": "weight",
+      "monotonicSeconds": 3.9,
+      "sequence": 78,
+      "weightGrams": 23.943182
+    },
+    {
+      "deviceTimestampMs": 3950,
+      "flowGramsPerSecond": -0.583988,
+      "kind": "weight",
+      "monotonicSeconds": 3.95,
+      "sequence": 79,
+      "weightGrams": 23.913187
+    },
+    {
+      "deviceTimestampMs": 4000,
+      "flowGramsPerSecond": -0.59175,
+      "kind": "weight",
+      "monotonicSeconds": 4.0,
+      "sequence": 80,
+      "weightGrams": 23.883252
+    },
+    {
+      "deviceTimestampMs": 4050,
+      "flowGramsPerSecond": -0.596966,
+      "kind": "weight",
+      "monotonicSeconds": 4.05,
+      "sequence": 81,
+      "weightGrams": 23.853503
+    },
+    {
+      "deviceTimestampMs": 4100,
+      "flowGramsPerSecond": -0.599627,
+      "kind": "weight",
+      "monotonicSeconds": 4.1,
+      "sequence": 82,
+      "weightGrams": 23.824068
+    },
+    {
+      "deviceTimestampMs": 4150,
+      "flowGramsPerSecond": -0.599729,
+      "kind": "weight",
+      "monotonicSeconds": 4.15,
+      "sequence": 83,
+      "weightGrams": 23.795075
+    },
+    {
+      "deviceTimestampMs": 4200,
+      "flowGramsPerSecond": -0.597272,
+      "kind": "weight",
+      "monotonicSeconds": 4.2,
+      "sequence": 84,
+      "weightGrams": 23.76665
+    },
+    {
+      "deviceTimestampMs": 4250,
+      "flowGramsPerSecond": -0.592259,
+      "kind": "weight",
+      "monotonicSeconds": 4.25,
+      "sequence": 85,
+      "weightGrams": 23.738918
+    },
+    {
+      "deviceTimestampMs": 4300,
+      "flowGramsPerSecond": -0.584699,
+      "kind": "weight",
+      "monotonicSeconds": 4.3,
+      "sequence": 86,
+      "weightGrams": 23.712003
+    },
+    {
+      "deviceTimestampMs": 4350,
+      "flowGramsPerSecond": -0.574604,
+      "kind": "weight",
+      "monotonicSeconds": 4.35,
+      "sequence": 87,
+      "weightGrams": 23.68603
+    },
+    {
+      "deviceTimestampMs": 4400,
+      "flowGramsPerSecond": -0.56199,
+      "kind": "weight",
+      "monotonicSeconds": 4.4,
+      "sequence": 88,
+      "weightGrams": 23.661118
+    },
+    {
+      "deviceTimestampMs": 4450,
+      "flowGramsPerSecond": -0.546877,
+      "kind": "weight",
+      "monotonicSeconds": 4.45,
+      "sequence": 89,
+      "weightGrams": 23.637389
+    },
+    {
+      "deviceTimestampMs": 4500,
+      "flowGramsPerSecond": -0.52929,
+      "kind": "weight",
+      "monotonicSeconds": 4.5,
+      "sequence": 90,
+      "weightGrams": 23.614959
+    },
+    {
+      "deviceTimestampMs": 4550,
+      "flowGramsPerSecond": -0.509255,
+      "kind": "weight",
+      "monotonicSeconds": 4.55,
+      "sequence": 91,
+      "weightGrams": 23.593946
+    },
+    {
+      "deviceTimestampMs": 4600,
+      "flowGramsPerSecond": -0.486807,
+      "kind": "weight",
+      "monotonicSeconds": 4.6,
+      "sequence": 92,
+      "weightGrams": 23.574461
+    },
+    {
+      "deviceTimestampMs": 4650,
+      "flowGramsPerSecond": -0.46198,
+      "kind": "weight",
+      "monotonicSeconds": 4.65,
+      "sequence": 93,
+      "weightGrams": 23.556618
+    },
+    {
+      "deviceTimestampMs": 4700,
+      "flowGramsPerSecond": -0.434813,
+      "kind": "weight",
+      "monotonicSeconds": 4.7,
+      "sequence": 94,
+      "weightGrams": 23.540524
+    },
+    {
+      "deviceTimestampMs": 4750,
+      "flowGramsPerSecond": -0.405352,
+      "kind": "weight",
+      "monotonicSeconds": 4.75,
+      "sequence": 95,
+      "weightGrams": 23.526284
+    },
+    {
+      "deviceTimestampMs": 4800,
+      "flowGramsPerSecond": -0.373642,
+      "kind": "weight",
+      "monotonicSeconds": 4.8,
+      "sequence": 96,
+      "weightGrams": 23.514003
+    },
+    {
+      "deviceTimestampMs": 4850,
+      "flowGramsPerSecond": -0.339735,
+      "kind": "weight",
+      "monotonicSeconds": 4.85,
+      "sequence": 97,
+      "weightGrams": 23.503778
+    },
+    {
+      "deviceTimestampMs": 4900,
+      "flowGramsPerSecond": -0.303684,
+      "kind": "weight",
+      "monotonicSeconds": 4.9,
+      "sequence": 98,
+      "weightGrams": 23.495707
+    },
+    {
+      "deviceTimestampMs": 4950,
+      "flowGramsPerSecond": -0.265548,
+      "kind": "weight",
+      "monotonicSeconds": 4.95,
+      "sequence": 99,
+      "weightGrams": 23.489883
+    },
+    {
+      "deviceTimestampMs": 5001,
+      "flowGramsPerSecond": -0.225388,
+      "kind": "weight",
+      "monotonicSeconds": 5.0,
+      "sequence": 100,
+      "weightGrams": 23.486395
+    },
+    {
+      "deviceTimestampMs": 5051,
+      "flowGramsPerSecond": -0.183266,
+      "kind": "weight",
+      "monotonicSeconds": 5.05,
+      "sequence": 101,
+      "weightGrams": 23.485328
+    },
+    {
+      "deviceTimestampMs": 5101,
+      "flowGramsPerSecond": -0.139252,
+      "kind": "weight",
+      "monotonicSeconds": 5.1,
+      "sequence": 102,
+      "weightGrams": 23.486765
+    },
+    {
+      "deviceTimestampMs": 5151,
+      "flowGramsPerSecond": -0.093416,
+      "kind": "weight",
+      "monotonicSeconds": 5.15,
+      "sequence": 103,
+      "weightGrams": 23.490782
+    },
+    {
+      "deviceTimestampMs": 5201,
+      "flowGramsPerSecond": -0.04583,
+      "kind": "weight",
+      "monotonicSeconds": 5.2,
+      "sequence": 104,
+      "weightGrams": 23.497453
+    },
+    {
+      "deviceTimestampMs": 5251,
+      "flowGramsPerSecond": 0.003429,
+      "kind": "weight",
+      "monotonicSeconds": 5.25,
+      "sequence": 105,
+      "weightGrams": 23.506848
+    },
+    {
+      "deviceTimestampMs": 5301,
+      "flowGramsPerSecond": 0.054283,
+      "kind": "weight",
+      "monotonicSeconds": 5.3,
+      "sequence": 106,
+      "weightGrams": 23.519032
+    },
+    {
+      "deviceTimestampMs": 5351,
+      "flowGramsPerSecond": 0.106649,
+      "kind": "weight",
+      "monotonicSeconds": 5.35,
+      "sequence": 107,
+      "weightGrams": 23.534065
+    },
+    {
+      "deviceTimestampMs": 5401,
+      "flowGramsPerSecond": 0.160444,
+      "kind": "weight",
+      "monotonicSeconds": 5.4,
+      "sequence": 108,
+      "weightGrams": 23.552004
+    },
+    {
+      "deviceTimestampMs": 5451,
+      "flowGramsPerSecond": 0.215583,
+      "kind": "weight",
+      "monotonicSeconds": 5.45,
+      "sequence": 109,
+      "weightGrams": 23.572898
+    },
+    {
+      "deviceTimestampMs": 5501,
+      "flowGramsPerSecond": 0.271976,
+      "kind": "weight",
+      "monotonicSeconds": 5.5,
+      "sequence": 110,
+      "weightGrams": 23.596796
+    },
+    {
+      "deviceTimestampMs": 5551,
+      "flowGramsPerSecond": 0.329534,
+      "kind": "weight",
+      "monotonicSeconds": 5.55,
+      "sequence": 111,
+      "weightGrams": 23.623738
+    },
+    {
+      "deviceTimestampMs": 5601,
+      "flowGramsPerSecond": 0.388165,
+      "kind": "weight",
+      "monotonicSeconds": 5.6,
+      "sequence": 112,
+      "weightGrams": 23.653762
+    },
+    {
+      "deviceTimestampMs": 5651,
+      "flowGramsPerSecond": 0.447774,
+      "kind": "weight",
+      "monotonicSeconds": 5.65,
+      "sequence": 113,
+      "weightGrams": 23.686899
+    },
+    {
+      "deviceTimestampMs": 5701,
+      "flowGramsPerSecond": 0.508267,
+      "kind": "weight",
+      "monotonicSeconds": 5.7,
+      "sequence": 114,
+      "weightGrams": 23.723177
+    },
+    {
+      "deviceTimestampMs": 5751,
+      "flowGramsPerSecond": 0.569547,
+      "kind": "weight",
+      "monotonicSeconds": 5.75,
+      "sequence": 115,
+      "weightGrams": 23.762618
+    },
+    {
+      "deviceTimestampMs": 5801,
+      "flowGramsPerSecond": 0.631515,
+      "kind": "weight",
+      "monotonicSeconds": 5.8,
+      "sequence": 116,
+      "weightGrams": 23.805238
+    },
+    {
+      "deviceTimestampMs": 5851,
+      "flowGramsPerSecond": 0.694073,
+      "kind": "weight",
+      "monotonicSeconds": 5.85,
+      "sequence": 117,
+      "weightGrams": 23.851049
+    },
+    {
+      "deviceTimestampMs": 5901,
+      "flowGramsPerSecond": 0.75712,
+      "kind": "weight",
+      "monotonicSeconds": 5.9,
+      "sequence": 118,
+      "weightGrams": 23.900058
+    },
+    {
+      "deviceTimestampMs": 5951,
+      "flowGramsPerSecond": 0.820556,
+      "kind": "weight",
+      "monotonicSeconds": 5.95,
+      "sequence": 119,
+      "weightGrams": 23.952266
+    },
+    {
+      "deviceTimestampMs": 6001,
+      "flowGramsPerSecond": 0.884279,
+      "kind": "weight",
+      "monotonicSeconds": 6.0,
+      "sequence": 120,
+      "weightGrams": 24.007671
+    },
+    {
+      "deviceTimestampMs": 6051,
+      "flowGramsPerSecond": 0.948187,
+      "kind": "weight",
+      "monotonicSeconds": 6.05,
+      "sequence": 121,
+      "weightGrams": 24.066262
+    },
+    {
+      "deviceTimestampMs": 6101,
+      "flowGramsPerSecond": 1.012178,
+      "kind": "weight",
+      "monotonicSeconds": 6.1,
+      "sequence": 122,
+      "weightGrams": 24.128028
+    },
+    {
+      "deviceTimestampMs": 6151,
+      "flowGramsPerSecond": 1.076149,
+      "kind": "weight",
+      "monotonicSeconds": 6.15,
+      "sequence": 123,
+      "weightGrams": 24.192948
+    },
+    {
+      "deviceTimestampMs": 6201,
+      "flowGramsPerSecond": 1.139998,
+      "kind": "weight",
+      "monotonicSeconds": 6.2,
+      "sequence": 124,
+      "weightGrams": 24.260999
+    },
+    {
+      "deviceTimestampMs": 6251,
+      "flowGramsPerSecond": 1.203624,
+      "kind": "weight",
+      "monotonicSeconds": 6.25,
+      "sequence": 125,
+      "weightGrams": 24.332151
+    },
+    {
+      "deviceTimestampMs": 6301,
+      "flowGramsPerSecond": 1.266924,
+      "kind": "weight",
+      "monotonicSeconds": 6.3,
+      "sequence": 126,
+      "weightGrams": 24.406372
+    },
+    {
+      "deviceTimestampMs": 6351,
+      "flowGramsPerSecond": 1.329796,
+      "kind": "weight",
+      "monotonicSeconds": 6.35,
+      "sequence": 127,
+      "weightGrams": 24.483623
+    },
+    {
+      "deviceTimestampMs": 6401,
+      "flowGramsPerSecond": 1.392142,
+      "kind": "weight",
+      "monotonicSeconds": 6.4,
+      "sequence": 128,
+      "weightGrams": 24.563859
+    },
+    {
+      "deviceTimestampMs": 6451,
+      "flowGramsPerSecond": 1.453859,
+      "kind": "weight",
+      "monotonicSeconds": 6.45,
+      "sequence": 129,
+      "weightGrams": 24.647033
+    },
+    {
+      "deviceTimestampMs": 6501,
+      "flowGramsPerSecond": 1.514851,
+      "kind": "weight",
+      "monotonicSeconds": 6.5,
+      "sequence": 130,
+      "weightGrams": 24.733091
+    },
+    {
+      "deviceTimestampMs": 6551,
+      "flowGramsPerSecond": 1.575019,
+      "kind": "weight",
+      "monotonicSeconds": 6.55,
+      "sequence": 131,
+      "weightGrams": 24.821975
+    },
+    {
+      "deviceTimestampMs": 6601,
+      "flowGramsPerSecond": 1.634268,
+      "kind": "weight",
+      "monotonicSeconds": 6.6,
+      "sequence": 132,
+      "weightGrams": 24.913625
+    },
+    {
+      "deviceTimestampMs": 6651,
+      "flowGramsPerSecond": 1.692501,
+      "kind": "weight",
+      "monotonicSeconds": 6.65,
+      "sequence": 133,
+      "weightGrams": 25.007972
+    },
+    {
+      "deviceTimestampMs": 6701,
+      "flowGramsPerSecond": 1.749627,
+      "kind": "weight",
+      "monotonicSeconds": 6.7,
+      "sequence": 134,
+      "weightGrams": 25.104945
+    },
+    {
+      "deviceTimestampMs": 6751,
+      "flowGramsPerSecond": 1.805553,
+      "kind": "weight",
+      "monotonicSeconds": 6.75,
+      "sequence": 135,
+      "weightGrams": 25.204471
+    },
+    {
+      "deviceTimestampMs": 6801,
+      "flowGramsPerSecond": 1.860191,
+      "kind": "weight",
+      "monotonicSeconds": 6.8,
+      "sequence": 136,
+      "weightGrams": 25.306469
+    },
+    {
+      "deviceTimestampMs": 6851,
+      "flowGramsPerSecond": 1.913452,
+      "kind": "weight",
+      "monotonicSeconds": 6.85,
+      "sequence": 137,
+      "weightGrams": 25.410857
+    },
+    {
+      "deviceTimestampMs": 6901,
+      "flowGramsPerSecond": 1.965253,
+      "kind": "weight",
+      "monotonicSeconds": 6.9,
+      "sequence": 138,
+      "weightGrams": 25.517546
+    },
+    {
+      "deviceTimestampMs": 6951,
+      "flowGramsPerSecond": 2.015509,
+      "kind": "weight",
+      "monotonicSeconds": 6.95,
+      "sequence": 139,
+      "weightGrams": 25.626448
+    },
+    {
+      "deviceTimestampMs": 7001,
+      "flowGramsPerSecond": 2.06414,
+      "kind": "weight",
+      "monotonicSeconds": 7.0,
+      "sequence": 140,
+      "weightGrams": 25.737467
+    },
+    {
+      "deviceTimestampMs": 7051,
+      "flowGramsPerSecond": 2.111069,
+      "kind": "weight",
+      "monotonicSeconds": 7.05,
+      "sequence": 141,
+      "weightGrams": 25.850505
+    },
+    {
+      "deviceTimestampMs": 7101,
+      "flowGramsPerSecond": 2.156221,
+      "kind": "weight",
+      "monotonicSeconds": 7.1,
+      "sequence": 142,
+      "weightGrams": 25.965463
+    },
+    {
+      "deviceTimestampMs": 7151,
+      "flowGramsPerSecond": 2.199523,
+      "kind": "weight",
+      "monotonicSeconds": 7.15,
+      "sequence": 143,
+      "weightGrams": 26.082235
+    },
+    {
+      "deviceTimestampMs": 7201,
+      "flowGramsPerSecond": 2.240905,
+      "kind": "weight",
+      "monotonicSeconds": 7.2,
+      "sequence": 144,
+      "weightGrams": 26.200716
+    },
+    {
+      "deviceTimestampMs": 7251,
+      "flowGramsPerSecond": 2.280303,
+      "kind": "weight",
+      "monotonicSeconds": 7.25,
+      "sequence": 145,
+      "weightGrams": 26.320796
+    },
+    {
+      "deviceTimestampMs": 7301,
+      "flowGramsPerSecond": 2.317653,
+      "kind": "weight",
+      "monotonicSeconds": 7.3,
+      "sequence": 146,
+      "weightGrams": 26.442362
+    },
+    {
+      "deviceTimestampMs": 7351,
+      "flowGramsPerSecond": 2.352894,
+      "kind": "weight",
+      "monotonicSeconds": 7.35,
+      "sequence": 147,
+      "weightGrams": 26.5653
+    },
+    {
+      "deviceTimestampMs": 7401,
+      "flowGramsPerSecond": 2.385971,
+      "kind": "weight",
+      "monotonicSeconds": 7.4,
+      "sequence": 148,
+      "weightGrams": 26.689493
+    },
+    {
+      "deviceTimestampMs": 7451,
+      "flowGramsPerSecond": 2.416831,
+      "kind": "weight",
+      "monotonicSeconds": 7.45,
+      "sequence": 149,
+      "weightGrams": 26.814823
+    },
+    {
+      "deviceTimestampMs": 7501,
+      "flowGramsPerSecond": 2.445425,
+      "kind": "weight",
+      "monotonicSeconds": 7.5,
+      "sequence": 150,
+      "weightGrams": 26.941169
+    },
+    {
+      "deviceTimestampMs": 7551,
+      "flowGramsPerSecond": 2.471705,
+      "kind": "weight",
+      "monotonicSeconds": 7.55,
+      "sequence": 151,
+      "weightGrams": 27.068409
+    },
+    {
+      "deviceTimestampMs": 7601,
+      "flowGramsPerSecond": 2.495632,
+      "kind": "weight",
+      "monotonicSeconds": 7.6,
+      "sequence": 152,
+      "weightGrams": 27.19642
+    },
+    {
+      "deviceTimestampMs": 7651,
+      "flowGramsPerSecond": 2.517166,
+      "kind": "weight",
+      "monotonicSeconds": 7.65,
+      "sequence": 153,
+      "weightGrams": 27.325076
+    },
+    {
+      "deviceTimestampMs": 7701,
+      "flowGramsPerSecond": 2.536272,
+      "kind": "weight",
+      "monotonicSeconds": 7.7,
+      "sequence": 154,
+      "weightGrams": 27.454252
+    },
+    {
+      "deviceTimestampMs": 7751,
+      "flowGramsPerSecond": 2.552921,
+      "kind": "weight",
+      "monotonicSeconds": 7.75,
+      "sequence": 155,
+      "weightGrams": 27.583821
+    },
+    {
+      "deviceTimestampMs": 7801,
+      "flowGramsPerSecond": 2.567086,
+      "kind": "weight",
+      "monotonicSeconds": 7.8,
+      "sequence": 156,
+      "weightGrams": 27.713656
+    },
+    {
+      "deviceTimestampMs": 7851,
+      "flowGramsPerSecond": 2.578744,
+      "kind": "weight",
+      "monotonicSeconds": 7.85,
+      "sequence": 157,
+      "weightGrams": 27.843629
+    },
+    {
+      "deviceTimestampMs": 7901,
+      "flowGramsPerSecond": 2.587876,
+      "kind": "weight",
+      "monotonicSeconds": 7.9,
+      "sequence": 158,
+      "weightGrams": 27.973613
+    },
+    {
+      "deviceTimestampMs": 7951,
+      "flowGramsPerSecond": 2.594467,
+      "kind": "weight",
+      "monotonicSeconds": 7.95,
+      "sequence": 159,
+      "weightGrams": 28.103478
+    },
+    {
+      "deviceTimestampMs": 8001,
+      "flowGramsPerSecond": 2.598508,
+      "kind": "weight",
+      "monotonicSeconds": 8.0,
+      "sequence": 160,
+      "weightGrams": 28.233098
+    },
+    {
+      "deviceTimestampMs": 8051,
+      "flowGramsPerSecond": 2.599992,
+      "kind": "weight",
+      "monotonicSeconds": 8.05,
+      "sequence": 161,
+      "weightGrams": 28.362346
+    },
+    {
+      "deviceTimestampMs": 8101,
+      "flowGramsPerSecond": 2.598916,
+      "kind": "weight",
+      "monotonicSeconds": 8.1,
+      "sequence": 162,
+      "weightGrams": 28.491093
+    },
+    {
+      "deviceTimestampMs": 8151,
+      "flowGramsPerSecond": 2.595282,
+      "kind": "weight",
+      "monotonicSeconds": 8.15,
+      "sequence": 163,
+      "weightGrams": 28.619215
+    },
+    {
+      "deviceTimestampMs": 8201,
+      "flowGramsPerSecond": 2.589096,
+      "kind": "weight",
+      "monotonicSeconds": 8.2,
+      "sequence": 164,
+      "weightGrams": 28.746586
+    },
+    {
+      "deviceTimestampMs": 8251,
+      "flowGramsPerSecond": 2.580368,
+      "kind": "weight",
+      "monotonicSeconds": 8.25,
+      "sequence": 165,
+      "weightGrams": 28.873083
+    },
+    {
+      "deviceTimestampMs": 8301,
+      "flowGramsPerSecond": 2.569111,
+      "kind": "weight",
+      "monotonicSeconds": 8.3,
+      "sequence": 166,
+      "weightGrams": 28.998583
+    },
+    {
+      "deviceTimestampMs": 8351,
+      "flowGramsPerSecond": 2.555344,
+      "kind": "weight",
+      "monotonicSeconds": 8.35,
+      "sequence": 167,
+      "weightGrams": 29.122965
+    },
+    {
+      "deviceTimestampMs": 8401,
+      "flowGramsPerSecond": 2.539089,
+      "kind": "weight",
+      "monotonicSeconds": 8.4,
+      "sequence": 168,
+      "weightGrams": 29.246111
+    },
+    {
+      "deviceTimestampMs": 8451,
+      "flowGramsPerSecond": 2.520372,
+      "kind": "weight",
+      "monotonicSeconds": 8.45,
+      "sequence": 169,
+      "weightGrams": 29.367903
+    },
+    {
+      "deviceTimestampMs": 8501,
+      "flowGramsPerSecond": 2.499223,
+      "kind": "weight",
+      "monotonicSeconds": 8.5,
+      "sequence": 170,
+      "weightGrams": 29.488227
+    },
+    {
+      "deviceTimestampMs": 8551,
+      "flowGramsPerSecond": 2.475675,
+      "kind": "weight",
+      "monotonicSeconds": 8.55,
+      "sequence": 171,
+      "weightGrams": 29.606969
+    },
+    {
+      "deviceTimestampMs": 8601,
+      "flowGramsPerSecond": 2.449766,
+      "kind": "weight",
+      "monotonicSeconds": 8.6,
+      "sequence": 172,
+      "weightGrams": 29.724021
+    },
+    {
+      "deviceTimestampMs": 8651,
+      "flowGramsPerSecond": 2.421538,
+      "kind": "weight",
+      "monotonicSeconds": 8.65,
+      "sequence": 173,
+      "weightGrams": 29.839275
+    },
+    {
+      "deviceTimestampMs": 8701,
+      "flowGramsPerSecond": 2.391036,
+      "kind": "weight",
+      "monotonicSeconds": 8.7,
+      "sequence": 174,
+      "weightGrams": 29.952626
+    },
+    {
+      "deviceTimestampMs": 8751,
+      "flowGramsPerSecond": 2.358308,
+      "kind": "weight",
+      "monotonicSeconds": 8.75,
+      "sequence": 175,
+      "weightGrams": 30.063973
+    },
+    {
+      "deviceTimestampMs": 8801,
+      "flowGramsPerSecond": 2.323408,
+      "kind": "weight",
+      "monotonicSeconds": 8.8,
+      "sequence": 176,
+      "weightGrams": 30.173218
+    },
+    {
+      "deviceTimestampMs": 8851,
+      "flowGramsPerSecond": 2.28639,
+      "kind": "weight",
+      "monotonicSeconds": 8.85,
+      "sequence": 177,
+      "weightGrams": 30.280266
+    },
+    {
+      "deviceTimestampMs": 8901,
+      "flowGramsPerSecond": 2.247315,
+      "kind": "weight",
+      "monotonicSeconds": 8.9,
+      "sequence": 178,
+      "weightGrams": 30.385027
+    },
+    {
+      "deviceTimestampMs": 8951,
+      "flowGramsPerSecond": 2.206244,
+      "kind": "weight",
+      "monotonicSeconds": 8.95,
+      "sequence": 179,
+      "weightGrams": 30.487411
+    },
+    {
+      "deviceTimestampMs": 9001,
+      "flowGramsPerSecond": 2.163243,
+      "kind": "weight",
+      "monotonicSeconds": 9.0,
+      "sequence": 180,
+      "weightGrams": 30.587336
+    },
+    {
+      "deviceTimestampMs": 9051,
+      "flowGramsPerSecond": 2.118381,
+      "kind": "weight",
+      "monotonicSeconds": 9.05,
+      "sequence": 181,
+      "weightGrams": 30.684721
+    },
+    {
+      "deviceTimestampMs": 9101,
+      "flowGramsPerSecond": 2.07173,
+      "kind": "weight",
+      "monotonicSeconds": 9.1,
+      "sequence": 182,
+      "weightGrams": 30.779491
+    },
+    {
+      "deviceTimestampMs": 9151,
+      "flowGramsPerSecond": 2.023365,
+      "kind": "weight",
+      "monotonicSeconds": 9.15,
+      "sequence": 183,
+      "weightGrams": 30.871575
+    },
+    {
+      "deviceTimestampMs": 9201,
+      "flowGramsPerSecond": 1.973362,
+      "kind": "weight",
+      "monotonicSeconds": 9.2,
+      "sequence": 184,
+      "weightGrams": 30.960904
+    },
+    {
+      "deviceTimestampMs": 9251,
+      "flowGramsPerSecond": 1.921802,
+      "kind": "weight",
+      "monotonicSeconds": 9.25,
+      "sequence": 185,
+      "weightGrams": 31.047416
+    },
+    {
+      "deviceTimestampMs": 9301,
+      "flowGramsPerSecond": 1.868768,
+      "kind": "weight",
+      "monotonicSeconds": 9.3,
+      "sequence": 186,
+      "weightGrams": 31.131053
+    },
+    {
+      "deviceTimestampMs": 9351,
+      "flowGramsPerSecond": 1.814344,
+      "kind": "weight",
+      "monotonicSeconds": 9.35,
+      "sequence": 187,
+      "weightGrams": 31.21176
+    },
+    {
+      "deviceTimestampMs": 9401,
+      "flowGramsPerSecond": 1.758616,
+      "kind": "weight",
+      "monotonicSeconds": 9.4,
+      "sequence": 188,
+      "weightGrams": 31.289489
+    },
+    {
+      "deviceTimestampMs": 9451,
+      "flowGramsPerSecond": 1.701676,
+      "kind": "weight",
+      "monotonicSeconds": 9.45,
+      "sequence": 189,
+      "weightGrams": 31.364195
+    },
+    {
+      "deviceTimestampMs": 9501,
+      "flowGramsPerSecond": 1.643612,
+      "kind": "weight",
+      "monotonicSeconds": 9.5,
+      "sequence": 190,
+      "weightGrams": 31.435839
+    },
+    {
+      "deviceTimestampMs": 9551,
+      "flowGramsPerSecond": 1.58452,
+      "kind": "weight",
+      "monotonicSeconds": 9.55,
+      "sequence": 191,
+      "weightGrams": 31.504386
+    },
+    {
+      "deviceTimestampMs": 9601,
+      "flowGramsPerSecond": 1.524492,
+      "kind": "weight",
+      "monotonicSeconds": 9.6,
+      "sequence": 192,
+      "weightGrams": 31.569807
+    },
+    {
+      "deviceTimestampMs": 9651,
+      "flowGramsPerSecond": 1.463625,
+      "kind": "weight",
+      "monotonicSeconds": 9.65,
+      "sequence": 193,
+      "weightGrams": 31.632076
+    },
+    {
+      "deviceTimestampMs": 9701,
+      "flowGramsPerSecond": 1.402016,
+      "kind": "weight",
+      "monotonicSeconds": 9.7,
+      "sequence": 194,
+      "weightGrams": 31.691174
+    },
+    {
+      "deviceTimestampMs": 9751,
+      "flowGramsPerSecond": 1.339764,
+      "kind": "weight",
+      "monotonicSeconds": 9.75,
+      "sequence": 195,
+      "weightGrams": 31.747087
+    },
+    {
+      "deviceTimestampMs": 9801,
+      "flowGramsPerSecond": 1.276968,
+      "kind": "weight",
+      "monotonicSeconds": 9.8,
+      "sequence": 196,
+      "weightGrams": 31.799805
+    },
+    {
+      "deviceTimestampMs": 9851,
+      "flowGramsPerSecond": 1.21373,
+      "kind": "weight",
+      "monotonicSeconds": 9.85,
+      "sequence": 197,
+      "weightGrams": 31.849323
+    },
+    {
+      "deviceTimestampMs": 9901,
+      "flowGramsPerSecond": 1.150149,
+      "kind": "weight",
+      "monotonicSeconds": 9.9,
+      "sequence": 198,
+      "weightGrams": 31.895643
+    },
+    {
+      "deviceTimestampMs": 9951,
+      "flowGramsPerSecond": 1.086329,
+      "kind": "weight",
+      "monotonicSeconds": 9.95,
+      "sequence": 199,
+      "weightGrams": 31.938771
+    },
+    {
+      "deviceTimestampMs": 10001,
+      "flowGramsPerSecond": 1.02237,
+      "kind": "weight",
+      "monotonicSeconds": 10.0,
+      "sequence": 200,
+      "weightGrams": 31.978716
+    },
+    {
+      "deviceTimestampMs": 10051,
+      "flowGramsPerSecond": 0.958375,
+      "kind": "weight",
+      "monotonicSeconds": 10.05,
+      "sequence": 201,
+      "weightGrams": 32.015497
+    },
+    {
+      "deviceTimestampMs": 10101,
+      "flowGramsPerSecond": 0.894447,
+      "kind": "weight",
+      "monotonicSeconds": 10.1,
+      "sequence": 202,
+      "weightGrams": 32.049133
+    },
+    {
+      "deviceTimestampMs": 10151,
+      "flowGramsPerSecond": 0.830688,
+      "kind": "weight",
+      "monotonicSeconds": 10.15,
+      "sequence": 203,
+      "weightGrams": 32.079651
+    },
+    {
+      "deviceTimestampMs": 10201,
+      "flowGramsPerSecond": 0.7672,
+      "kind": "weight",
+      "monotonicSeconds": 10.2,
+      "sequence": 204,
+      "weightGrams": 32.107081
+    },
+    {
+      "deviceTimestampMs": 10251,
+      "flowGramsPerSecond": 0.704084,
+      "kind": "weight",
+      "monotonicSeconds": 10.25,
+      "sequence": 205,
+      "weightGrams": 32.131461
+    },
+    {
+      "deviceTimestampMs": 10301,
+      "flowGramsPerSecond": 0.641442,
+      "kind": "weight",
+      "monotonicSeconds": 10.3,
+      "sequence": 206,
+      "weightGrams": 32.152831
+    },
+    {
+      "deviceTimestampMs": 10351,
+      "flowGramsPerSecond": 0.579373,
+      "kind": "weight",
+      "monotonicSeconds": 10.35,
+      "sequence": 207,
+      "weightGrams": 32.171237
+    },
+    {
+      "deviceTimestampMs": 10401,
+      "flowGramsPerSecond": 0.517977,
+      "kind": "weight",
+      "monotonicSeconds": 10.4,
+      "sequence": 208,
+      "weightGrams": 32.186729
+    },
+    {
+      "deviceTimestampMs": 10451,
+      "flowGramsPerSecond": 0.457352,
+      "kind": "weight",
+      "monotonicSeconds": 10.45,
+      "sequence": 209,
+      "weightGrams": 32.199363
+    },
+    {
+      "deviceTimestampMs": 10501,
+      "flowGramsPerSecond": 0.397596,
+      "kind": "weight",
+      "monotonicSeconds": 10.5,
+      "sequence": 210,
+      "weightGrams": 32.209198
+    },
+    {
+      "deviceTimestampMs": 10551,
+      "flowGramsPerSecond": 0.338803,
+      "kind": "weight",
+      "monotonicSeconds": 10.55,
+      "sequence": 211,
+      "weightGrams": 32.216299
+    },
+    {
+      "deviceTimestampMs": 10601,
+      "flowGramsPerSecond": 0.281068,
+      "kind": "weight",
+      "monotonicSeconds": 10.6,
+      "sequence": 212,
+      "weightGrams": 32.220734
+    },
+    {
+      "deviceTimestampMs": 10651,
+      "flowGramsPerSecond": 0.224483,
+      "kind": "weight",
+      "monotonicSeconds": 10.65,
+      "sequence": 213,
+      "weightGrams": 32.222576
+    },
+    {
+      "deviceTimestampMs": 10701,
+      "flowGramsPerSecond": 0.169138,
+      "kind": "weight",
+      "monotonicSeconds": 10.7,
+      "sequence": 214,
+      "weightGrams": 32.221902
+    },
+    {
+      "deviceTimestampMs": 10751,
+      "flowGramsPerSecond": 0.115123,
+      "kind": "weight",
+      "monotonicSeconds": 10.75,
+      "sequence": 215,
+      "weightGrams": 32.218794
+    },
+    {
+      "deviceTimestampMs": 10801,
+      "flowGramsPerSecond": 0.062523,
+      "kind": "weight",
+      "monotonicSeconds": 10.8,
+      "sequence": 216,
+      "weightGrams": 32.213336
+    },
+    {
+      "deviceTimestampMs": 10851,
+      "flowGramsPerSecond": 0.011424,
+      "kind": "weight",
+      "monotonicSeconds": 10.85,
+      "sequence": 217,
+      "weightGrams": 32.205617
+    },
+    {
+      "deviceTimestampMs": 10901,
+      "flowGramsPerSecond": -0.038095,
+      "kind": "weight",
+      "monotonicSeconds": 10.9,
+      "sequence": 218,
+      "weightGrams": 32.195729
+    },
+    {
+      "deviceTimestampMs": 10951,
+      "flowGramsPerSecond": -0.085952,
+      "kind": "weight",
+      "monotonicSeconds": 10.95,
+      "sequence": 219,
+      "weightGrams": 32.183769
+    },
+    {
+      "deviceTimestampMs": 11001,
+      "flowGramsPerSecond": -0.132072,
+      "kind": "weight",
+      "monotonicSeconds": 11.0,
+      "sequence": 220,
+      "weightGrams": 32.169834
+    },
+    {
+      "deviceTimestampMs": 11051,
+      "flowGramsPerSecond": -0.176381,
+      "kind": "weight",
+      "monotonicSeconds": 11.05,
+      "sequence": 221,
+      "weightGrams": 32.154029
+    },
+    {
+      "deviceTimestampMs": 11101,
+      "flowGramsPerSecond": -0.218809,
+      "kind": "weight",
+      "monotonicSeconds": 11.1,
+      "sequence": 222,
+      "weightGrams": 32.136456
+    },
+    {
+      "deviceTimestampMs": 11151,
+      "flowGramsPerSecond": -0.259286,
+      "kind": "weight",
+      "monotonicSeconds": 11.15,
+      "sequence": 223,
+      "weightGrams": 32.117226
+    },
+    {
+      "deviceTimestampMs": 11201,
+      "flowGramsPerSecond": -0.297749,
+      "kind": "weight",
+      "monotonicSeconds": 11.2,
+      "sequence": 224,
+      "weightGrams": 32.096449
+    },
+    {
+      "deviceTimestampMs": 11251,
+      "flowGramsPerSecond": -0.334135,
+      "kind": "weight",
+      "monotonicSeconds": 11.25,
+      "sequence": 225,
+      "weightGrams": 32.074237
+    },
+    {
+      "deviceTimestampMs": 11301,
+      "flowGramsPerSecond": -0.368388,
+      "kind": "weight",
+      "monotonicSeconds": 11.3,
+      "sequence": 226,
+      "weightGrams": 32.050707
+    },
+    {
+      "deviceTimestampMs": 11351,
+      "flowGramsPerSecond": -0.400451,
+      "kind": "weight",
+      "monotonicSeconds": 11.35,
+      "sequence": 227,
+      "weightGrams": 32.025975
+    },
+    {
+      "deviceTimestampMs": 11401,
+      "flowGramsPerSecond": -0.430274,
+      "kind": "weight",
+      "monotonicSeconds": 11.4,
+      "sequence": 228,
+      "weightGrams": 32.000163
+    },
+    {
+      "deviceTimestampMs": 11451,
+      "flowGramsPerSecond": -0.457808,
+      "kind": "weight",
+      "monotonicSeconds": 11.45,
+      "sequence": 229,
+      "weightGrams": 31.97339
+    },
+    {
+      "deviceTimestampMs": 11501,
+      "flowGramsPerSecond": -0.483011,
+      "kind": "weight",
+      "monotonicSeconds": 11.5,
+      "sequence": 230,
+      "weightGrams": 31.94578
+    },
+    {
+      "deviceTimestampMs": 11551,
+      "flowGramsPerSecond": -0.505841,
+      "kind": "weight",
+      "monotonicSeconds": 11.55,
+      "sequence": 231,
+      "weightGrams": 31.917457
+    },
+    {
+      "deviceTimestampMs": 11601,
+      "flowGramsPerSecond": -0.526262,
+      "kind": "weight",
+      "monotonicSeconds": 11.6,
+      "sequence": 232,
+      "weightGrams": 31.888545
+    },
+    {
+      "deviceTimestampMs": 11651,
+      "flowGramsPerSecond": -0.544241,
+      "kind": "weight",
+      "monotonicSeconds": 11.65,
+      "sequence": 233,
+      "weightGrams": 31.859173
+    },
+    {
+      "deviceTimestampMs": 11701,
+      "flowGramsPerSecond": -0.55975,
+      "kind": "weight",
+      "monotonicSeconds": 11.7,
+      "sequence": 234,
+      "weightGrams": 31.829465
+    },
+    {
+      "deviceTimestampMs": 11751,
+      "flowGramsPerSecond": -0.572763,
+      "kind": "weight",
+      "monotonicSeconds": 11.75,
+      "sequence": 235,
+      "weightGrams": 31.799551
+    },
+    {
+      "deviceTimestampMs": 11801,
+      "flowGramsPerSecond": -0.583261,
+      "kind": "weight",
+      "monotonicSeconds": 11.8,
+      "sequence": 236,
+      "weightGrams": 31.769557
+    },
+    {
+      "deviceTimestampMs": 11851,
+      "flowGramsPerSecond": -0.591225,
+      "kind": "weight",
+      "monotonicSeconds": 11.85,
+      "sequence": 237,
+      "weightGrams": 31.739612
+    },
+    {
+      "deviceTimestampMs": 11901,
+      "flowGramsPerSecond": -0.596644,
+      "kind": "weight",
+      "monotonicSeconds": 11.9,
+      "sequence": 238,
+      "weightGrams": 31.709844
+    },
+    {
+      "deviceTimestampMs": 11951,
+      "flowGramsPerSecond": -0.599509,
+      "kind": "weight",
+      "monotonicSeconds": 11.95,
+      "sequence": 239,
+      "weightGrams": 31.680379
+    },
+    {
+      "deviceTimestampMs": 12001,
+      "flowGramsPerSecond": -0.599815,
+      "kind": "weight",
+      "monotonicSeconds": 12.0,
+      "sequence": 240,
+      "weightGrams": 31.651346
+    },
+    {
+      "deviceTimestampMs": 12051,
+      "flowGramsPerSecond": -0.597561,
+      "kind": "weight",
+      "monotonicSeconds": 12.05,
+      "sequence": 241,
+      "weightGrams": 31.622871
+    },
+    {
+      "deviceTimestampMs": 12101,
+      "flowGramsPerSecond": -0.592752,
+      "kind": "weight",
+      "monotonicSeconds": 12.1,
+      "sequence": 242,
+      "weightGrams": 31.595079
+    },
+    {
+      "deviceTimestampMs": 12151,
+      "flowGramsPerSecond": -0.585394,
+      "kind": "weight",
+      "monotonicSeconds": 12.15,
+      "sequence": 243,
+      "weightGrams": 31.568095
+    },
+    {
+      "deviceTimestampMs": 12201,
+      "flowGramsPerSecond": -0.575501,
+      "kind": "weight",
+      "monotonicSeconds": 12.2,
+      "sequence": 244,
+      "weightGrams": 31.542042
+    },
+    {
+      "deviceTimestampMs": 12251,
+      "flowGramsPerSecond": -0.563086,
+      "kind": "weight",
+      "monotonicSeconds": 12.25,
+      "sequence": 245,
+      "weightGrams": 31.517042
+    },
+    {
+      "deviceTimestampMs": 12301,
+      "flowGramsPerSecond": -0.548172,
+      "kind": "weight",
+      "monotonicSeconds": 12.3,
+      "sequence": 246,
+      "weightGrams": 31.493214
+    },
+    {
+      "deviceTimestampMs": 12351,
+      "flowGramsPerSecond": -0.53078,
+      "kind": "weight",
+      "monotonicSeconds": 12.35,
+      "sequence": 247,
+      "weightGrams": 31.470676
+    },
+    {
+      "deviceTimestampMs": 12401,
+      "flowGramsPerSecond": -0.51094,
+      "kind": "weight",
+      "monotonicSeconds": 12.4,
+      "sequence": 248,
+      "weightGrams": 31.449546
+    },
+    {
+      "deviceTimestampMs": 12451,
+      "flowGramsPerSecond": -0.488682,
+      "kind": "weight",
+      "monotonicSeconds": 12.45,
+      "sequence": 249,
+      "weightGrams": 31.429936
+    },
+    {
+      "deviceTimestampMs": 12501,
+      "flowGramsPerSecond": -0.464043,
+      "kind": "weight",
+      "monotonicSeconds": 12.5,
+      "sequence": 250,
+      "weightGrams": 31.411958
+    },
+    {
+      "deviceTimestampMs": 12551,
+      "flowGramsPerSecond": -0.437061,
+      "kind": "weight",
+      "monotonicSeconds": 12.55,
+      "sequence": 251,
+      "weightGrams": 31.39572
+    },
+    {
+      "deviceTimestampMs": 12601,
+      "flowGramsPerSecond": -0.407781,
+      "kind": "weight",
+      "monotonicSeconds": 12.6,
+      "sequence": 252,
+      "weightGrams": 31.381329
+    },
+    {
+      "deviceTimestampMs": 12651,
+      "flowGramsPerSecond": -0.376249,
+      "kind": "weight",
+      "monotonicSeconds": 12.65,
+      "sequence": 253,
+      "weightGrams": 31.368888
+    },
+    {
+      "deviceTimestampMs": 12701,
+      "flowGramsPerSecond": -0.342514,
+      "kind": "weight",
+      "monotonicSeconds": 12.7,
+      "sequence": 254,
+      "weightGrams": 31.358496
+    },
+    {
+      "deviceTimestampMs": 12751,
+      "flowGramsPerSecond": -0.306633,
+      "kind": "weight",
+      "monotonicSeconds": 12.75,
+      "sequence": 255,
+      "weightGrams": 31.350251
+    },
+    {
+      "deviceTimestampMs": 12801,
+      "flowGramsPerSecond": -0.26866,
+      "kind": "weight",
+      "monotonicSeconds": 12.8,
+      "sequence": 0,
+      "weightGrams": 31.344244
+    },
+    {
+      "deviceTimestampMs": 12851,
+      "flowGramsPerSecond": -0.228658,
+      "kind": "weight",
+      "monotonicSeconds": 12.85,
+      "sequence": 1,
+      "weightGrams": 31.340567
+    },
+    {
+      "deviceTimestampMs": 12901,
+      "flowGramsPerSecond": -0.186691,
+      "kind": "weight",
+      "monotonicSeconds": 12.9,
+      "sequence": 2,
+      "weightGrams": 31.339304
+    },
+    {
+      "deviceTimestampMs": 12951,
+      "flowGramsPerSecond": -0.142825,
+      "kind": "weight",
+      "monotonicSeconds": 12.95,
+      "sequence": 3,
+      "weightGrams": 31.340538
+    },
+    {
+      "deviceTimestampMs": 13001,
+      "flowGramsPerSecond": -0.097131,
+      "kind": "weight",
+      "monotonicSeconds": 13.0,
+      "sequence": 4,
+      "weightGrams": 31.344347
+    },
+    {
+      "deviceTimestampMs": 13051,
+      "flowGramsPerSecond": -0.049682,
+      "kind": "weight",
+      "monotonicSeconds": 13.05,
+      "sequence": 5,
+      "weightGrams": 31.350805
+    },
+    {
+      "deviceTimestampMs": 13101,
+      "flowGramsPerSecond": -0.000553,
+      "kind": "weight",
+      "monotonicSeconds": 13.1,
+      "sequence": 6,
+      "weightGrams": 31.359981
+    },
+    {
+      "deviceTimestampMs": 13151,
+      "flowGramsPerSecond": 0.050176,
+      "kind": "weight",
+      "monotonicSeconds": 13.15,
+      "sequence": 7,
+      "weightGrams": 31.37194
+    },
+    {
+      "deviceTimestampMs": 13201,
+      "flowGramsPerSecond": 0.102425,
+      "kind": "weight",
+      "monotonicSeconds": 13.2,
+      "sequence": 8,
+      "weightGrams": 31.386744
+    },
+    {
+      "deviceTimestampMs": 13251,
+      "flowGramsPerSecond": 0.15611,
+      "kind": "weight",
+      "monotonicSeconds": 13.25,
+      "sequence": 9,
+      "weightGrams": 31.404449
+    },
+    {
+      "deviceTimestampMs": 13301,
+      "flowGramsPerSecond": 0.211145,
+      "kind": "weight",
+      "monotonicSeconds": 13.3,
+      "sequence": 10,
+      "weightGrams": 31.425107
+    },
+    {
+      "deviceTimestampMs": 13351,
+      "flowGramsPerSecond": 0.267441,
+      "kind": "weight",
+      "monotonicSeconds": 13.35,
+      "sequence": 11,
+      "weightGrams": 31.448763
+    },
+    {
+      "deviceTimestampMs": 13401,
+      "flowGramsPerSecond": 0.32491,
+      "kind": "weight",
+      "monotonicSeconds": 13.4,
+      "sequence": 12,
+      "weightGrams": 31.475462
+    },
+    {
+      "deviceTimestampMs": 13451,
+      "flowGramsPerSecond": 0.383459,
+      "kind": "weight",
+      "monotonicSeconds": 13.45,
+      "sequence": 13,
+      "weightGrams": 31.505239
+    },
+    {
+      "deviceTimestampMs": 13501,
+      "flowGramsPerSecond": 0.442994,
+      "kind": "weight",
+      "monotonicSeconds": 13.5,
+      "sequence": 14,
+      "weightGrams": 31.538128
+    },
+    {
+      "deviceTimestampMs": 13551,
+      "flowGramsPerSecond": 0.50342,
+      "kind": "weight",
+      "monotonicSeconds": 13.55,
+      "sequence": 15,
+      "weightGrams": 31.574155
+    },
+    {
+      "deviceTimestampMs": 13601,
+      "flowGramsPerSecond": 0.564641,
+      "kind": "weight",
+      "monotonicSeconds": 13.6,
+      "sequence": 16,
+      "weightGrams": 31.613343
+    },
+    {
+      "deviceTimestampMs": 13651,
+      "flowGramsPerSecond": 0.626558,
+      "kind": "weight",
+      "monotonicSeconds": 13.65,
+      "sequence": 17,
+      "weightGrams": 31.655709
+    },
+    {
+      "deviceTimestampMs": 13701,
+      "flowGramsPerSecond": 0.689072,
+      "kind": "weight",
+      "monotonicSeconds": 13.7,
+      "sequence": 18,
+      "weightGrams": 31.701265
+    },
+    {
+      "deviceTimestampMs": 13751,
+      "flowGramsPerSecond": 0.752084,
+      "kind": "weight",
+      "monotonicSeconds": 13.75,
+      "sequence": 19,
+      "weightGrams": 31.75002
+    },
+    {
+      "deviceTimestampMs": 13801,
+      "flowGramsPerSecond": 0.815493,
+      "kind": "weight",
+      "monotonicSeconds": 13.8,
+      "sequence": 20,
+      "weightGrams": 31.801973
+    },
+    {
+      "deviceTimestampMs": 13851,
+      "flowGramsPerSecond": 0.879196,
+      "kind": "weight",
+      "monotonicSeconds": 13.85,
+      "sequence": 21,
+      "weightGrams": 31.857123
+    },
+    {
+      "deviceTimestampMs": 13901,
+      "flowGramsPerSecond": 0.943093,
+      "kind": "weight",
+      "monotonicSeconds": 13.9,
+      "sequence": 22,
+      "weightGrams": 31.915462
+    },
+    {
+      "deviceTimestampMs": 13951,
+      "flowGramsPerSecond": 1.007081,
+      "kind": "weight",
+      "monotonicSeconds": 13.95,
+      "sequence": 23,
+      "weightGrams": 31.976975
+    },
+    {
+      "deviceTimestampMs": 14001,
+      "flowGramsPerSecond": 1.071058,
+      "kind": "weight",
+      "monotonicSeconds": 14.0,
+      "sequence": 24,
+      "weightGrams": 32.041645
+    },
+    {
+      "deviceTimestampMs": 14051,
+      "flowGramsPerSecond": 1.134921,
+      "kind": "weight",
+      "monotonicSeconds": 14.05,
+      "sequence": 25,
+      "weightGrams": 32.109447
+    },
+    {
+      "deviceTimestampMs": 14101,
+      "flowGramsPerSecond": 1.198568,
+      "kind": "weight",
+      "monotonicSeconds": 14.1,
+      "sequence": 26,
+      "weightGrams": 32.180354
+    },
+    {
+      "deviceTimestampMs": 14151,
+      "flowGramsPerSecond": 1.261897,
+      "kind": "weight",
+      "monotonicSeconds": 14.15,
+      "sequence": 27,
+      "weightGrams": 32.254332
+    },
+    {
+      "deviceTimestampMs": 14201,
+      "flowGramsPerSecond": 1.324808,
+      "kind": "weight",
+      "monotonicSeconds": 14.2,
+      "sequence": 28,
+      "weightGrams": 32.331343
+    },
+    {
+      "deviceTimestampMs": 14251,
+      "flowGramsPerSecond": 1.387199,
+      "kind": "weight",
+      "monotonicSeconds": 14.25,
+      "sequence": 29,
+      "weightGrams": 32.411343
+    },
+    {
+      "deviceTimestampMs": 14301,
+      "flowGramsPerSecond": 1.44897,
+      "kind": "weight",
+      "monotonicSeconds": 14.3,
+      "sequence": 30,
+      "weightGrams": 32.494285
+    },
+    {
+      "deviceTimestampMs": 14351,
+      "flowGramsPerSecond": 1.510023,
+      "kind": "weight",
+      "monotonicSeconds": 14.35,
+      "sequence": 31,
+      "weightGrams": 32.580115
+    },
+    {
+      "deviceTimestampMs": 14401,
+      "flowGramsPerSecond": 1.57026,
+      "kind": "weight",
+      "monotonicSeconds": 14.4,
+      "sequence": 32,
+      "weightGrams": 32.668777
+    },
+    {
+      "deviceTimestampMs": 14451,
+      "flowGramsPerSecond": 1.629585,
+      "kind": "weight",
+      "monotonicSeconds": 14.45,
+      "sequence": 33,
+      "weightGrams": 32.760208
+    },
+    {
+      "deviceTimestampMs": 14501,
+      "flowGramsPerSecond": 1.687903,
+      "kind": "weight",
+      "monotonicSeconds": 14.5,
+      "sequence": 34,
+      "weightGrams": 32.854343
+    },
+    {
+      "deviceTimestampMs": 14551,
+      "flowGramsPerSecond": 1.74512,
+      "kind": "weight",
+      "monotonicSeconds": 14.55,
+      "sequence": 35,
+      "weightGrams": 32.95111
+    },
+    {
+      "deviceTimestampMs": 14601,
+      "flowGramsPerSecond": 1.801146,
+      "kind": "weight",
+      "monotonicSeconds": 14.6,
+      "sequence": 36,
+      "weightGrams": 33.050435
+    },
+    {
+      "deviceTimestampMs": 14651,
+      "flowGramsPerSecond": 1.855889,
+      "kind": "weight",
+      "monotonicSeconds": 14.65,
+      "sequence": 37,
+      "weightGrams": 33.15224
+    },
+    {
+      "deviceTimestampMs": 14701,
+      "flowGramsPerSecond": 1.909263,
+      "kind": "weight",
+      "monotonicSeconds": 14.7,
+      "sequence": 38,
+      "weightGrams": 33.25644
+    },
+    {
+      "deviceTimestampMs": 14751,
+      "flowGramsPerSecond": 1.961183,
+      "kind": "weight",
+      "monotonicSeconds": 14.75,
+      "sequence": 39,
+      "weightGrams": 33.36295
+    },
+    {
+      "deviceTimestampMs": 14801,
+      "flowGramsPerSecond": 2.011565,
+      "kind": "weight",
+      "monotonicSeconds": 14.8,
+      "sequence": 40,
+      "weightGrams": 33.471679
+    },
+    {
+      "deviceTimestampMs": 14851,
+      "flowGramsPerSecond": 2.060329,
+      "kind": "weight",
+      "monotonicSeconds": 14.85,
+      "sequence": 41,
+      "weightGrams": 33.582532
+    },
+    {
+      "deviceTimestampMs": 14901,
+      "flowGramsPerSecond": 2.107396,
+      "kind": "weight",
+      "monotonicSeconds": 14.9,
+      "sequence": 42,
+      "weightGrams": 33.695414
+    },
+    {
+      "deviceTimestampMs": 14951,
+      "flowGramsPerSecond": 2.152692,
+      "kind": "weight",
+      "monotonicSeconds": 14.95,
+      "sequence": 43,
+      "weightGrams": 33.810222
+    },
+    {
+      "deviceTimestampMs": 15002,
+      "flowGramsPerSecond": 2.196144,
+      "kind": "weight",
+      "monotonicSeconds": 15.0,
+      "sequence": 44,
+      "weightGrams": 33.926854
+    },
+    {
+      "deviceTimestampMs": 15052,
+      "flowGramsPerSecond": 2.237682,
+      "kind": "weight",
+      "monotonicSeconds": 15.05,
+      "sequence": 45,
+      "weightGrams": 34.045203
+    },
+    {
+      "deviceTimestampMs": 15102,
+      "flowGramsPerSecond": 2.27724,
+      "kind": "weight",
+      "monotonicSeconds": 15.1,
+      "sequence": 46,
+      "weightGrams": 34.165159
+    },
+    {
+      "deviceTimestampMs": 15152,
+      "flowGramsPerSecond": 2.314755,
+      "kind": "weight",
+      "monotonicSeconds": 15.15,
+      "sequence": 47,
+      "weightGrams": 34.286611
+    },
+    {
+      "deviceTimestampMs": 15202,
+      "flowGramsPerSecond": 2.350166,
+      "kind": "weight",
+      "monotonicSeconds": 15.2,
+      "sequence": 48,
+      "weightGrams": 34.409444
+    },
+    {
+      "deviceTimestampMs": 15252,
+      "flowGramsPerSecond": 2.383418,
+      "kind": "weight",
+      "monotonicSeconds": 15.25,
+      "sequence": 49,
+      "weightGrams": 34.533541
+    },
+    {
+      "deviceTimestampMs": 15302,
+      "flowGramsPerSecond": 2.414456,
+      "kind": "weight",
+      "monotonicSeconds": 15.3,
+      "sequence": 50,
+      "weightGrams": 34.658785
+    },
+    {
+      "deviceTimestampMs": 15352,
+      "flowGramsPerSecond": 2.443232,
+      "kind": "weight",
+      "monotonicSeconds": 15.35,
+      "sequence": 51,
+      "weightGrams": 34.785055
+    },
+    {
+      "deviceTimestampMs": 15402,
+      "flowGramsPerSecond": 2.469698,
+      "kind": "weight",
+      "monotonicSeconds": 15.4,
+      "sequence": 52,
+      "weightGrams": 34.912228
+    },
+    {
+      "deviceTimestampMs": 15452,
+      "flowGramsPerSecond": 2.493814,
+      "kind": "weight",
+      "monotonicSeconds": 15.45,
+      "sequence": 53,
+      "weightGrams": 35.040182
+    },
+    {
+      "deviceTimestampMs": 15502,
+      "flowGramsPerSecond": 2.515539,
+      "kind": "weight",
+      "monotonicSeconds": 15.5,
+      "sequence": 54,
+      "weightGrams": 35.168792
+    },
+    {
+      "deviceTimestampMs": 15552,
+      "flowGramsPerSecond": 2.534841,
+      "kind": "weight",
+      "monotonicSeconds": 15.55,
+      "sequence": 55,
+      "weightGrams": 35.297931
+    },
+    {
+      "deviceTimestampMs": 15602,
+      "flowGramsPerSecond": 2.551686,
+      "kind": "weight",
+      "monotonicSeconds": 15.6,
+      "sequence": 56,
+      "weightGrams": 35.427473
+    },
+    {
+      "deviceTimestampMs": 15652,
+      "flowGramsPerSecond": 2.56605,
+      "kind": "weight",
+      "monotonicSeconds": 15.65,
+      "sequence": 57,
+      "weightGrams": 35.557292
+    },
+    {
+      "deviceTimestampMs": 15702,
+      "flowGramsPerSecond": 2.577908,
+      "kind": "weight",
+      "monotonicSeconds": 15.7,
+      "sequence": 58,
+      "weightGrams": 35.687259
+    },
+    {
+      "deviceTimestampMs": 15752,
+      "flowGramsPerSecond": 2.587241,
+      "kind": "weight",
+      "monotonicSeconds": 15.75,
+      "sequence": 59,
+      "weightGrams": 35.817246
+    },
+    {
+      "deviceTimestampMs": 15802,
+      "flowGramsPerSecond": 2.594036,
+      "kind": "weight",
+      "monotonicSeconds": 15.8,
+      "sequence": 60,
+      "weightGrams": 35.947126
+    },
+    {
+      "deviceTimestampMs": 15852,
+      "flowGramsPerSecond": 2.59828,
+      "kind": "weight",
+      "monotonicSeconds": 15.85,
+      "sequence": 61,
+      "weightGrams": 36.07677
+    },
+    {
+      "deviceTimestampMs": 15902,
+      "flowGramsPerSecond": 2.599968,
+      "kind": "weight",
+      "monotonicSeconds": 15.9,
+      "sequence": 62,
+      "weightGrams": 36.206052
+    },
+    {
+      "deviceTimestampMs": 15952,
+      "flowGramsPerSecond": 2.599095,
+      "kind": "weight",
+      "monotonicSeconds": 15.95,
+      "sequence": 63,
+      "weightGrams": 36.334843
+    },
+    {
+      "deviceTimestampMs": 16002,
+      "flowGramsPerSecond": 2.595665,
+      "kind": "weight",
+      "monotonicSeconds": 16.0,
+      "sequence": 64,
+      "weightGrams": 36.46302
+    },
+    {
+      "deviceTimestampMs": 16052,
+      "flowGramsPerSecond": 2.589682,
+      "kind": "weight",
+      "monotonicSeconds": 16.05,
+      "sequence": 65,
+      "weightGrams": 36.590455
+    },
+    {
+      "deviceTimestampMs": 16102,
+      "flowGramsPerSecond": 2.581156,
+      "kind": "weight",
+      "monotonicSeconds": 16.1,
+      "sequence": 66,
+      "weightGrams": 36.717026
+    },
+    {
+      "deviceTimestampMs": 16152,
+      "flowGramsPerSecond": 2.5701,
+      "kind": "weight",
+      "monotonicSeconds": 16.15,
+      "sequence": 67,
+      "weightGrams": 36.84261
+    },
+    {
+      "deviceTimestampMs": 16202,
+      "flowGramsPerSecond": 2.556532,
+      "kind": "weight",
+      "monotonicSeconds": 16.2,
+      "sequence": 68,
+      "weightGrams": 36.967086
+    },
+    {
+      "deviceTimestampMs": 16252,
+      "flowGramsPerSecond": 2.540474,
+      "kind": "weight",
+      "monotonicSeconds": 16.25,
+      "sequence": 69,
+      "weightGrams": 37.090334
+    },
+    {
+      "deviceTimestampMs": 16302,
+      "flowGramsPerSecond": 2.521952,
+      "kind": "weight",
+      "monotonicSeconds": 16.3,
+      "sequence": 70,
+      "weightGrams": 37.212238
+    },
+    {
+      "deviceTimestampMs": 16352,
+      "flowGramsPerSecond": 2.500995,
+      "kind": "weight",
+      "monotonicSeconds": 16.35,
+      "sequence": 71,
+      "weightGrams": 37.332683
+    },
+    {
+      "deviceTimestampMs": 16402,
+      "flowGramsPerSecond": 2.477637,
+      "kind": "weight",
+      "monotonicSeconds": 16.4,
+      "sequence": 72,
+      "weightGrams": 37.451556
+    },
+    {
+      "deviceTimestampMs": 16452,
+      "flowGramsPerSecond": 2.451915,
+      "kind": "weight",
+      "monotonicSeconds": 16.45,
+      "sequence": 73,
+      "weightGrams": 37.568746
+    },
+    {
+      "deviceTimestampMs": 16502,
+      "flowGramsPerSecond": 2.42387,
+      "kind": "weight",
+      "monotonicSeconds": 16.5,
+      "sequence": 74,
+      "weightGrams": 37.684147
+    },
+    {
+      "deviceTimestampMs": 16552,
+      "flowGramsPerSecond": 2.393547,
+      "kind": "weight",
+      "monotonicSeconds": 16.55,
+      "sequence": 75,
+      "weightGrams": 37.797653
+    },
+    {
+      "deviceTimestampMs": 16602,
+      "flowGramsPerSecond": 2.360995,
+      "kind": "weight",
+      "monotonicSeconds": 16.6,
+      "sequence": 76,
+      "weightGrams": 37.909164
+    },
+    {
+      "deviceTimestampMs": 16652,
+      "flowGramsPerSecond": 2.326266,
+      "kind": "weight",
+      "monotonicSeconds": 16.65,
+      "sequence": 77,
+      "weightGrams": 38.01858
+    },
+    {
+      "deviceTimestampMs": 16702,
+      "flowGramsPerSecond": 2.289414,
+      "kind": "weight",
+      "monotonicSeconds": 16.7,
+      "sequence": 78,
+      "weightGrams": 38.125806
+    },
+    {
+      "deviceTimestampMs": 16752,
+      "flowGramsPerSecond": 2.2505,
+      "kind": "weight",
+      "monotonicSeconds": 16.75,
+      "sequence": 79,
+      "weightGrams": 38.230752
+    },
+    {
+      "deviceTimestampMs": 16802,
+      "flowGramsPerSecond": 2.209586,
+      "kind": "weight",
+      "monotonicSeconds": 16.8,
+      "sequence": 80,
+      "weightGrams": 38.333328
+    },
+    {
+      "deviceTimestampMs": 16852,
+      "flowGramsPerSecond": 2.166736,
+      "kind": "weight",
+      "monotonicSeconds": 16.85,
+      "sequence": 81,
+      "weightGrams": 38.433452
+    },
+    {
+      "deviceTimestampMs": 16902,
+      "flowGramsPerSecond": 2.12202,
+      "kind": "weight",
+      "monotonicSeconds": 16.9,
+      "sequence": 82,
+      "weightGrams": 38.531043
+    },
+    {
+      "deviceTimestampMs": 16952,
+      "flowGramsPerSecond": 2.075509,
+      "kind": "weight",
+      "monotonicSeconds": 16.95,
+      "sequence": 83,
+      "weightGrams": 38.626024
+    },
+    {
+      "deviceTimestampMs": 17002,
+      "flowGramsPerSecond": 2.027277,
+      "kind": "weight",
+      "monotonicSeconds": 17.0,
+      "sequence": 84,
+      "weightGrams": 38.718324
+    },
+    {
+      "deviceTimestampMs": 17052,
+      "flowGramsPerSecond": 1.977402,
+      "kind": "weight",
+      "monotonicSeconds": 17.05,
+      "sequence": 85,
+      "weightGrams": 38.807875
+    },
+    {
+      "deviceTimestampMs": 17102,
+      "flowGramsPerSecond": 1.925963,
+      "kind": "weight",
+      "monotonicSeconds": 17.1,
+      "sequence": 86,
+      "weightGrams": 38.894613
+    },
+    {
+      "deviceTimestampMs": 17152,
+      "flowGramsPerSecond": 1.873043,
+      "kind": "weight",
+      "monotonicSeconds": 17.15,
+      "sequence": 87,
+      "weightGrams": 38.978481
+    },
+    {
+      "deviceTimestampMs": 17202,
+      "flowGramsPerSecond": 1.818726,
+      "kind": "weight",
+      "monotonicSeconds": 17.2,
+      "sequence": 88,
+      "weightGrams": 39.059423
+    },
+    {
+      "deviceTimestampMs": 17252,
+      "flowGramsPerSecond": 1.7631,
+      "kind": "weight",
+      "monotonicSeconds": 17.25,
+      "sequence": 89,
+      "weightGrams": 39.137391
+    },
+    {
+      "deviceTimestampMs": 17302,
+      "flowGramsPerSecond": 1.706252,
+      "kind": "weight",
+      "monotonicSeconds": 17.3,
+      "sequence": 90,
+      "weightGrams": 39.21234
+    },
+    {
+      "deviceTimestampMs": 17352,
+      "flowGramsPerSecond": 1.648275,
+      "kind": "weight",
+      "monotonicSeconds": 17.35,
+      "sequence": 91,
+      "weightGrams": 39.284229
+    },
+    {
+      "deviceTimestampMs": 17402,
+      "flowGramsPerSecond": 1.589261,
+      "kind": "weight",
+      "monotonicSeconds": 17.4,
+      "sequence": 92,
+      "weightGrams": 39.353024
+    },
+    {
+      "deviceTimestampMs": 17452,
+      "flowGramsPerSecond": 1.529304,
+      "kind": "weight",
+      "monotonicSeconds": 17.45,
+      "sequence": 93,
+      "weightGrams": 39.418694
+    },
+    {
+      "deviceTimestampMs": 17502,
+      "flowGramsPerSecond": 1.4685,
+      "kind": "weight",
+      "monotonicSeconds": 17.5,
+      "sequence": 94,
+      "weightGrams": 39.481215
+    },
+    {
+      "deviceTimestampMs": 17552,
+      "flowGramsPerSecond": 1.406947,
+      "kind": "weight",
+      "monotonicSeconds": 17.55,
+      "sequence": 95,
+      "weightGrams": 39.540566
+    },
+    {
+      "deviceTimestampMs": 17602,
+      "flowGramsPerSecond": 1.344742,
+      "kind": "weight",
+      "monotonicSeconds": 17.6,
+      "sequence": 96,
+      "weightGrams": 39.596733
+    },
+    {
+      "deviceTimestampMs": 17652,
+      "flowGramsPerSecond": 1.281987,
+      "kind": "weight",
+      "monotonicSeconds": 17.65,
+      "sequence": 97,
+      "weightGrams": 39.649705
+    },
+    {
+      "deviceTimestampMs": 17702,
+      "flowGramsPerSecond": 1.21878,
+      "kind": "weight",
+      "monotonicSeconds": 17.7,
+      "sequence": 98,
+      "weightGrams": 39.699479
+    },
+    {
+      "deviceTimestampMs": 17752,
+      "flowGramsPerSecond": 1.155223,
+      "kind": "weight",
+      "monotonicSeconds": 17.75,
+      "sequence": 99,
+      "weightGrams": 39.746053
+    },
+    {
+      "deviceTimestampMs": 17802,
+      "flowGramsPerSecond": 1.091417,
+      "kind": "weight",
+      "monotonicSeconds": 17.8,
+      "sequence": 100,
+      "weightGrams": 39.789435
+    },
+    {
+      "deviceTimestampMs": 17852,
+      "flowGramsPerSecond": 1.027466,
+      "kind": "weight",
+      "monotonicSeconds": 17.85,
+      "sequence": 101,
+      "weightGrams": 39.829633
+    },
+    {
+      "deviceTimestampMs": 17902,
+      "flowGramsPerSecond": 0.96347,
+      "kind": "weight",
+      "monotonicSeconds": 17.9,
+      "sequence": 102,
+      "weightGrams": 39.866665
+    },
+    {
+      "deviceTimestampMs": 17952,
+      "flowGramsPerSecond": 0.899533,
+      "kind": "weight",
+      "monotonicSeconds": 17.95,
+      "sequence": 103,
+      "weightGrams": 39.900551
+    },
+    {
+      "deviceTimestampMs": 18002,
+      "flowGramsPerSecond": 0.835757,
+      "kind": "weight",
+      "monotonicSeconds": 18.0,
+      "sequence": 104,
+      "weightGrams": 39.931316
+    },
+    {
+      "deviceTimestampMs": 18052,
+      "flowGramsPerSecond": 0.772243,
+      "kind": "weight",
+      "monotonicSeconds": 18.05,
+      "sequence": 105,
+      "weightGrams": 39.958991
+    },
+    {
+      "deviceTimestampMs": 18102,
+      "flowGramsPerSecond": 0.709094,
+      "kind": "weight",
+      "monotonicSeconds": 18.1,
+      "sequence": 106,
+      "weightGrams": 39.983612
+    },
+    {
+      "deviceTimestampMs": 18152,
+      "flowGramsPerSecond": 0.64641,
+      "kind": "weight",
+      "monotonicSeconds": 18.15,
+      "sequence": 107,
+      "weightGrams": 40.00522
+    },
+    {
+      "deviceTimestampMs": 18202,
+      "flowGramsPerSecond": 0.584292,
+      "kind": "weight",
+      "monotonicSeconds": 18.2,
+      "sequence": 108,
+      "weightGrams": 40.02386
+    },
+    {
+      "deviceTimestampMs": 18252,
+      "flowGramsPerSecond": 0.522839,
+      "kind": "weight",
+      "monotonicSeconds": 18.25,
+      "sequence": 109,
+      "weightGrams": 40.039582
+    },
+    {
+      "deviceTimestampMs": 18302,
+      "flowGramsPerSecond": 0.462149,
+      "kind": "weight",
+      "monotonicSeconds": 18.3,
+      "sequence": 110,
+      "weightGrams": 40.052442
+    },
+    {
+      "deviceTimestampMs": 18352,
+      "flowGramsPerSecond": 0.40232,
+      "kind": "weight",
+      "monotonicSeconds": 18.35,
+      "sequence": 111,
+      "weightGrams": 40.062497
+    },
+    {
+      "deviceTimestampMs": 18402,
+      "flowGramsPerSecond": 0.343447,
+      "kind": "weight",
+      "monotonicSeconds": 18.4,
+      "sequence": 112,
+      "weightGrams": 40.069813
+    },
+    {
+      "deviceTimestampMs": 18452,
+      "flowGramsPerSecond": 0.285624,
+      "kind": "weight",
+      "monotonicSeconds": 18.45,
+      "sequence": 113,
+      "weightGrams": 40.074458
+    },
+    {
+      "deviceTimestampMs": 18502,
+      "flowGramsPerSecond": 0.228944,
+      "kind": "weight",
+      "monotonicSeconds": 18.5,
+      "sequence": 114,
+      "weightGrams": 40.076504
+    },
+    {
+      "deviceTimestampMs": 18552,
+      "flowGramsPerSecond": 0.173498,
+      "kind": "weight",
+      "monotonicSeconds": 18.55,
+      "sequence": 115,
+      "weightGrams": 40.076028
+    },
+    {
+      "deviceTimestampMs": 18602,
+      "flowGramsPerSecond": 0.119374,
+      "kind": "weight",
+      "monotonicSeconds": 18.6,
+      "sequence": 116,
+      "weightGrams": 40.073111
+    },
+    {
+      "deviceTimestampMs": 18652,
+      "flowGramsPerSecond": 0.066658,
+      "kind": "weight",
+      "monotonicSeconds": 18.65,
+      "sequence": 117,
+      "weightGrams": 40.067837
+    },
+    {
+      "deviceTimestampMs": 18702,
+      "flowGramsPerSecond": 0.015436,
+      "kind": "weight",
+      "monotonicSeconds": 18.7,
+      "sequence": 118,
+      "weightGrams": 40.060294
+    },
+    {
+      "deviceTimestampMs": 18752,
+      "flowGramsPerSecond": -0.034211,
+      "kind": "weight",
+      "monotonicSeconds": 18.75,
+      "sequence": 119,
+      "weightGrams": 40.050576
+    },
+    {
+      "deviceTimestampMs": 18802,
+      "flowGramsPerSecond": -0.082204,
+      "kind": "weight",
+      "monotonicSeconds": 18.8,
+      "sequence": 120,
+      "weightGrams": 40.038777
+    },
+    {
+      "deviceTimestampMs": 18852,
+      "flowGramsPerSecond": -0.128465,
+      "kind": "weight",
+      "monotonicSeconds": 18.85,
+      "sequence": 121,
+      "weightGrams": 40.024996
+    },
+    {
+      "deviceTimestampMs": 18902,
+      "flowGramsPerSecond": -0.172921,
+      "kind": "weight",
+      "monotonicSeconds": 18.9,
+      "sequence": 122,
+      "weightGrams": 40.009335
+    },
+    {
+      "deviceTimestampMs": 18952,
+      "flowGramsPerSecond": -0.215501,
+      "kind": "weight",
+      "monotonicSeconds": 18.95,
+      "sequence": 123,
+      "weightGrams": 39.9919
+    },
+    {
+      "deviceTimestampMs": 19002,
+      "flowGramsPerSecond": -0.256136,
+      "kind": "weight",
+      "monotonicSeconds": 19.0,
+      "sequence": 124,
+      "weightGrams": 39.972797
+    },
+    {
+      "deviceTimestampMs": 19052,
+      "flowGramsPerSecond": -0.294761,
+      "kind": "weight",
+      "monotonicSeconds": 19.05,
+      "sequence": 125,
+      "weightGrams": 39.952139
+    },
+    {
+      "deviceTimestampMs": 19102,
+      "flowGramsPerSecond": -0.331315,
+      "kind": "weight",
+      "monotonicSeconds": 19.1,
+      "sequence": 126,
+      "weightGrams": 39.930037
+    },
+    {
+      "deviceTimestampMs": 19152,
+      "flowGramsPerSecond": -0.36574,
+      "kind": "weight",
+      "monotonicSeconds": 19.15,
+      "sequence": 127,
+      "weightGrams": 39.906608
+    },
+    {
+      "deviceTimestampMs": 19202,
+      "flowGramsPerSecond": -0.397979,
+      "kind": "weight",
+      "monotonicSeconds": 19.2,
+      "sequence": 128,
+      "weightGrams": 39.881968
+    },
+    {
+      "deviceTimestampMs": 19252,
+      "flowGramsPerSecond": -0.427982,
+      "kind": "weight",
+      "monotonicSeconds": 19.25,
+      "sequence": 129,
+      "weightGrams": 39.856237
+    },
+    {
+      "deviceTimestampMs": 19302,
+      "flowGramsPerSecond": -0.455701,
+      "kind": "weight",
+      "monotonicSeconds": 19.3,
+      "sequence": 130,
+      "weightGrams": 39.829536
+    },
+    {
+      "deviceTimestampMs": 19352,
+      "flowGramsPerSecond": -0.48109,
+      "kind": "weight",
+      "monotonicSeconds": 19.35,
+      "sequence": 131,
+      "weightGrams": 39.801988
+    },
+    {
+      "deviceTimestampMs": 19402,
+      "flowGramsPerSecond": -0.504111,
+      "kind": "weight",
+      "monotonicSeconds": 19.4,
+      "sequence": 132,
+      "weightGrams": 39.773717
+    },
+    {
+      "deviceTimestampMs": 19452,
+      "flowGramsPerSecond": -0.524725,
+      "kind": "weight",
+      "monotonicSeconds": 19.45,
+      "sequence": 133,
+      "weightGrams": 39.744848
+    },
+    {
+      "deviceTimestampMs": 19502,
+      "flowGramsPerSecond": -0.542899,
+      "kind": "weight",
+      "monotonicSeconds": 19.5,
+      "sequence": 134,
+      "weightGrams": 39.715507
+    },
+    {
+      "deviceTimestampMs": 19552,
+      "flowGramsPerSecond": -0.558606,
+      "kind": "weight",
+      "monotonicSeconds": 19.55,
+      "sequence": 135,
+      "weightGrams": 39.685822
+    },
+    {
+      "deviceTimestampMs": 19602,
+      "flowGramsPerSecond": -0.571819,
+      "kind": "weight",
+      "monotonicSeconds": 19.6,
+      "sequence": 136,
+      "weightGrams": 39.655919
+    },
+    {
+      "deviceTimestampMs": 19652,
+      "flowGramsPerSecond": -0.582517,
+      "kind": "weight",
+      "monotonicSeconds": 19.65,
+      "sequence": 137,
+      "weightGrams": 39.625927
+    },
+    {
+      "deviceTimestampMs": 19702,
+      "flowGramsPerSecond": -0.590684,
+      "kind": "weight",
+      "monotonicSeconds": 19.7,
+      "sequence": 138,
+      "weightGrams": 39.595973
+    },
+    {
+      "deviceTimestampMs": 19752,
+      "flowGramsPerSecond": -0.596306,
+      "kind": "weight",
+      "monotonicSeconds": 19.75,
+      "sequence": 139,
+      "weightGrams": 39.566186
+    },
+    {
+      "deviceTimestampMs": 19802,
+      "flowGramsPerSecond": -0.599374,
+      "kind": "weight",
+      "monotonicSeconds": 19.8,
+      "sequence": 140,
+      "weightGrams": 39.536693
+    },
+    {
+      "deviceTimestampMs": 19852,
+      "flowGramsPerSecond": -0.599884,
+      "kind": "weight",
+      "monotonicSeconds": 19.85,
+      "sequence": 141,
+      "weightGrams": 39.507621
+    },
+    {
+      "deviceTimestampMs": 19902,
+      "flowGramsPerSecond": -0.597834,
+      "kind": "weight",
+      "monotonicSeconds": 19.9,
+      "sequence": 142,
+      "weightGrams": 39.479097
+    },
+    {
+      "deviceTimestampMs": 19952,
+      "flowGramsPerSecond": -0.593228,
+      "kind": "weight",
+      "monotonicSeconds": 19.95,
+      "sequence": 143,
+      "weightGrams": 39.451246
+    }
+  ],
+  "mode": "shot",
+  "protocolCapabilities": {
+    "deviceClockModulus": 16777216,
+    "deviceClockSemantics": "freeRunning",
+    "hasChecksum": true,
+    "hasDeviceClock": true,
+    "hasSequence": true,
+    "sequenceModulus": 256
+  },
+  "recordingEndMonotonicSeconds": 20.0,
+  "recordingStartMonotonicSeconds": 0.0,
+  "vectorId": "shot-signal-diagnostics"
+}

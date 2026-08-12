@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "scaleKind": "bookooUltra",
+  "characteristicUUID": "FF11",
+  "bytesHex": "03 0B 00 10 00 02 2D 00 00 64 2B 00 C8 63 00 1E 02 00 01 CE",
+  "fields": [
+    { "startByte": 0, "endByteExclusive": 2, "label": "Header", "decodedValue": "03 0B", "semantic": "header" },
+    { "startByte": 2, "endByteExclusive": 5, "label": "Timestamp", "decodedValue": "4096 ms", "semantic": "timestamp" },
+    { "startByte": 5, "endByteExclusive": 6, "label": "Protocol data", "decodedValue": "02", "semantic": "payload" },
+    { "startByte": 6, "endByteExclusive": 10, "label": "Weight", "decodedValue": "-1.00 g", "semantic": "weight" },
+    { "startByte": 10, "endByteExclusive": 13, "label": "Flow", "decodedValue": "2.00 g/s", "semantic": "flow" },
+    { "startByte": 13, "endByteExclusive": 14, "label": "Battery", "decodedValue": "99%", "semantic": "battery" },
+    { "startByte": 14, "endByteExclusive": 19, "label": "Protocol data", "decodedValue": "00 1E 02 00 01", "semantic": "payload" },
+    { "startByte": 19, "endByteExclusive": 20, "label": "Checksum", "decodedValue": "CE", "semantic": "checksum" }
+  ]
+}

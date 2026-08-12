@@ -4,117 +4,234 @@
   <img src="ScaleBench/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png" alt="ScaleBench app icon" width="120" height="120">
 </p>
 
-ScaleBench is an open iOS and MacOS Bluetooth scale analyzer for coffee-scale transport quality. It records raw BLE packets, parses supported scale protocols into a canonical sample stream, scores transport/stability quality, reports telemetry coverage, and exports a JSON recording for external analysis.
+ScaleBench is an open Bluetooth coffee-scale analyzer for iPhone, iPad, macOS Catalyst, and Android. It records BLE notifications at callback time, preserves raw packets, parses them into a canonical weight stream, computes mode-specific quality results, and exports the evidence as JSON.
 
-The main goal is protocol and hardware comparison: WMB vs BooKoo standard vs BooKoo native, Bookoo/Eureka/DiFluid/etc. against the same scoring model.
+ScaleBench is a diagnostic benchmark, not a brew log. Its purpose is to compare scale hardware and protocols under controlled procedures.
 
-For basic usage, recording modes, scorecards, and packet visualizer help, see [HELP.md](HELP.md).
+<p align="center">
+  <img src="docs/images/scalebench-v1-macos.png" alt="ScaleBench Standard v1 recording analysis on macOS" width="900">
+</p>
+
+For recording procedures, scoring explanations, diagnostics, and troubleshooting, see [HELP.md](HELP.md).
+
+## Current app status
+
+- **iPhone and iPad**: live BLE recording, Standard v1 scoring, charts, packet inspection, saved recordings, JSON import/export, score explanation, scorecard export, and first-run examples.
+- **macOS Catalyst**: the same recording and analysis workflow, plus Device Utility for cabled maintenance experiments.
+- **Android**: live BLE recording, Standard v1 scoring, dark/light theme, richer diagnostic overlays, packet inspection, saved-recording details, JSON import/export through the Android file picker, scorecard sharing, Nordic DFU support, USB device detection, and first-run examples.
+- Saved recordings use a shared recording format. Exports from iOS/macOS can be imported by Android and Android exports can be imported by iOS/macOS.
 
 ## Requirements
 
-- iPhone/iPad: iOS/iPadOS 17.0 or newer
-- Mac: macOS 14.0 Sonoma or newer through Mac Catalyst
-- Bluetooth access is required for live scale recording
+- iOS/iPadOS 17 or newer
+- macOS 14 or newer through Mac Catalyst
+- Android 8.0 (API 26) or newer
+- Bluetooth permission and a supported scale for live recording
 
-## Project intent and provenance
+## Downloads
 
-ScaleBench is a diagnostic and benchmarking tool, not a brew logger clone. It is meant to answer concrete hardware/protocol questions:
+Published builds are attached to [GitHub Releases](https://github.com/danielfcurrie-alt/ScaleBench/releases):
 
-- how fast a scale actually notifies under real conditions
-- how much packet jitter, long-gap behavior, and rejection noise each protocol produces
-- whether firmware extensions such as timestamps, sequence numbers, battery, flow, and scale-quality diagnostics improve the data stream
-- whether the same physical scale behaves differently through legacy, compatibility, and native/extended transports
+- **macOS**: download `ScaleBench-1.0.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is ad hoc signed but not yet Apple-notarized; right-click the app and choose **Open**, or approve it under **System Settings > Privacy & Security** if Gatekeeper asks.
+- **Android**: download the release-signed APK and allow installation from your browser or file manager when Android asks.
+- **iOS/iPadOS**: build the `v1.0.0` source tag in Xcode with your own signing team. TestFlight will be the normal public installation route when that build is available; no misleading unsigned IPA is attached to this release.
 
-Protocol support necessarily includes exact BLE UUIDs, command bytes, packet lengths, checksums, and field offsets. Those values are interoperability facts required to communicate with existing devices. ScaleBench's Bluetooth manager, parser layout, canonical sample model, recording format, scoring model, and scorecard/export behavior are ScaleBench-native Swift implementations.
+Every release also includes SHA-256 checksums. GitHub automatically provides source archives for the exact tagged revision.
 
-Where protocol details come from public protocol documentation, upstream firmware behavior, or observed behavior from user-owned test hardware, keep that visible in code comments or README notes. Do not copy application architecture, control flow, comments, or implementation code from other apps.
+## Supported protocols
 
-## Current protocol support
+| Family | Parsed data |
+| --- | --- |
+| WeighMyBru / WeighMyBru+ | weight; extended packets may include timestamp, sequence, flow, battery, status, and diagnostics |
+| BooKoo Standard / Mini / Ultra | weight, timestamp, flow, battery, and protocol-specific status fields |
+| Acaia | weight |
+| Decent / Espressi | weight and shot timer when present |
+| DiFluid Microbalance / Ti | weight, free-running device timestamp, flow, and battery |
+| Eureka Precisa / Solo Barista / LSJ | weight |
+| Felicita | weight |
+| Futula / LFSmart / Lefu | weight |
+| Skale2 | weight |
+| Timemore Black Mirror Dot | weight, battery, and CRC rejection diagnostics |
 
-ScaleBench has broad protocol coverage and keeps protocol-specific fields in the exported raw packet stream.
+BooKoo Mini and Ultra support follows the public [OpenSourceBooKoo](https://github.com/patrlean/OpenSourceBooKoo) protocol documentation.
 
-| Family | BLE support | Parsed data |
-| --- | --- | --- |
-| WeighMyBru | `6E400001...` Float32 and 20-byte/GaggiMate characteristics | weight, packet rejection diagnostics |
-| WeighMyBru+ | optional `6E400005...` capabilities plus extended 20-byte packets | weight, timestamp, sequence, flow, battery, status flags, diagnostics, firmware quality |
-| BooKoo Standard | `0FFE` / `FF11` / `FF12` | weight, 24-bit ms timestamp, flow, battery |
-| BooKoo Mini Native | official OpenSourceBooKoo Mini packet layout | weight, timestamp, flow, battery, standby, buzzer/smoothing bytes in raw export |
-| BooKoo Ultra Native | official OpenSourceBooKoo Ultra packet layout | weight, timestamp, flow, battery, smoothing, auto-stop status byte in raw export |
-| Acaia | modern `1820/2A80` and legacy `49535343-*` | weight |
-| Decent / Espressi | `FFF0` / `FFF4` / `36F5` | weight and v1.2 timer timestamp when present |
-| DiFluid Microbalance / Ti | `00EE` or `00DD`, characteristic `AA01` | weight, device timestamp, hardware flow, battery status |
-| Eureka Precisa / Solo Barista / LSJ | `FFF0` / `FFF1` / `FFF2` | weight |
-| Felicita | `FFE0` / `FFE1` | weight |
-| Futula / LFSmart / Lefu | `FFF0` / `FFF4` / `FFF1` | weight |
-| Skale2 | `FF08` / `EF81` / `EF80` | weight |
-| Timemore Black Mirror Dot | `FFF0` / `FFF1` / `FFF2` | weight, battery, CRC rejection diagnostics |
+## ScaleBench Standard v1
 
-BooKoo Mini/Ultra details are based on the public OpenSourceBooKoo protocol docs: https://github.com/patrlean/OpenSourceBooKoo
+The public benchmark is **ScaleBench Standard v1**, identified in exports as `standard-1.0.0`. There is one public scoring contract; custom weighted profiles are not part of Standard v1.
 
-## Recording modes
+Standard v1 is mode-aware. It does not produce one blended score that mixes unrelated behaviors.
 
-ScaleBench records the same raw packet stream in every mode; the mode labels what kind of test you are running and affects which metrics are most meaningful.
+Delivery applies only to **Shot / Pour** and **Transport Stress**:
 
-- **Shot / Pour**: normal public comparison mode. Record one real espresso shot or pour from tare through finish.
-- **Idle Stability**: leave the scale untouched for 30–60 seconds. This is the mode where idle noise and drift fields are scored directly.
-- **Tare Latency**: record around a tare action. This is for testing how quickly app/scale tare behavior settles.
-- **Transport Stress**: intentionally stress Bluetooth by changing distance, moving the phone, or adding interference. Useful for gap/jitter/rejection testing.
-- **Battery Logging**: capture battery values over time. This currently logs exposed battery telemetry; it is not yet a calibrated runtime estimator.
+```text
+Delivery = round(100 x coverage x purity)
+```
 
-## Scoring
+- **Coverage** is the fraction of complete 50 ms slots containing at least one usable weight frame. A clean 20 Hz stream reaches 100% coverage; faster streams saturate rather than earning bonus points.
+- **Purity** is usable weight frames divided by all relevant weight frames. Parse failures, out-of-order sequence values, stale free-running timestamps, isolated implausible spikes, and avoidable duplicates each have a fixed classification order. Sustained Shot / Pour motion is not treated as packet corruption.
+- Multiplication makes defects compound. Half coverage and half purity produce 25, not 50 or 75.
 
-The default score is **ScaleBench Standard v1**. Treat that as the public benchmark profile for apples-to-apples tester comparisons.
+Checksums, sequence numbers, and device clocks do not earn points merely for existing. They make additional defect classes observable. Available checks also respect the selected mode: Transport Stress deliberately disables weight-physics and duplicate checks. When every class is not checked, Delivery is rendered as an upper bound such as `<=100`, beside a label such as `3 of 5 available`.
 
-Standard v1 intentionally does not deduct points for optional telemetry coverage such as battery, sequence numbers, device timestamps, or firmware-side quality fields. Those fields are still reported and exported, but the official score is based on measured arrival cadence/transport behavior and stability so simpler protocols are not handicapped before the first packet is timed.
+**Idle Stability** is a separate score based on detrended residual noise and drift. **Step Response** reports rise time, settling time, and overshoot without a 0-100 score. These domains are never combined into a weighted overall score.
 
-The app also includes configurable scoring profiles so the same recording can be judged with different weights and thresholds:
+The normative formulas, constants, classification order, and golden vectors are in [scoring/SCORING-SPEC.md](scoring/SCORING-SPEC.md).
 
-- ScaleBench Standard v1
-- Strict
-- Transport Focused
-- locally saved custom profiles
+## Recording procedures
 
-The selected scoring profile is embedded into every exported JSON recording so results can be reproduced. Custom profiles are useful for experimentation, but scores from custom profiles should not be compared directly against Standard v1 claims.
+| Mode | Official minimum | Procedure | Result |
+| --- | ---: | --- | --- |
+| Shot / Pour | 20 s | Tare and settle before Start; stop before removing the vessel | Delivery |
+| Transport Stress | 120 s | Intentionally stress range/interference; disconnects are recorded but allowed | Delivery |
+| Idle Stability | 60 s | Leave the scale untouched; the first 5 s are discarded | Idle Stability |
+| Step Response | 10 s | Wait at least 2 s, add at least 5 g once, then hold through the final window | Metrics only |
+| Tare Latency | 5 s | Record around a tare action | Metrics only |
+| Battery Logging | 60 s | Capture exposed battery telemetry | Telemetry only |
 
-The score explanation screen shows the active profile, benchmark/custom status, transport/stability/metadata weights, and the metrics feeding each subscore.
+The app captures monotonic start and stop boundaries when the user acts. Only frames in the half-open interval `[start, end)` are scored, so startup silence, trailing outages, and disconnect boundaries remain visible. Recordings without authoritative boundaries retain diagnostics but do not receive an official score.
 
-## Saved recordings and comparison
+Other validity gates include minimum usable-frame counts and mode-specific baseline/final-window requirements. A disconnect invalidates normal modes; Transport Stress is the deliberate exception. Every official capture must remain in the foreground. The apps keep the screen awake, export app background/foreground events, and withhold an official result if the app leaves the foreground so mobile background scheduling cannot silently change the measurement.
 
-Recordings can be saved in-app with:
+## Comparing results
 
-- raw BLE packets
-- parsed samples
-- score snapshot
-- scoring profile
-- free-text notes
-- device/protocol identity
+Always compare:
 
-Saved recordings are stored as JSON under app support storage and are shown in the comparison section. This makes it possible to save one WMB run, one WMB+ run, one BooKoo standard run, and one BooKoo native run, then compare scores, sample rate, p95 interval, max gap, long-gap count, rejection count, and notes.
+- the same recording mode and procedure
+- the same platform family
+- the Delivery value together with available protocol checks
+- the exported `scoringModelVersion`
 
-## Accessibility and system settings
+iOS and Android BLE connection controls differ, so their Delivery results are different measurement conditions and should not be ranked directly against one another. Android official captures request high connection priority and an MTU of 247; Apple controls connection parameters through CoreBluetooth.
 
-ScaleBench should follow platform defaults wherever possible: semantic SwiftUI fonts, Dynamic Type, system color roles, Dark Mode, high contrast, and user text-size choices. Avoid fixed typography or layout assumptions that make score sharing harder for testers using larger text.
+## Exports
 
-## Export
+JSON exports include platform/app build identity, raw packets, decoded packet field maps, parsed samples, explicit recording boundaries, disconnect/reconnect and app-state events, link setup, protocol scoring capabilities, Standard v1 validity, frame classifications, mode-specific results, and diagnostics. The schema version describes the container; `scoringModelVersion` identifies the mathematics.
 
-The JSON export includes:
+Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported. This keeps captures in the current shared format usable while Standard v1 is still being tuned, without confusing container schema changes with scoring math changes.
 
-- app/schema version
-- device identity and advertised services
-- recording mode
-- free-text notes
-- WMB+ capability payload when present
-- raw BLE packets with characteristic UUID and rejection reason
-- parsed canonical samples
-- scoring profile
-- calculated metrics
+The visible JSON export buttons write the shared recording JSON. The app also has an internal official analysis/scorecard payload model used by the scorecard and cross-platform analysis tests; this is separate from the normal recording export.
 
-The scorecard PNG export always creates a shareable **official ScaleBench Standard v1** image, even when the current recording is being inspected with a custom scoring profile. It includes the official overall score, sub-scores, sample-rate/gap/rejection metrics, protocol identity, recording mode, notes, and the `Standard v1` badge.
+Scorecards are generated only for valid scored modes. They show the platform and, for Delivery, coverage, purity, and Protocol detail. Metrics-only and invalid recordings remain exportable as JSON but cannot produce an official 0-100 scorecard.
 
-## Build
+## Recordings library
 
-Open `ScaleBench.xcodeproj` in Xcode 26+ or run:
+The saved-recordings view is the main comparison surface on every platform. It is collapsible and can be viewed by:
+
+- **Date**: newest recordings first
+- **Score**: best comparable Standard v1 result first
+- **Protocol**: grouped by scale/protocol family, with the best full-detail result highlighted
+- **Mode**: grouped by Shot / Pour, Idle Stability, Step Response, and other test modes
+
+Three synthetic examples are seeded automatically on first launch when the local recordings library is empty:
+
+- `Example · Clean WMB+ Pour`
+- `Example · Legacy WMB Pour`
+- `Example · Noisy Solo Barista Pour`
+
+If a user already has saved recordings, examples are not inserted automatically, but the app keeps an **Examples** / **Add examples** action available.
+
+Saved detail screens include charts, score explanation, deduction evidence, protocol comparison context, and raw packet inspection. Selectable, color-keyed hex connects raw byte ranges to parser-decoded fields such as weight, timestamp, flow, battery, sequence, and checksum.
+
+The shared chart-analysis model also reports three non-scoring signal diagnostics when the source data supports them: median reported-flow error and timing against a centered 1-second weight derivative; free-running device-clock drift for BooKoo-family and WMB+ packets; and average weight frames per occupied 50 ms scoring slot. Decent's shot timer is deliberately excluded from clock-drift analysis.
+
+## Device Utility
+
+Device Utility, or DU, is not a scoring mode. It is an operational surface for connected-device maintenance.
+
+- Android can start classic Nordic nRF5 Secure/Legacy DFU from a ZIP package using Nordic's Android DFU library.
+- SMP/McuManager devices are detected by advertised service UUID, but update is not wired in yet.
+- Device Utility is not exposed in the iOS/iPadOS app. Apple OTA update work should use NordicDFU or the Nordic iOS McuManager package later, after the target bootloader is confirmed.
+- macOS Catalyst exposes Device Utility below the normal recordings workflow. It scans for cabled USB serial ports and can run ESP32 4 MB flash backup and app-binary flashing through local esptool, with flash blocked until a backup succeeds. It also shows command templates for Nordic serial DFU, unlocked Nordic debug readback, USB DFU, and ESP serial workflows.
+- Android detects attached USB devices and includes them in DU reports. Android ESP32 backup/flash needs a native `esp-serial-flasher` bridge before destructive operations are enabled.
+- "Backup" means exporting a device utility report by default. Full firmware image backup requires a cabled/debug/bootloader readback path and is not assumed.
+
+## Development builds
+
+Build requirements:
+
+- Xcode 26 or newer for the Apple project
+- Android Studio with Android SDK 36 and JDK 17 for the Android project
+- Python 3 only for shared-contract validation and scoring-vector generation
+
+### iPhone, iPad, and Mac
+
+Open `ScaleBench.xcodeproj`, select the `ScaleBench` scheme, then choose either an attached iPhone/iPad or **My Mac (Mac Catalyst)** and press Run. Select your own signing team for a physical iOS device. If Xcode reports that the bundle identifier is unavailable, replace `app.scalebench.ScaleBench` with a unique reverse-DNS identifier owned by your team.
+
+Compile an unsigned iOS device build from the command line:
 
 ```sh
-xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench \
+  -configuration Debug -destination 'generic/platform=iOS' \
+  CODE_SIGNING_ALLOWED=NO build
 ```
+
+Compile a Mac Catalyst build:
+
+```sh
+xcodebuild -project ScaleBench.xcodeproj -scheme ScaleBench \
+  -configuration Debug \
+  -destination 'platform=macOS,variant=Mac Catalyst' build
+```
+
+### Android
+
+Open `ScaleBenchAndroid` in Android Studio, or build the Debug APK from the repository root:
+
+```sh
+./ScaleBenchAndroid/gradlew -p ScaleBenchAndroid :app:assembleDebug
+```
+
+The APK is written to `ScaleBenchAndroid/app/build/outputs/apk/debug/app-debug.apk`. Install it on an attached, authorized device with:
+
+```sh
+adb install -r ScaleBenchAndroid/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Maintainer convenience scripts
+
+The scripts below build from this checkout and install local Debug builds. The Apple scripts discover an available development identity and paired iPhone; `SCALEBENCH_CODESIGN_IDENTITY` and `SCALEBENCH_IOS_DEVICE_ID` override discovery when needed. Other contributors can also use Xcode as described above.
+
+```sh
+./scripts/build-android-install.sh
+./scripts/build-ios-install.sh [device-id]
+./scripts/build-mac.sh
+```
+
+### Verification
+
+Android scoring and shared-contract conformance:
+
+```sh
+./ScaleBenchAndroid/scripts/run_core_smoke_tests.sh
+```
+
+Shared JSON contracts:
+
+```sh
+python3 -m pip install -r requirements-dev.txt
+python3 scripts/validate_json_contracts.py
+```
+
+The contract check validates iOS and Android recording fixtures, the official scorecard, the official analysis payload, and its nested chart analysis. GitHub Actions runs it for every change; Android runs its core suite on Linux and Swift runs the same scoring and signal-diagnostic vectors on macOS.
+
+Golden fixtures are generated deterministically from the dependency-free reference implementation:
+
+```sh
+python3 scoring/reference/generate_vectors.py
+```
+
+Public release assets use one matching version number and are built from the tagged commit:
+
+- an ad hoc-signed macOS Catalyst app packaged as a ZIP, clearly identified as not yet notarized
+- a release-signed Android APK
+- a `SHA256SUMS.txt` file covering all uploaded binaries
+
+iOS users build from the same tag with their own signing team until a TestFlight build is published.
+
+## License
+
+ScaleBench is available under the MIT License. See [LICENSE](LICENSE).
+
+## Privacy
+
+ScaleBench stores recordings and diagnostics locally unless the user exports or shares them. See [PRIVACY.md](PRIVACY.md).

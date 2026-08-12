@@ -12,9 +12,20 @@ enum ScoreCardExporter {
         return finalized
     }
 
+    static func officialPayload(from recording: ScaleRecording) -> OfficialScorecardPayload {
+        OfficialScorecardPayload.make(from: recording)
+    }
+
     @MainActor
     static func exportOfficial(_ recording: ScaleRecording) throws -> URL {
         let finalized = officialRecording(from: recording)
+        guard finalized.metrics.validity?.isValid == true else {
+            let reasons = finalized.metrics.validity?.reasons.joined(separator: ", ") ?? "unknown validity error"
+            throw ScoreCardExportError.invalidRecording(reasons)
+        }
+        guard finalized.metrics.overallScore != nil else {
+            throw ScoreCardExportError.metricsOnlyMode
+        }
         let renderer = ImageRenderer(content: ShareableScoreCard(recording: finalized))
         renderer.scale = 2
 
@@ -37,10 +48,14 @@ enum ScoreCardExporter {
 
 enum ScoreCardExportError: LocalizedError {
     case renderFailed
+    case invalidRecording(String)
+    case metricsOnlyMode
 
     var errorDescription: String? {
         switch self {
         case .renderFailed: "Could not render scorecard image"
+        case let .invalidRecording(reasons): "This recording is not valid for an official scorecard: \(reasons)"
+        case .metricsOnlyMode: "This recording mode reports metrics and does not produce an official 0–100 score."
         }
     }
 }
@@ -61,59 +76,120 @@ private struct ShareableScoreCard: View {
         formatter.timeStyle = .short
         return formatter.string(from: recording.endedAt ?? recording.startedAt)
     }
+    private var scoreTitle: String {
+        recording.mode == .idleStability ? "Idle Stability" : "Delivery"
+    }
+    private var benchmarkScore: Int? {
+        switch recording.mode {
+        case .shot, .transportStress:
+            metrics.delivery?.deliveryScore
+        case .idleStability:
+            metrics.stabilityScore
+        case .stepResponse, .tareLatency, .batteryStability:
+            nil
+        }
+    }
+    private var scoreText: String {
+        benchmarkScore.map { "\($0)" } ?? "—"
+    }
+    private var platformName: String {
+        switch recording.platform {
+        case "macos-catalyst": "macOS Catalyst"
+        case "android": "Android"
+        default: "iOS / iPadOS"
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: 22) {
             header
 
-            HStack(alignment: .lastTextBaseline, spacing: 18) {
-                Text(metrics.overallScore.map(String.init) ?? "—")
-                    .font(.system(size: 136, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("/100")
-                    .font(.system(size: 46, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 22) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(scoreTitle)
+                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.78))
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(scoreText)
+                            .font(.system(size: 104, weight: .black, design: .rounded))
+                            .monospacedDigit()
+                        Text("/100")
+                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
+
                 Spacer()
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(protocolName)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.trailing)
+                    Text(recording.mode.displayName)
+                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .frame(maxWidth: 310, alignment: .trailing)
             }
+            .foregroundStyle(.white)
+            .padding(28)
+            .background(scoreAccentGradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             HStack(spacing: 14) {
-                scorePill(title: "Transport", value: metrics.transportScore)
-                scorePill(title: "Stability", value: metrics.stabilityScore)
-                scorePill(title: "Telemetry", value: metrics.metadataScore)
+                if recording.mode == .idleStability {
+                    scorePill(title: "Noise", value: metrics.idleNoiseScore)
+                    scorePill(title: "Drift", value: metrics.idleDriftScore)
+                    valuePill(title: "Analysed", value: metrics.idleAnalysedSampleCount.map { "\($0) frames" } ?? "—")
+                } else {
+                    valuePill(title: "Delivered", value: deliveredPacketsText)
+                    valuePill(title: "Usable", value: usableReadingsText)
+                    valuePill(title: "Checks", value: packetChecksText)
+                }
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                metricTile(title: "Sample rate", value: formatRate(metrics.effectiveSampleRateHz))
-                metricTile(title: "Interval p95", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
                 metricTile(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
                 metricTile(title: "Long gaps", value: "\(metrics.longGapCount)")
-                metricTile(title: "Missing seq", value: "\(metrics.missingSequenceCount)")
+                metricTile(title: "p95 interval", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
                 metricTile(title: "Rejected", value: "\(metrics.rejectedPacketCount)")
-                metricTile(title: "Idle noise", value: metrics.idleNoisePeakToPeakGrams.map { String(format: "%.2f g p-p", $0) } ?? "—")
-                metricTile(title: "Bumps", value: "\(metrics.firmwareBumpCount)")
             }
 
             if !recording.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(recording.notes)
-                    .font(.title3)
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
-                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .padding(16)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
+            if recording.mode == .shot || recording.mode == .transportStress {
+                Text(deliveryFormulaText)
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
 
             Spacer(minLength: 0)
 
-            Text("Official ScaleBench score. Scored with \(recording.scoringProfile.name). Telemetry coverage is shown for context and is not weighted in Standard v1. Raw recording export available from ScaleBench.")
+            Text(recording.mode == .idleStability
+                ? "Official ScaleBench Standard v1 Idle Stability result. Noise and drift are a separate domain from Delivery. Raw evidence is available in the JSON export."
+                : "Official ScaleBench Standard v1 Delivery result. Delivered packets and usable readings create the score; packet checks explain how much the protocol lets ScaleBench verify.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-        .padding(54)
-        .frame(width: 1080, height: 1350)
+        .padding(34)
+        .frame(width: 900, height: 900)
         .background(
             LinearGradient(
-                colors: [Color(.systemBackground), Color(.secondarySystemBackground)],
+                colors: [
+                    Color(red: 0.96, green: 0.98, blue: 0.98),
+                    Color(red: 0.90, green: 0.94, blue: 0.97)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -121,26 +197,63 @@ private struct ShareableScoreCard: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("ScaleBench Official Score")
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                Spacer()
-                Text("Standard v1")
-                    .font(.headline)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor.opacity(0.16), in: Capsule())
+        HStack(spacing: 16) {
+            logoView
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("ScaleBench")
+                    .font(.system(size: 42, weight: .black, design: .rounded))
+                Text("\(deviceName) · \(platformName) · \(dateString)")
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Text("\(protocolName) · \(recording.mode.displayName)")
-                .font(.title)
-                .foregroundStyle(.secondary)
+            Spacer()
 
-            Text("\(deviceName) · \(dateString)")
-                .font(.title3)
-                .foregroundStyle(.tertiary)
+            Text("Standard v1")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.04, green: 0.23, blue: 0.31))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color(red: 0.39, green: 0.83, blue: 0.76).opacity(0.24), in: Capsule())
         }
+    }
+
+    @ViewBuilder
+    private var logoView: some View {
+        if let image = UIImage(named: "ScorecardLogo")
+            ?? UIImage(named: "AppIcon")
+            ?? UIImage(named: "AppIcon-1024")
+            ?? UIImage(named: "AppIcon-512") {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 76, height: 76)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(red: 0.02, green: 0.13, blue: 0.25))
+                Image(systemName: "scalemass")
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 76, height: 76)
+            .shadow(color: .black.opacity(0.14), radius: 10, y: 5)
+        }
+    }
+
+    private var scoreAccentGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.02, green: 0.13, blue: 0.25),
+                Color(red: 0.06, green: 0.45, blue: 0.43)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private func scorePill(title: String, value: Int?) -> some View {
@@ -153,8 +266,22 @@ private struct ShareableScoreCard: View {
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(22)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(16)
+        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func valuePill(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 42, weight: .bold, design: .rounded))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func metricTile(title: String, value: String) -> some View {
@@ -167,9 +294,45 @@ private struct ShareableScoreCard: View {
                 .fontWeight(.semibold)
                 .monospacedDigit()
         }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .padding(20)
-        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .padding(16)
+        .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var deliveredPacketsText: String {
+        if let served = metrics.servedSlots,
+           let total = metrics.slotCount,
+           total > 0,
+           let coverage = metrics.delivery?.coverage {
+            return "\(served)/\(total) (\(formatPercent(coverage)))"
+        }
+        return metrics.delivery?.coverage.map(formatPercent) ?? "—"
+    }
+
+    private var usableReadingsText: String {
+        if let usable = metrics.usableSampleCount,
+           let total = metrics.relevantWeightFrameCount,
+           total > 0,
+           let purity = metrics.delivery?.purity {
+            return "\(usable)/\(total) (\(formatPercent(purity)))"
+        }
+        return metrics.delivery?.purity.map(formatPercent) ?? "—"
+    }
+
+    private var packetChecksText: String {
+        guard let verification = metrics.protocolVerification else { return "—" }
+        let total = verification.verifiableClasses.count + verification.unverifiableClasses.count
+        guard total > 0 else { return "—" }
+        return "\(verification.verifiableClasses.count)/\(total)"
+    }
+
+    private var deliveryFormulaText: String {
+        guard let score = metrics.delivery?.deliveryScore,
+              let coverage = metrics.delivery?.coverage,
+              let purity = metrics.delivery?.purity else {
+            return "Score needs enough delivered packets and usable readings."
+        }
+        return "Score: round(100 × \(formatMultiplier(coverage)) × \(formatMultiplier(purity))) = \(score)/100."
     }
 }
 
@@ -179,4 +342,12 @@ private func formatRate(_ value: Double?) -> String {
 
 private func formatMilliseconds(_ value: Double?) -> String {
     value.map { String(format: "%.0f ms", $0) } ?? "—"
+}
+
+private func formatPercent(_ value: Double?) -> String {
+    value.map { String(format: "%.1f%%", $0 * 100) } ?? "—"
+}
+
+private func formatMultiplier(_ value: Double) -> String {
+    String(format: "%.3f", value)
 }

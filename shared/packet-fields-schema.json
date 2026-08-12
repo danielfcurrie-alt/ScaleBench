@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scalebench.app/schemas/packet-fields-schema.json",
+  "title": "ScaleBench Packet Field Map",
+  "description": "Protocol-decoder output connecting raw byte ranges to their decoded meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "scaleKind", "characteristicUUID", "bytesHex", "fields"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "scaleKind": { "$ref": "recording-schema.json#/$defs/scaleKind" },
+    "characteristicUUID": { "type": "string" },
+    "bytesHex": {
+      "type": "string",
+      "pattern": "^[0-9A-F]{2}( [0-9A-F]{2})*$"
+    },
+    "fields": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/field" }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startByte", "endByteExclusive", "label", "decodedValue", "semantic"],
+      "properties": {
+        "startByte": { "type": "integer", "minimum": 0 },
+        "endByteExclusive": { "type": "integer", "minimum": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "decodedValue": { "type": "string" },
+        "semantic": {
+          "type": "string",
+          "enum": [
+            "header",
+            "timestamp",
+            "weight",
+            "flow",
+            "battery",
+            "sequence",
+            "status",
+            "quality",
+            "sampleRate",
+            "checksum",
+            "unit",
+            "payload"
+          ]
+        }
+      }
+    }
+  }
+}

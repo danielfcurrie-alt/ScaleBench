@@ -1,23 +1,48 @@
 import Charts
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
     @EnvironmentObject private var appCommands: AppCommandRouter
     @StateObject private var savedStore = SavedRecordingStore()
-    @StateObject private var scoringStore = CustomScoringProfileStore()
     @State private var selectedMode: RecordingMode = .shot
-    @State private var selectedScoringProfileID = ScoringProfileOption.builtIn(.standard).id
     @State private var recordingNotes = ""
     @State private var exportURL: URL?
-    @State private var scoreCardURL: URL?
-    @State private var scoreCardErrorMessage: String?
+    @State private var deviceUtilityReportURL: URL?
     @State private var activeSheet: ActiveSheet?
+    @State private var isImportingRecording = false
+    @State private var importStatusMessage: String?
+    @State private var isRecordingsExpanded = true
+    @State private var recordingLibraryMode: RecordingLibraryMode = .date
+    @State private var recordingSearchText = ""
+    @State private var commandErrorMessage: String?
+    @State private var recordingResultSaveStatusMessage = ""
     @ScaledMetric(relativeTo: .body) private var notesMinHeight = 72
+
+    private var filteredRecordings: [SavedScaleRecording] {
+        let query = recordingSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return savedStore.recordings }
+        return savedStore.recordings.filter { saved in
+            [
+                saved.title,
+                saved.notes,
+                saved.protocolKind.displayName,
+                saved.recording.mode.displayName,
+                platformDisplayName(saved.recording.platform),
+            ].contains { $0.localizedCaseInsensitiveContains(query) }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    ScaleBenchBrandHeader(status: bluetooth.statusMessage)
+                }
+                .listRowBackground(Color.clear)
+
                 Section("Bluetooth") {
                     HStack {
                         VStack(alignment: .leading) {
@@ -30,7 +55,7 @@ struct ContentView: View {
                         Button(bluetooth.isScanning ? "Stop" : "Scan") {
                             bluetooth.isScanning ? bluetooth.stopScanning() : bluetooth.startScanning()
                         }
-                        .buttonStyle(.borderedProminent)
+                        .scaleBenchProminentButtonStyle()
                     }
                 }
 
@@ -88,32 +113,9 @@ struct ContentView: View {
 
                     ModeHelpCard(mode: selectedMode)
 
-                    Picker("Scoring", selection: $selectedScoringProfileID) {
-                        ForEach(scoringOptions) { option in
-                            Text(option.displayName).tag(option.id)
-                        }
-                    }
-                    .onChange(of: selectedScoringProfileID) { _, _ in
-                        bluetooth.applyScoringProfile(selectedScoringProfile)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(selectedScoringProfile.isStandardBenchmark
-                            ? "Official comparable benchmark profile. Use this for public tester score claims."
-                            : "Custom profile. Useful for experiments, but not comparable to Standard v1 scores.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        ViewThatFits(in: .horizontal) {
-                            HStack {
-                                scoringButtons
-                            }
-
-                            VStack(alignment: .leading) {
-                                scoringButtons
-                            }
-                        }
-                    }
+                    Label("ScaleBench Standard v1", systemImage: "checkmark.seal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Notes")
@@ -129,7 +131,7 @@ struct ContentView: View {
 
                     RecordingActionButtons(
                         isRecording: bluetooth.isRecording,
-                        canRecord: bluetooth.connectedDevice != nil,
+                        canRecord: bluetooth.isConnectionReady,
                         canExport: !bluetooth.currentRecording.samples.isEmpty || !bluetooth.currentRecording.rawPackets.isEmpty,
                         startOrStop: {
                             if bluetooth.isRecording {
@@ -139,30 +141,14 @@ struct ContentView: View {
                             }
                         },
                         export: {
-                            bluetooth.applyScoringProfile(selectedScoringProfile)
+                            bluetooth.applyScoringProfile(.standard)
                             exportURL = bluetooth.exportCurrentRecording(notes: recordingNotes)
                         }
                     )
 
-                    Button {
-                        bluetooth.applyScoringProfile(selectedScoringProfile)
-                        let snapshot = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
-                        _ = savedStore.save(recording: snapshot, notes: recordingNotes)
-                    } label: {
-                        Label("Save Recording", systemImage: "tray.and.arrow.down")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(bluetooth.isRecording || (bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty))
-
                     if let exportURL {
                         ShareLink(item: exportURL) {
                             Label("Share JSON \(exportURL.lastPathComponent)", systemImage: "square.and.arrow.up")
-                        }
-                    }
-
-                    if let scoreCardURL {
-                        ShareLink(item: scoreCardURL) {
-                            Label("Share Official Scorecard \(scoreCardURL.lastPathComponent)", systemImage: "photo")
                         }
                     }
 
@@ -184,11 +170,7 @@ struct ContentView: View {
 
                 Section("Scorecard") {
                     let metrics = bluetooth.currentMetrics
-                    MetricRow(title: "Scoring", value: bluetooth.currentRecording.scoringProfile.name)
-                    MetricRow(title: "Benchmark", value: bluetooth.currentRecording.scoringProfile.isStandardBenchmark ? "Standard v1" : "Custom")
-                    MetricRow(title: "Overall", value: metrics.overallScore.map { "\($0)/100" } ?? "—")
-                    MetricRow(title: "Transport", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
-                    MetricRow(title: "Stability", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
+                    BenchmarkScoreRows(mode: bluetooth.currentRecording.mode, metrics: metrics)
                     MetricRow(title: "Effective rate", value: metrics.effectiveSampleRateHz.map { String(format: "%.1f Hz", $0) } ?? "—")
                     MetricRow(title: "Interval p95", value: metrics.packetIntervalP95Milliseconds.map { String(format: "%.0f ms", $0) } ?? "—")
                     MetricRow(title: "Max gap", value: metrics.packetIntervalMaxMilliseconds.map { String(format: "%.0f ms", $0) } ?? "—")
@@ -198,78 +180,132 @@ struct ContentView: View {
                     MetricRow(title: "Idle noise", value: metrics.idleNoisePeakToPeakGrams.map { String(format: "%.2f g p-p", $0) } ?? "—")
                     MetricRow(title: "Drift", value: metrics.driftGramsPerMinute.map { String(format: "%.3f g/min", $0) } ?? "—")
 
-                    ViewThatFits(in: .horizontal) {
-                        HStack {
-                            scorecardButtons
-                        }
-
-                        VStack(alignment: .leading) {
-                            scorecardButtons
-                        }
-                    }
-
-                    Text("Shared scorecards always use ScaleBench Standard v1, even if a custom scoring profile is selected for analysis.")
+                    Text("Delivery, Idle Stability, and Step Response are separate results and are never combined into a weighted overall score.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    if let scoreCardErrorMessage {
-                        Text("Scorecard error: \(scoreCardErrorMessage)")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
                 }
 
-                Section("Protocol comparison") {
-                    let comparison = savedStore.comparison
-                    if comparison.rows.count < 2 {
-                        ContentUnavailableView("Save two recordings", systemImage: "chart.bar.xaxis", description: Text("Record WMB, WMB+, BooKoo standard, or native BooKoo sessions, then compare their scores side by side."))
-                    } else {
-                        if let best = comparison.bestOverall {
-                            MetricRow(title: "Best overall", value: "\(best.protocolKind.displayName) · \(best.score.map { "\($0)" } ?? "—")")
-                        }
-                        ForEach(comparison.rows) { row in
-                            ComparisonRow(row: row)
-                        }
-                    }
-                }
-
-                Section("Saved recordings") {
-                    if savedStore.recordings.isEmpty {
-                        ContentUnavailableView {
-                            Label("No saved recordings", systemImage: "tray")
-                        } description: {
-                            Text("Saved recordings keep the raw packets, score snapshot, scoring profile, and your notes.")
-                        } actions: {
-                            Button {
+                Section("Recordings") {
+                    DisclosureGroup(isExpanded: $isRecordingsExpanded) {
+                        let visibleRecordings = filteredRecordings
+                        RecordingLibraryControls(
+                            count: savedStore.recordings.count,
+                            mode: $recordingLibraryMode,
+                            importJSON: {
+                                startRecordingImport()
+                            },
+                            loadExamples: {
                                 savedStore.loadExampleRecordings()
-                            } label: {
-                                Label("Load Example Recordings", systemImage: "sparkles")
                             }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    } else {
-                        Button {
-                            savedStore.loadExampleRecordings()
-                        } label: {
-                            Label("Load Example Recordings", systemImage: "sparkles")
+                        )
+
+                        if savedStore.recordings.isEmpty {
+                            EmptySavedRecordingsView(
+                                loadExamples: {
+                                    savedStore.loadExampleRecordings()
+                                }
+                            )
+                        } else if visibleRecordings.isEmpty {
+                            ContentUnavailableView(
+                                "No matching recordings",
+                                systemImage: "magnifyingglass",
+                                description: Text("Try another scale, protocol, mode, platform, or note.")
+                            )
+                        } else {
+                            RecordingLibrarySummary(mode: recordingLibraryMode, comparison: savedStore.comparison)
+
+                            switch recordingLibraryMode {
+                            case .date, .score:
+                                let recordings = sortedSavedRecordings(visibleRecordings, mode: recordingLibraryMode)
+                                ForEach(recordings) { saved in
+                                    NavigationLink {
+                                        SavedRecordingDetailView(saved: saved) {
+                                            activeSheet = .scoreExplanation(saved.recording)
+                                        }
+                                    } label: {
+                                        SavedRecordingRow(saved: saved)
+                                    }
+                                    .recordingDeleteAction {
+                                        savedStore.delete(saved)
+                                    }
+                                }
+                            case .protocolKind:
+                                ForEach(recordingGroups(visibleRecordings, mode: .protocolKind)) { group in
+                                    RecordingGroupHeader(title: group.title, count: group.recordings.count)
+                                    ForEach(group.recordings) { saved in
+                                        NavigationLink {
+                                            SavedRecordingDetailView(saved: saved) {
+                                                activeSheet = .scoreExplanation(saved.recording)
+                                            }
+                                        } label: {
+                                            SavedRecordingRow(saved: saved)
+                                        }
+                                        .recordingDeleteAction {
+                                            savedStore.delete(saved)
+                                        }
+                                    }
+                                }
+                            case .mode:
+                                ForEach(recordingGroups(visibleRecordings, mode: .mode)) { group in
+                                    RecordingGroupHeader(title: group.title, count: group.recordings.count)
+                                    ForEach(group.recordings) { saved in
+                                        NavigationLink {
+                                            SavedRecordingDetailView(saved: saved) {
+                                                activeSheet = .scoreExplanation(saved.recording)
+                                            }
+                                        } label: {
+                                            SavedRecordingRow(saved: saved)
+                                        }
+                                        .recordingDeleteAction {
+                                            savedStore.delete(saved)
+                                        }
+                                    }
+                                }
+                            }
                         }
 
-                        ForEach(savedStore.recordings) { saved in
-                            NavigationLink {
-                                SavedRecordingDetailView(saved: saved) {
-                                    activeSheet = .scoreExplanation(saved.recording)
-                                }
-                            } label: {
-                                SavedRecordingRow(saved: saved)
-                            }
+                        if let importStatusMessage {
+                            Text(importStatusMessage)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        .onDelete { offsets in
-                            offsets.map { savedStore.recordings[$0] }.forEach(savedStore.delete)
+
+                        if let libraryError = savedStore.lastErrorMessage {
+                            Text("Library warning: \(libraryError)")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    } label: {
+                        HStack {
+                            Label("Saved shots", systemImage: "tray.full")
+                            Spacer()
+                            Text("\(savedStore.recordings.count)")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
                         }
                     }
                 }
+
+#if targetEnvironment(macCatalyst)
+                Section("Device Utility") {
+                    DeviceUtilitySummaryView(
+                        connectedDevice: bluetooth.connectedDevice,
+                        activeProtocol: bluetooth.activeProtocol,
+                        advertisedServices: bluetooth.connectedAdvertisedServices
+                    )
+
+                    Button {
+                        activeSheet = .deviceUtility
+                    } label: {
+                        Label("Open Device Utility", systemImage: "wrench.and.screwdriver")
+                    }
+                    .buttonStyle(.bordered)
+                }
+#endif
             }
+            .scaleBenchListBackdrop()
             .navigationTitle("ScaleBench")
+            .searchable(text: $recordingSearchText, prompt: "Search saved recordings")
             .toolbar {
                 ToolbarItem(placement: helpToolbarPlacement) {
                     Button {
@@ -281,11 +317,7 @@ struct ContentView: View {
 
                 ToolbarItem(placement: resetToolbarPlacement) {
                     Button("Reset") {
-                        bluetooth.resetRecording()
-                        exportURL = nil
-                        scoreCardURL = nil
-                        scoreCardErrorMessage = nil
-                        activeSheet = nil
+                        resetCurrentRecording()
                     }
                 }
             }
@@ -296,14 +328,20 @@ struct ContentView: View {
                         stopRecordingAndShowResults()
                     }
                     .presentationDetents([.medium])
+                    .interactiveDismissDisabled(bluetooth.isRecording)
                 case .help:
                     ScaleBenchHelpView()
+#if targetEnvironment(macCatalyst)
+                case .deviceUtility:
+                    DeviceUtilityView(
+                        bluetooth: bluetooth,
+                        reportURL: $deviceUtilityReportURL
+                    )
+#endif
                 case let .recordingResults(recording):
                     RecordingResultsView(
                         recording: recording,
-                        save: { recording in
-                            savedStore.save(recording: recording, notes: recording.notes)
-                        },
+                        savedStatusMessage: recordingResultSaveStatusMessage,
                         exportJSON: { recording in
                             try? RecordingExporter.export(recording)
                         },
@@ -316,197 +354,684 @@ struct ContentView: View {
                     )
                     .presentationDetents([.large])
                 case let .scoreExplanation(recording):
-                    ScoreExplanationView(recording: recording, profile: recording.scoringProfile)
-                case let .scoringEditor(customProfile):
-                    ScoringProfileEditorView(
-                        customProfile: customProfile,
-                        baseProfile: selectedScoringProfile
-                    ) { profile, id in
-                        if let saved = scoringStore.save(profile: profile, id: id) {
-                            selectedScoringProfileID = ScoringProfileOption.custom(saved).id
-                            bluetooth.applyScoringProfile(saved.profile)
-                        }
-                    }
+                    ScoreExplanationView(recording: recording)
+                case let .shareURL(url):
+                    ShareSheet(items: [url])
                 }
             }
             .onChange(of: appCommands.helpRequestID) { _, _ in
                 activeSheet = .help
             }
+            .modifier(AppCommandRequestModifier(
+                commands: appCommands,
+                startRecording: startRecordingAndShowTimer,
+                stopRecording: stopRecordingAndShowResults,
+                importRecording: startRecordingImport,
+                exportJSON: exportCurrentJSONFromCommand,
+                exportScorecard: exportCurrentScorecardFromCommand,
+                reset: resetCurrentRecording
+            ))
+            .modifier(RecordingLifecycleModifier(
+                bluetooth: bluetooth,
+                recordingCompleted: showCompletedRecording,
+                syncCommands: syncAppCommandState
+            ))
+            .fileImporter(
+                isPresented: $isImportingRecording,
+                allowedContentTypes: [.json, .data],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case let .success(urls):
+                    guard let url = urls.first else { return }
+                    importRecording(from: url)
+                case let .failure(error):
+                    importStatusMessage = error.localizedDescription
+                }
+            }
+            .alert(
+                "Could Not Complete Command",
+                isPresented: Binding(
+                    get: { commandErrorMessage != nil },
+                    set: { if !$0 { commandErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    commandErrorMessage = nil
+                }
+            } message: {
+                Text(commandErrorMessage ?? "Unknown error")
+            }
         }
     }
 
     private func startRecordingAndShowTimer() {
-        bluetooth.applyScoringProfile(selectedScoringProfile)
+        guard bluetooth.isConnectionReady else { return }
+        bluetooth.applyScoringProfile(.standard)
         exportURL = nil
-        scoreCardURL = nil
-        scoreCardErrorMessage = nil
-        bluetooth.startRecording(mode: selectedMode, scoringProfile: selectedScoringProfile)
+        bluetooth.startRecording(mode: selectedMode, scoringProfile: .standard)
         activeSheet = .recordingTimer
     }
 
     private func stopRecordingAndShowResults() {
-        if bluetooth.isRecording {
-            bluetooth.stopRecording()
+        guard bluetooth.isRecording else {
+            showCompletedRecording()
+            return
         }
-        let snapshot = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
-        activeSheet = .recordingResults(snapshot)
+        bluetooth.stopRecording()
     }
 
-    private var scoringOptions: [ScoringProfileOption] {
-        ScoringPreset.allCases.map(ScoringProfileOption.builtIn)
-            + scoringStore.profiles.map(ScoringProfileOption.custom)
+    private func showCompletedRecording() {
+        guard let snapshot = bluetooth.takeCompletedRecording() else { return }
+        if snapshot.samples.isEmpty && snapshot.rawPackets.isEmpty {
+            recordingResultSaveStatusMessage = "No saved shot was created because no packets were captured."
+            activeSheet = .recordingResults(snapshot)
+            return
+        }
+        if let saved = savedStore.save(recording: snapshot, notes: recordingNotes) {
+            recordingResultSaveStatusMessage = "Saved automatically. Detailed charts and packet analysis are ready in Saved shots."
+            activeSheet = .recordingResults(saved.recording)
+        } else {
+            let reason = savedStore.lastErrorMessage ?? "The recording file could not be written."
+            recordingResultSaveStatusMessage = "Automatic save failed: \(reason) Use Export JSON below to keep this recording."
+            activeSheet = .recordingResults(snapshot)
+        }
     }
 
-    private var selectedScoringProfile: ScoringProfile {
-        scoringOptions.first { $0.id == selectedScoringProfileID }?.profile ?? .standard
+    private func startRecordingImport() {
+        isImportingRecording = true
     }
 
-    private var selectedCustomScoringProfile: CustomScoringProfile? {
-        scoringStore.profiles.first { ScoringProfileOption.custom($0).id == selectedScoringProfileID }
+    private func exportCurrentJSONFromCommand() {
+        guard let url = bluetooth.exportCurrentRecording(notes: recordingNotes) else {
+            commandErrorMessage = "The current recording could not be exported."
+            return
+        }
+        activeSheet = .shareURL(url)
+    }
+
+    private func exportCurrentScorecardFromCommand() {
+        do {
+            let recording = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
+            activeSheet = .shareURL(try ScoreCardExporter.exportOfficial(recording))
+        } catch {
+            commandErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func resetCurrentRecording() {
+        bluetooth.resetRecording()
+        exportURL = nil
+        activeSheet = nil
+        syncAppCommandState()
+    }
+
+    private func syncAppCommandState() {
+        let hasRecordingData = !bluetooth.currentRecording.samples.isEmpty
+            || !bluetooth.currentRecording.rawPackets.isEmpty
+        let canExport = !bluetooth.isRecording && hasRecordingData
+        let canExportScorecard = canExport
+            && bluetooth.currentMetrics.validity?.isValid == true
+            && benchmarkScore(
+                mode: bluetooth.currentRecording.mode,
+                metrics: bluetooth.currentMetrics
+            ) != nil
+        appCommands.updateState(
+            canStartRecording: bluetooth.isConnectionReady && !bluetooth.isRecording,
+            isRecording: bluetooth.isRecording,
+            canExport: canExport,
+            canExportScorecard: canExportScorecard
+        )
+    }
+
+    private func importRecording(from url: URL) {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        if let saved = savedStore.importRecording(from: url) {
+            importStatusMessage = "Imported \(saved.title)."
+        } else {
+            importStatusMessage = savedStore.lastErrorMessage ?? "Import failed."
+        }
+    }
+}
+
+private struct AppCommandRequestModifier: ViewModifier {
+    @ObservedObject var commands: AppCommandRouter
+    let startRecording: () -> Void
+    let stopRecording: () -> Void
+    let importRecording: () -> Void
+    let exportJSON: () -> Void
+    let exportScorecard: () -> Void
+    let reset: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: commands.startRecordingRequestID) { _, _ in
+                if commands.canStartRecording { startRecording() }
+            }
+            .onChange(of: commands.stopRecordingRequestID) { _, _ in
+                if commands.isRecording { stopRecording() }
+            }
+            .onChange(of: commands.importRecordingRequestID) { _, _ in
+                importRecording()
+            }
+            .onChange(of: commands.exportJSONRequestID) { _, _ in
+                if commands.canExport { exportJSON() }
+            }
+            .onChange(of: commands.exportScorecardRequestID) { _, _ in
+                if commands.canExportScorecard { exportScorecard() }
+            }
+            .onChange(of: commands.resetRequestID) { _, _ in
+                reset()
+            }
+    }
+}
+
+private struct RecordingLifecycleModifier: ViewModifier {
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject var bluetooth: BluetoothScaleManager
+    let recordingCompleted: () -> Void
+    let syncCommands: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: scenePhase) { _, phase in
+                switch phase {
+                case .active:
+                    bluetooth.noteAppBecameForeground()
+                case .background:
+                    bluetooth.noteAppEnteredBackground()
+                case .inactive:
+                    break
+                @unknown default:
+                    break
+                }
+            }
+            .onChange(of: bluetooth.isRecording) { _, isRecording in
+                RecordingWakeLock.setActive(isRecording)
+                syncCommands()
+            }
+            .onChange(of: bluetooth.completedRecording?.id) { _, completedID in
+                if completedID != nil {
+                    recordingCompleted()
+                }
+            }
+            .onChange(of: bluetooth.isConnectionReady) { _, _ in
+                syncCommands()
+            }
+            .onChange(of: bluetooth.connectedDevice?.id) { _, _ in
+                syncCommands()
+            }
+            .onChange(of: bluetooth.currentRecording.samples.count) { _, _ in
+                syncCommands()
+            }
+            .onChange(of: bluetooth.currentRecording.rawPackets.count) { _, _ in
+                syncCommands()
+            }
+            .onAppear {
+                RecordingWakeLock.setActive(bluetooth.isRecording)
+                recordingCompleted()
+                syncCommands()
+            }
+            .onDisappear {
+                RecordingWakeLock.setActive(false)
+            }
+            .sensoryFeedback(trigger: bluetooth.isRecording) { wasRecording, isRecording in
+                guard wasRecording != isRecording else { return nil }
+                return isRecording ? .start : .stop
+            }
+    }
+}
+
+private struct ShareSheetItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private enum ScaleBenchGlass {
+    // Rollback switch for the Liquid Glass trial.
+    static let isEnabled = true
+}
+
+private struct ScaleBenchBrandHeader: View {
+    let status: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image("ScorecardLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("ScaleBench")
+                    .font(.title3.weight(.bold))
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct ScaleBenchGlassBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.02, green: 0.07, blue: 0.11).opacity(0.98),
+                    Color(red: 0.00, green: 0.24, blue: 0.25).opacity(0.28),
+                    Color(uiColor: .systemBackground)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            GeometryReader { proxy in
+                Image("ScorecardLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: min(proxy.size.width * 0.72, 380))
+                    .opacity(0.055)
+                    .position(x: proxy.size.width * 0.74, y: proxy.size.height * 0.18)
+                    .accessibilityHidden(true)
+            }
+
+            if ScaleBenchGlass.isEnabled {
+                if #available(iOS 26.0, *), !ProcessInfo.processInfo.isMacCatalystApp {
+                    Color.clear
+                        .glassEffect(.regular.tint(Color.accentColor.opacity(0.08)), in: Rectangle())
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private struct ScaleBenchGlassSurfaceModifier: ViewModifier {
+    let tint: Color?
+    let interactive: Bool
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if ScaleBenchGlass.isEnabled {
+            if #available(iOS 26.0, *), !ProcessInfo.processInfo.isMacCatalystApp {
+                let glass = interactive
+                    ? Glass.regular.tint(tint).interactive()
+                    : Glass.regular.tint(tint)
+                content
+                    .glassEffect(glass, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            } else {
+                content
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func scaleBenchListBackdrop() -> some View {
+        if ScaleBenchGlass.isEnabled {
+            self
+                .scrollContentBackground(.hidden)
+                .background(ScaleBenchGlassBackdrop())
+        } else {
+            self
+        }
+    }
+
+    func scaleBenchGlassSurface(
+        tint: Color? = nil,
+        interactive: Bool = false,
+        cornerRadius: CGFloat = 18
+    ) -> some View {
+        modifier(ScaleBenchGlassSurfaceModifier(tint: tint, interactive: interactive, cornerRadius: cornerRadius))
     }
 
     @ViewBuilder
-    private var scoringButtons: some View {
-        Button {
-            activeSheet = .scoringEditor(nil)
-        } label: {
-            Label("New Custom Profile", systemImage: "slider.horizontal.3")
-        }
-        .buttonStyle(.bordered)
-
-        if let selectedCustomScoringProfile {
-            Button {
-                activeSheet = .scoringEditor(selectedCustomScoringProfile)
-            } label: {
-                Label("Edit", systemImage: "pencil")
+    func scaleBenchProminentButtonStyle() -> some View {
+        if ScaleBenchGlass.isEnabled {
+            if #available(iOS 26.0, *), !ProcessInfo.processInfo.isMacCatalystApp {
+                self.buttonStyle(.glassProminent)
+            } else {
+                self.buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.bordered)
-
-            Button(role: .destructive) {
-                scoringStore.delete(selectedCustomScoringProfile)
-                selectedScoringProfileID = ScoringProfileOption.builtIn(.standard).id
-                bluetooth.applyScoringProfile(.standard)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            .buttonStyle(.bordered)
+        } else {
+            self.buttonStyle(.borderedProminent)
         }
     }
+}
 
-    @ViewBuilder
-    private var scorecardButtons: some View {
-        Button {
-            bluetooth.applyScoringProfile(selectedScoringProfile)
-            let snapshot = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
-            activeSheet = .scoreExplanation(snapshot)
-        } label: {
-            Label("Explain Score", systemImage: "questionmark.circle")
-        }
-        .buttonStyle(.bordered)
+private var helpToolbarPlacement: ToolbarItemPlacement {
+#if os(macOS)
+    .automatic
+#else
+    .topBarLeading
+#endif
+}
 
-        Button {
-            bluetooth.applyScoringProfile(selectedScoringProfile)
-            do {
-                let finalized = bluetooth.finalizedCurrentRecording(notes: recordingNotes)
-                scoreCardURL = try ScoreCardExporter.exportOfficial(finalized)
-                scoreCardErrorMessage = nil
-            } catch {
-                scoreCardErrorMessage = error.localizedDescription
-            }
-        } label: {
-            Label("Export Official Scorecard", systemImage: "photo")
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(bluetooth.currentRecording.samples.isEmpty && bluetooth.currentRecording.rawPackets.isEmpty)
-    }
+private var resetToolbarPlacement: ToolbarItemPlacement {
+#if os(macOS)
+    .automatic
+#else
+    .topBarTrailing
+#endif
 }
 
 private enum ActiveSheet: Identifiable {
     case help
+#if targetEnvironment(macCatalyst)
+    case deviceUtility
+#endif
     case recordingTimer
     case recordingResults(ScaleRecording)
     case scoreExplanation(ScaleRecording)
-    case scoringEditor(CustomScoringProfile?)
+    case shareURL(URL)
 
     var id: String {
         switch self {
         case .help: "help"
+#if targetEnvironment(macCatalyst)
+        case .deviceUtility: "device-utility"
+#endif
         case .recordingTimer: "recording-timer"
         case let .recordingResults(recording): "recording-results-\(recording.id.uuidString)"
         case let .scoreExplanation(recording): "score-explanation-\(recording.id.uuidString)"
-        case let .scoringEditor(profile): "scoring-editor-\(profile?.id.uuidString ?? "new")"
+        case let .shareURL(url): "share-\(url.absoluteString)"
         }
     }
 }
 
-private struct ScoringProfileOption: Identifiable, Equatable {
-    let id: String
-    let displayName: String
-    let profile: ScoringProfile
+private enum RecordingLibraryMode: String, CaseIterable, Identifiable {
+    case date
+    case score
+    case protocolKind
+    case mode
 
-    static func builtIn(_ preset: ScoringPreset) -> ScoringProfileOption {
-        ScoringProfileOption(
-            id: "built-in-\(preset.rawValue)",
-            displayName: preset.displayName,
-            profile: preset.profile
-        )
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .date: "Date"
+        case .score: "Score"
+        case .protocolKind: "Protocol"
+        case .mode: "Mode"
+        }
+    }
+}
+
+private struct RecordingLibraryGroup: Identifiable {
+    let id: String
+    let title: String
+    let recordings: [SavedScaleRecording]
+}
+
+private struct RecordingLibraryControls: View {
+    let count: Int
+    @Binding var mode: RecordingLibraryMode
+    let importJSON: () -> Void
+    let loadExamples: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(count) saved")
+                        .font(.headline)
+                    Text("Tap a recording to inspect score, charts, packets, and export.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            Picker("View", selection: $mode) {
+                ForEach(RecordingLibraryMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    libraryButtons
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    libraryButtons
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
-    static func custom(_ custom: CustomScoringProfile) -> ScoringProfileOption {
-        ScoringProfileOption(
-            id: "custom-\(custom.id.uuidString)",
-            displayName: custom.profile.name,
-            profile: custom.profile
-        )
+    @ViewBuilder
+    private var libraryButtons: some View {
+        Button(action: importJSON) {
+            Label("Import JSON", systemImage: "tray.and.arrow.down")
+        }
+        .buttonStyle(.bordered)
+
+        if count == 0 {
+            Button(action: loadExamples) {
+                Label("Examples", systemImage: "sparkles")
+            }
+            .buttonStyle(.borderedProminent)
+        } else {
+            Button(action: loadExamples) {
+                Label("Add Examples", systemImage: "sparkles")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+}
+
+private struct RecordingLibrarySummary: View {
+    let mode: RecordingLibraryMode
+    let comparison: ProtocolComparison
+
+    var body: some View {
+        switch mode {
+        case .protocolKind:
+            if comparison.rows.count < 2 {
+                Text("Save or load two recordings to compare protocols side by side.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let best = comparison.bestOverall {
+                MetricRow(title: "Best full-detail result", value: "\(best.protocolKind.displayName) · \(best.score.map { "\($0)/100" } ?? "—")")
+            }
+        case .score:
+            Text("Sorted by official comparable score first. Open a recording to see delivered packets, usable readings, and packet checks.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .mode:
+            Text("Grouped by test mode so Shot / Pour, Idle, and Step Response recordings stay together.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .date:
+            Text("Newest recordings first.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct RecordingGroupHeader: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            Text("\(count)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 6)
+    }
+}
+
+private func sortedSavedRecordings(
+    _ recordings: [SavedScaleRecording],
+    mode: RecordingLibraryMode
+) -> [SavedScaleRecording] {
+    switch mode {
+    case .date:
+        recordings.sorted { lhs, rhs in
+            lhs.savedAt > rhs.savedAt
+        }
+    case .score:
+        recordings.sorted { lhs, rhs in
+            let lhsScore = benchmarkScore(mode: lhs.recording.mode, metrics: lhs.scoreSnapshot) ?? -1
+            let rhsScore = benchmarkScore(mode: rhs.recording.mode, metrics: rhs.scoreSnapshot) ?? -1
+            if lhsScore != rhsScore { return lhsScore > rhsScore }
+            let lhsUpperBound = lhs.scoreSnapshot.delivery?.purityIsUpperBound == true
+            let rhsUpperBound = rhs.scoreSnapshot.delivery?.purityIsUpperBound == true
+            if lhsUpperBound != rhsUpperBound { return !lhsUpperBound }
+            return lhs.savedAt > rhs.savedAt
+        }
+    case .protocolKind:
+        recordings.sorted { lhs, rhs in
+            let lhsProtocol = lhs.protocolKind.displayName
+            let rhsProtocol = rhs.protocolKind.displayName
+            if lhsProtocol != rhsProtocol { return lhsProtocol < rhsProtocol }
+            let lhsScore = benchmarkScore(mode: lhs.recording.mode, metrics: lhs.scoreSnapshot) ?? -1
+            let rhsScore = benchmarkScore(mode: rhs.recording.mode, metrics: rhs.scoreSnapshot) ?? -1
+            if lhsScore != rhsScore { return lhsScore > rhsScore }
+            return lhs.savedAt > rhs.savedAt
+        }
+    case .mode:
+        recordings.sorted { lhs, rhs in
+            if lhs.recording.mode.displayName != rhs.recording.mode.displayName {
+                return lhs.recording.mode.displayName < rhs.recording.mode.displayName
+            }
+            return lhs.savedAt > rhs.savedAt
+        }
+    }
+}
+
+private func recordingGroups(
+    _ recordings: [SavedScaleRecording],
+    mode: RecordingLibraryMode
+) -> [RecordingLibraryGroup] {
+    let sorted = sortedSavedRecordings(recordings, mode: mode)
+    let pairs: [(id: String, title: String, saved: SavedScaleRecording)] = sorted.map { saved in
+        switch mode {
+        case .protocolKind:
+            let title = saved.protocolKind.displayName
+            return (title, title, saved)
+        case .mode:
+            let title = saved.recording.mode.displayName
+            return (title, title, saved)
+        case .date, .score:
+            return ("all", "All recordings", saved)
+        }
+    }
+
+    var groups: [RecordingLibraryGroup] = []
+    for pair in pairs {
+        if let last = groups.last, last.id == pair.id {
+            groups[groups.count - 1] = RecordingLibraryGroup(
+                id: last.id,
+                title: last.title,
+                recordings: last.recordings + [pair.saved]
+            )
+        } else {
+            groups.append(RecordingLibraryGroup(id: pair.id, title: pair.title, recordings: [pair.saved]))
+        }
+    }
+    return groups
+}
+
+private struct EmptySavedRecordingsView: View {
+    let loadExamples: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "tray")
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 4) {
+                Text("No saved recordings")
+                    .font(.headline)
+                Text("Saved and imported recordings keep the raw packets, score snapshot, scoring profile, and your notes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    emptyStateButtons
+                }
+
+                VStack(spacing: 10) {
+                    emptyStateButtons
+                }
+            }
+            .controlSize(.regular)
+            .buttonBorderShape(.capsule)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+    }
+
+    @ViewBuilder
+    private var emptyStateButtons: some View {
+        Button(action: loadExamples) {
+            Label("Load Examples", systemImage: "sparkles")
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.borderedProminent)
     }
 }
 
 private struct ScaleBenchHelpView: View {
     @Environment(\.dismiss) private var dismiss
+    private let content = SharedHelpContent.bundled
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Quick start") {
-                    HelpStepRow(number: 1, title: "Scan and connect", text: "Power on a supported Bluetooth scale, tap Scan, then select the scale.")
-                    HelpStepRow(number: 2, title: "Choose a mode", text: "Use Shot / Pour for normal public comparisons. Use the other modes only when testing a specific behavior.")
-                    HelpStepRow(number: 3, title: "Record", text: "Tap Start Recording. A timer sheet stays open so it is obvious that capture is running.")
-                    HelpStepRow(number: 4, title: "Stop, inspect, save", text: "Tap Stop and View Results, then save the recording, export JSON, or make an official scorecard.")
-                }
-
-                Section("Modes") {
-                    ForEach(RecordingMode.allCases) { mode in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(mode.displayName)
-                                .font(.headline)
-                            Text(mode.shortDescription)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(mode.suggestedDuration)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                ForEach(content.sections) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { item in
+                            SharedHelpItemRow(item: item)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
-
-                Section("Score") {
-                    Text("ScaleBench Standard v1 combines measured transport quality and stability into a 0–100 score. Optional telemetry coverage is reported separately so basic protocols are not pre-penalized.")
-                    Text("Red evidence means a direct score penalty, such as a rejected packet, missing sequence, or parsed-sample long gap. Yellow/orange means warning context.")
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Visualizer") {
-                    Text("Weight stream shows parsed samples. Packet cadence uses the same parsed sample intervals used by scoring. Packet timeline keeps raw packets for forensic inspection and overlays score-impacting gaps separately.")
-                    Text("Open a saved recording to inspect packets, intervals, raw bytes, notes, and the score explanation for that specific capture.")
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Examples") {
-                    Text("Synthetic examples are bundled so new users can inspect the app without owning a scale yet. They are marked as examples in the title and notes.")
-                }
             }
-            .navigationTitle("ScaleBench Help")
+            .navigationTitle(content.title)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -516,6 +1041,742 @@ private struct ScaleBenchHelpView: View {
             }
         }
     }
+}
+
+private struct SharedHelpItemRow: View {
+    let item: SharedHelpItem
+
+    var body: some View {
+        switch item.type {
+        case .step:
+            HelpStepRow(
+                number: Int(item.number ?? "") ?? 0,
+                title: item.title ?? "",
+                text: item.text ?? ""
+            )
+        case .row:
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title ?? "")
+                    .font(.headline)
+                Text(item.value ?? item.text ?? "")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        case .bullet:
+            HStack(alignment: .top, spacing: 8) {
+                Text("•")
+                    .foregroundStyle(.secondary)
+                Text(item.text ?? "")
+                    .foregroundStyle(.secondary)
+            }
+        case .text:
+            Text(item.text ?? "")
+                .foregroundStyle(.secondary)
+        case .link:
+            if let urlText = item.value ?? item.text,
+               let url = URL(string: urlText) {
+                Link(destination: url) {
+                    Label(item.title ?? urlText, systemImage: "link")
+                }
+            } else {
+                Text(item.title ?? item.text ?? item.value ?? "")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct DeviceUtilitySummaryView: View {
+    let connectedDevice: DiscoveredScale?
+    let activeProtocol: ScaleKind
+    let advertisedServices: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Device Utility", systemImage: "wrench.and.screwdriver")
+                .font(.headline)
+            Text(summaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let connectedDevice {
+                MetricRow(title: "Connected", value: connectedDevice.name)
+                MetricRow(title: "Protocol", value: activeProtocol.displayName)
+                MetricRow(title: "DFU", value: deviceUtilityCapabilityLabel(services: advertisedServices))
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var summaryText: String {
+        if connectedDevice == nil {
+            return "Inspect BLE or cabled update and backup options."
+        }
+        return "Export a device report now. Firmware update support depends on the bootloader exposed by the scale."
+    }
+}
+
+private struct DeviceUtilityView: View {
+    @ObservedObject var bluetooth: BluetoothScaleManager
+    @Binding var reportURL: URL?
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedFirmwareURL: URL?
+    @State private var firmwareMessage: String?
+    @State private var isShowingFirmwarePicker = false
+#if targetEnvironment(macCatalyst)
+    @State private var cabledState = scanCabledDeviceUtility()
+#endif
+
+    private var advertisedServices: [String] { bluetooth.connectedAdvertisedServices }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Connected device") {
+                    if let device = bluetooth.connectedDevice {
+                        MetricRow(title: "Name", value: device.name)
+                        MetricRow(title: "Protocol", value: bluetooth.activeProtocol.displayName)
+                        MetricRow(title: "Identifier", value: device.id.uuidString)
+                        MetricRow(title: "RSSI", value: "\(device.rssi)")
+                        MetricRow(title: "DFU capability", value: deviceUtilityCapabilityLabel(services: advertisedServices))
+                        if !advertisedServices.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Advertised services")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(advertisedServices.joined(separator: "\n"))
+                                    .font(.caption.monospaced())
+                            }
+                        }
+                    } else {
+                        ContentUnavailableView("No scale connected", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                }
+
+                Section("Firmware update") {
+                    Text("Android can use Nordic DFU libraries now. Apple OTA support needs a follow-up integration with NordicDFU or McuManager after we confirm the scale bootloader.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        isShowingFirmwarePicker = true
+                    } label: {
+                        Label("Choose Firmware Package", systemImage: "doc.badge.gearshape")
+                    }
+
+                    if let selectedFirmwareURL {
+                        MetricRow(title: "Selected", value: selectedFirmwareURL.lastPathComponent)
+                    }
+
+                    if let firmwareMessage {
+                        Text(firmwareMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+#if targetEnvironment(macCatalyst)
+                CabledDeviceUtilitySection(
+                    state: cabledState,
+                    selectedFirmwareURL: selectedFirmwareURL,
+                    refresh: {
+                        cabledState = scanCabledDeviceUtility()
+                    }
+                )
+#else
+                Section("Cable") {
+                    Text("Cabled firmware update is a Mac utility feature. iPhone and iPad stay on BLE because iOS does not provide a general serial/USB flashing path for arbitrary scales.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+#endif
+
+                Section("Backup") {
+                    Text("Full firmware image backup is usually blocked by the bootloader or flash readout protection. On Mac, DU can suggest cable backup commands for tools it detects, but the exact command depends on the scale's firmware family.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+#if targetEnvironment(macCatalyst)
+                        reportURL = makeDeviceUtilityReport(bluetooth: bluetooth, cabledState: cabledState)
+#else
+                        reportURL = makeDeviceUtilityReport(bluetooth: bluetooth)
+#endif
+                    } label: {
+                        Label("Export Device Report", systemImage: "square.and.arrow.up")
+                    }
+
+                    if let reportURL {
+                        ShareLink(item: reportURL) {
+                            Label("Share \(reportURL.lastPathComponent)", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Device Utility")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .fileImporter(
+                isPresented: $isShowingFirmwarePicker,
+                allowedContentTypes: [.zip, .data],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case let .success(urls):
+                    selectedFirmwareURL = urls.first
+                    firmwareMessage = "Firmware update on Apple is not enabled yet. Package selection is saved for inspection only."
+                case let .failure(error):
+                    firmwareMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+#if targetEnvironment(macCatalyst)
+private struct CabledDeviceUtilitySection: View {
+    let state: CabledDeviceUtilityState
+    let selectedFirmwareURL: URL?
+    let refresh: () -> Void
+    @State private var selectedPortID: String?
+    @State private var operationState = EspToolOperationState()
+    @State private var flashOffset = "0x10000"
+
+    private var selectedPort: SerialPortOption? {
+        if let selectedPortID,
+           let port = state.serialPorts.first(where: { $0.id == selectedPortID }) {
+            return port
+        }
+        return state.serialPorts.first
+    }
+
+    private var runner: EspToolRunner? {
+        espToolRunner(from: state.tools)
+    }
+
+    var body: some View {
+        Section("Cable") {
+            Text("Mac DU can back up and flash ESP32-family scales over USB serial with esptool. Back up before flashing; protected devices may refuse readback.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button {
+                refresh()
+            } label: {
+                Label("Refresh Cable Devices", systemImage: "arrow.clockwise")
+            }
+
+            if state.serialPorts.isEmpty {
+                ContentUnavailableView("No serial devices", systemImage: "cable.connector", description: Text("Plug in a scale in USB serial or bootloader mode, then refresh."))
+            } else {
+                ForEach(state.serialPorts) { port in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(port.name)
+                            .font(.headline)
+                        Text(port.path)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            if state.serialPorts.count > 1 {
+                Picker("Serial port", selection: Binding(
+                    get: { selectedPort?.id },
+                    set: { selectedPortID = $0 }
+                )) {
+                    ForEach(state.serialPorts) { port in
+                        Text(port.name).tag(Optional(port.id))
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Detected tools")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(state.tools) { tool in
+                    MetricRow(title: tool.displayName, value: tool.path ?? "Not installed")
+                }
+            }
+
+            if let selectedPort {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ESP32 backup and flash")
+                        .font(.headline)
+                    MetricRow(title: "Port", value: selectedPort.path)
+                    MetricRow(title: "esptool", value: runner?.displayPath ?? "Not installed")
+
+                    if let selectedFirmwareURL {
+                        MetricRow(title: "Firmware", value: selectedFirmwareURL.lastPathComponent)
+                    } else {
+                        Text("Choose a firmware `.bin` package above before flashing. ScaleBench flashes app binaries at the offset below; full images need their exact partition offsets.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    TextField("Flash offset", text: $flashOffset)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    ViewThatFits(in: .horizontal) {
+                        HStack {
+                            espActionButtons(selectedPort: selectedPort)
+                        }
+
+                        VStack(alignment: .leading) {
+                            espActionButtons(selectedPort: selectedPort)
+                        }
+                    }
+
+                    if operationState.isRunning {
+                        ProgressView(operationState.status)
+                    } else {
+                        MetricRow(title: "Status", value: operationState.status)
+                    }
+
+                    if let backupURL = operationState.backupURL {
+                        ShareLink(item: backupURL) {
+                            Label("Share \(backupURL.lastPathComponent)", systemImage: "square.and.arrow.up")
+                        }
+                    }
+
+                    if !operationState.output.isEmpty {
+                        Text(operationState.output)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .lineLimit(10)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Command templates")
+                        .font(.headline)
+                    ForEach(cabledCommandTemplates(port: selectedPort, firmwareURL: selectedFirmwareURL, tools: state.tools)) { command in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(command.title, systemImage: command.systemImage)
+                                .font(.subheadline.weight(.semibold))
+                            Text(command.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(command.command)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func espActionButtons(selectedPort: SerialPortOption) -> some View {
+        Button {
+            startEspBackup(selectedPort: selectedPort)
+        } label: {
+            Label("Backup ESP32", systemImage: "tray.and.arrow.down")
+        }
+        .buttonStyle(.bordered)
+        .disabled(runner == nil || operationState.isRunning)
+
+        Button {
+            startEspFlash(selectedPort: selectedPort)
+        } label: {
+            Label("Flash ESP32", systemImage: "bolt")
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(runner == nil || operationState.backupURL == nil || selectedFirmwareURL == nil || operationState.isRunning)
+    }
+
+    private func startEspBackup(selectedPort: SerialPortOption) {
+        guard let runner else { return }
+        let backupURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBench-ESP32-backup-\(Int(Date().timeIntervalSince1970)).bin")
+        operationState = EspToolOperationState(isRunning: true, status: "Backing up 4 MB from ESP32 flash...", output: "", backupURL: nil)
+        Task {
+            let result = await runEspTool(
+                runner: runner,
+                arguments: [
+                    "--port", selectedPort.path,
+                    "--baud", "460800",
+                    "--before", "default-reset",
+                    "--after", "hard-reset",
+                    "read_flash", "0x00000", "0x400000", backupURL.path
+                ],
+                securityScopedURL: nil
+            )
+            operationState = EspToolOperationState(
+                isRunning: false,
+                status: result.succeeded ? "Backup complete" : "Backup failed",
+                output: result.output,
+                backupURL: result.succeeded ? backupURL : nil
+            )
+        }
+    }
+
+    private func startEspFlash(selectedPort: SerialPortOption) {
+        guard let runner, let selectedFirmwareURL else { return }
+        operationState = EspToolOperationState(isRunning: true, status: "Flashing ESP32...", output: "", backupURL: operationState.backupURL)
+        Task {
+            let result = await runEspTool(
+                runner: runner,
+                arguments: [
+                    "--port", selectedPort.path,
+                    "--baud", "460800",
+                    "--before", "default-reset",
+                    "--after", "hard-reset",
+                    "--chip", "auto",
+                    "write_flash",
+                    "-z",
+                    "--flash-mode", "dio",
+                    "--flash-size", "detect",
+                    flashOffset,
+                    selectedFirmwareURL.path
+                ],
+                securityScopedURL: selectedFirmwareURL
+            )
+            operationState = EspToolOperationState(
+                isRunning: false,
+                status: result.succeeded ? "Flash complete" : "Flash failed",
+                output: result.output,
+                backupURL: operationState.backupURL
+            )
+        }
+    }
+}
+
+private struct CabledDeviceUtilityState {
+    var serialPorts: [SerialPortOption]
+    var tools: [CommandLineToolOption]
+}
+
+private struct SerialPortOption: Identifiable {
+    let path: String
+
+    var id: String { path }
+    var name: String { URL(fileURLWithPath: path).lastPathComponent }
+}
+
+private struct CommandLineToolOption: Identifiable {
+    let name: String
+    let displayName: String
+    let path: String?
+
+    var id: String { name }
+    var isInstalled: Bool { path != nil }
+}
+
+private struct CabledCommandTemplate: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let systemImage: String
+    let command: String
+}
+
+private struct EspToolOperationState {
+    var isRunning = false
+    var status = "Idle"
+    var output = ""
+    var backupURL: URL?
+}
+
+private struct EspToolRunner {
+    let executable: String
+    let argumentPrefix: [String]
+    let displayPath: String
+}
+
+private struct EspToolResult {
+    let succeeded: Bool
+    let output: String
+}
+
+private func scanCabledDeviceUtility() -> CabledDeviceUtilityState {
+    CabledDeviceUtilityState(
+        serialPorts: scanSerialPorts(),
+        tools: [
+            detectCommandLineTool(name: "nrfutil", displayName: "Nordic nrfutil"),
+            detectCommandLineTool(name: "nrfjprog", displayName: "Nordic nrfjprog"),
+            detectCommandLineTool(name: "dfu-util", displayName: "dfu-util"),
+            detectCommandLineTool(name: "esptool.py", displayName: "ESP esptool.py"),
+            detectCommandLineTool(name: "esptool", displayName: "ESP esptool"),
+            detectCommandLineTool(name: "python3", displayName: "Python 3")
+        ]
+    )
+}
+
+private func scanSerialPorts() -> [SerialPortOption] {
+    let deviceDirectory = URL(fileURLWithPath: "/dev", isDirectory: true)
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: deviceDirectory.path)) ?? []
+    return names
+        .filter { name in
+            guard name.hasPrefix("cu.") || name.hasPrefix("tty.") else { return false }
+            let lowercased = name.lowercased()
+            return lowercased.contains("usb")
+                || lowercased.contains("modem")
+                || lowercased.contains("serial")
+                || lowercased.contains("wch")
+                || lowercased.contains("slab")
+                || lowercased.contains("jlink")
+        }
+        .sorted()
+        .map { SerialPortOption(path: deviceDirectory.appendingPathComponent($0).path) }
+}
+
+private func detectCommandLineTool(name: String, displayName: String) -> CommandLineToolOption {
+    let candidates = [
+        "/opt/homebrew/bin/\(name)",
+        "/usr/local/bin/\(name)",
+        "/usr/bin/\(name)",
+        "/bin/\(name)"
+    ]
+    let path = candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    return CommandLineToolOption(name: name, displayName: displayName, path: path)
+}
+
+private func espToolRunner(from tools: [CommandLineToolOption]) -> EspToolRunner? {
+    if let esptool = tools.first(where: { $0.name == "esptool" })?.path {
+        return EspToolRunner(executable: esptool, argumentPrefix: [], displayPath: esptool)
+    }
+    if let esptool = tools.first(where: { $0.name == "esptool.py" })?.path {
+        return EspToolRunner(executable: esptool, argumentPrefix: [], displayPath: esptool)
+    }
+    let knownPython = "/private/tmp/frankenbru-esptool-venv/bin/python"
+    if FileManager.default.isExecutableFile(atPath: knownPython) {
+        return EspToolRunner(executable: knownPython, argumentPrefix: ["-m", "esptool"], displayPath: "\(knownPython) -m esptool")
+    }
+    if let python = tools.first(where: { $0.name == "python3" })?.path {
+        return EspToolRunner(executable: python, argumentPrefix: ["-m", "esptool"], displayPath: "\(python) -m esptool")
+    }
+    return nil
+}
+
+private func runEspTool(
+    runner: EspToolRunner,
+    arguments: [String],
+    securityScopedURL: URL?
+) async -> EspToolResult {
+    await Task.detached(priority: .userInitiated) {
+        let didAccess = securityScopedURL?.startAccessingSecurityScopedResource() ?? false
+        defer {
+            if didAccess {
+                securityScopedURL?.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        return runCommand(executable: runner.executable, arguments: runner.argumentPrefix + arguments)
+    }.value
+}
+
+private func runCommand(executable: String, arguments: [String]) -> EspToolResult {
+    var outputPipe: [Int32] = [0, 0]
+    guard pipe(&outputPipe) == 0 else {
+        return EspToolResult(succeeded: false, output: "Could not create output pipe.")
+    }
+    defer {
+        if outputPipe[0] >= 0 {
+            close(outputPipe[0])
+        }
+        if outputPipe[1] >= 0 {
+            close(outputPipe[1])
+        }
+    }
+
+    var fileActions: posix_spawn_file_actions_t?
+    posix_spawn_file_actions_init(&fileActions)
+    defer {
+        posix_spawn_file_actions_destroy(&fileActions)
+    }
+    posix_spawn_file_actions_adddup2(&fileActions, outputPipe[1], STDOUT_FILENO)
+    posix_spawn_file_actions_adddup2(&fileActions, outputPipe[1], STDERR_FILENO)
+    posix_spawn_file_actions_addclose(&fileActions, outputPipe[0])
+
+    let argvStrings = [executable] + arguments
+    let argv = argvStrings.map { strdup($0) } + [nil]
+    defer {
+        argv.forEach { pointer in
+            if let pointer {
+                free(pointer)
+            }
+        }
+    }
+
+    var pid: pid_t = 0
+    let spawnStatus = posix_spawn(&pid, executable, &fileActions, nil, argv, nil)
+    close(outputPipe[1])
+    outputPipe[1] = -1
+    guard spawnStatus == 0 else {
+        return EspToolResult(succeeded: false, output: String(cString: strerror(spawnStatus)))
+    }
+
+    var output = Data()
+    var buffer = [UInt8](repeating: 0, count: 4096)
+    while true {
+        let count = read(outputPipe[0], &buffer, buffer.count)
+        if count > 0 {
+            output.append(buffer, count: count)
+        } else {
+            break
+        }
+    }
+
+    var waitStatus: Int32 = 0
+    waitpid(pid, &waitStatus, 0)
+    let text = String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return EspToolResult(succeeded: waitStatus == 0, output: text)
+}
+
+private func cabledCommandTemplates(
+    port: SerialPortOption,
+    firmwareURL: URL?,
+    tools: [CommandLineToolOption]
+) -> [CabledCommandTemplate] {
+    let firmwarePath = firmwareURL?.path ?? "/path/to/firmware.zip"
+    let nrfutil = tools.first(where: { $0.name == "nrfutil" })?.path ?? "nrfutil"
+    let nrfjprog = tools.first(where: { $0.name == "nrfjprog" })?.path ?? "nrfjprog"
+    let dfuUtil = tools.first(where: { $0.name == "dfu-util" })?.path ?? "dfu-util"
+    let esptool = tools.first(where: { $0.name == "esptool.py" })?.path
+        ?? tools.first(where: { $0.name == "esptool" })?.path
+        ?? "esptool.py"
+
+    return [
+        CabledCommandTemplate(
+            title: "Nordic serial DFU update",
+            detail: "For nRF5 serial DFU bootloaders that accept a Nordic DFU ZIP over a serial port.",
+            systemImage: "arrow.up.doc",
+            command: "\(shellEscape(nrfutil)) dfu serial -pkg \(shellEscape(firmwarePath)) -p \(shellEscape(port.path)) -b 115200"
+        ),
+        CabledCommandTemplate(
+            title: "Nordic debug backup",
+            detail: "For development boards with an unlocked SWD/J-Link path. This will fail on protected production devices.",
+            systemImage: "tray.and.arrow.down",
+            command: "\(shellEscape(nrfjprog)) --readcode ScaleBench-backup.hex"
+        ),
+        CabledCommandTemplate(
+            title: "DFU USB update",
+            detail: "For devices that enumerate as a USB DFU target rather than a serial port.",
+            systemImage: "cable.connector",
+            command: "\(shellEscape(dfuUtil)) -D \(shellEscape(firmwarePath))"
+        ),
+        CabledCommandTemplate(
+            title: "ESP app flash",
+            detail: "For ESP32 app binaries. ScaleBench's button uses the same defaults and requires a backup first.",
+            systemImage: "bolt",
+            command: "\(shellEscape(esptool)) --port \(shellEscape(port.path)) --baud 460800 --before default-reset --after hard-reset --chip auto write_flash -z --flash-mode dio --flash-size detect 0x10000 \(shellEscape(firmwarePath))"
+        ),
+        CabledCommandTemplate(
+            title: "ESP flash backup",
+            detail: "For ESP-based scales in serial bootloader mode. Flash size/address may need to be adjusted per board.",
+            systemImage: "externaldrive",
+            command: "\(shellEscape(esptool)) --port \(shellEscape(port.path)) read_flash 0x00000 0x400000 ScaleBench-backup.bin"
+        )
+    ]
+}
+
+private func shellEscape(_ value: String) -> String {
+    if value.range(of: #"^[A-Za-z0-9_@%+=:,./-]+$"#, options: .regularExpression) != nil {
+        return value
+    }
+    return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+}
+#endif
+
+private func deviceUtilityCapabilityLabel(services: [String]) -> String {
+    let normalized = services.map { $0.uppercased() }
+    if normalized.contains(where: { $0.contains("FE59") }) {
+        return "Nordic DFU advertised"
+    }
+    if normalized.contains(where: { $0.contains("8D53DC1D") }) {
+        return "SMP / McuManager advertised"
+    }
+    return "Not advertised"
+}
+
+#if targetEnvironment(macCatalyst)
+private func makeDeviceUtilityReport(bluetooth: BluetoothScaleManager, cabledState: CabledDeviceUtilityState) -> URL? {
+    makeDeviceUtilityReport(
+        bluetooth: bluetooth,
+        cabledUtility: [
+            "serialPorts": cabledState.serialPorts.map { ["name": $0.name, "path": $0.path] },
+            "tools": cabledState.tools.map {
+                [
+                    "name": $0.name,
+                    "displayName": $0.displayName,
+                    "path": jsonValue($0.path),
+                    "isInstalled": $0.isInstalled
+                ]
+            },
+            "note": "ScaleBench prepares cabled command templates on Mac; update and backup behavior depends on the target bootloader and installed tools."
+        ]
+    )
+}
+#endif
+
+private func makeDeviceUtilityReport(bluetooth: BluetoothScaleManager) -> URL? {
+    makeDeviceUtilityReport(bluetooth: bluetooth, cabledUtility: nil)
+}
+
+private func makeDeviceUtilityReport(bluetooth: BluetoothScaleManager, cabledUtility: [String: Any]?) -> URL? {
+    let device = bluetooth.connectedDevice
+    var utility: [String: Any] = [
+        "dfuCapability": deviceUtilityCapabilityLabel(services: bluetooth.connectedAdvertisedServices),
+        "firmwareBackupSupported": false,
+        "backupNote": "Full firmware image backup requires firmware or bootloader readback support."
+    ]
+    if let cabledUtility {
+        utility["cabled"] = cabledUtility
+    }
+
+    let report: [String: Any] = [
+        "schemaVersion": 1,
+        "kind": "ScaleBenchDeviceUtilityReport",
+        "createdAt": ISO8601DateFormatter().string(from: Date()),
+        "appName": "ScaleBench",
+        "appVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+        "appBuild": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
+        "platform": ScaleRecording.empty().platform,
+        "device": [
+            "connected": device != nil,
+            "name": jsonValue(device?.name),
+            "identifier": jsonValue(device?.id.uuidString),
+            "protocol": bluetooth.activeProtocol.displayName,
+            "rssi": jsonValue(device?.rssi),
+            "advertisedServices": bluetooth.connectedAdvertisedServices
+        ],
+        "latestTelemetry": [
+            "weightGrams": jsonValue(bluetooth.latestSample?.weightGrams),
+            "batteryPercent": jsonValue(bluetooth.latestSample?.batteryPercent ?? bluetooth.latestBatteryPercent),
+            "flowGramsPerSecond": jsonValue(bluetooth.latestSample?.flowGramsPerSecond)
+        ],
+        "utility": utility
+    ]
+    do {
+        let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+        let safeName = (device?.name ?? "cabled-device")
+            .replacingOccurrences(of: " ", with: "-")
+            .replacingOccurrences(of: "/", with: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBench-DU-\(safeName)-\(Int(Date().timeIntervalSince1970)).json")
+        try data.write(to: url, options: [.atomic])
+        return url
+    } catch {
+        return nil
+    }
+}
+
+private func jsonValue<T>(_ value: T?) -> Any {
+    value ?? NSNull()
 }
 
 private struct HelpStepRow: View {
@@ -566,66 +1827,88 @@ private struct RecordingTimerView: View {
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: Date(), by: 1)) { context in
-                List {
-                    Section {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Recording", systemImage: "record.circle.fill")
-                                .font(.headline)
-                                .foregroundStyle(.red)
-
-                            Text(formatDuration(recordingDuration(bluetooth.currentRecording, now: context.date)))
-                                .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                                .monospacedDigit()
-
-                            Text(bluetooth.currentRecording.mode.shortDescription)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
+#if targetEnvironment(macCatalyst)
+                recordingList(now: context.date, includesStopAction: true)
+#else
+                recordingList(now: context.date, includesStopAction: false)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        stopAction
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(.ultraThinMaterial)
                     }
-
-                    Section("Live capture") {
-                        MetricRow(title: "Samples", value: "\(bluetooth.currentRecording.samples.count)")
-                        MetricRow(title: "Packets", value: "\(bluetooth.currentRecording.rawPackets.count)")
-                        MetricRow(title: "Weight", value: bluetooth.latestSample.map { String(format: "%.2f g", $0.weightGrams) } ?? "—")
-                        MetricRow(title: "Flow", value: bluetooth.latestSample?.flowGramsPerSecond.map { String(format: "%.2f g/s", $0) } ?? "—")
-                        MetricRow(title: "Battery", value: bluetooth.latestSample?.batteryPercent.map { "\($0)%" } ?? bluetooth.latestBatteryPercent.map { "\($0)%" } ?? "—")
-                    }
-
-                    Section {
-                        Button(role: .destructive, action: stop) {
-                            Label("Stop and View Results", systemImage: "stop.circle.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
+#endif
             }
             .navigationTitle("Recording")
         }
+    }
+
+    private func recordingList(now: Date, includesStopAction: Bool) -> some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Recording", systemImage: "record.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.red)
+
+                    Text(formatDuration(recordingDuration(bluetooth.currentRecording, now: now)))
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .monospacedDigit()
+
+                    Text(bluetooth.currentRecording.mode.shortDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+            }
+
+            Section("Live capture") {
+                MetricRow(title: "Samples", value: "\(bluetooth.currentRecording.samples.count)")
+                MetricRow(title: "Packets", value: "\(bluetooth.currentRecording.rawPackets.count)")
+                MetricRow(title: "Weight", value: bluetooth.latestSample.map { String(format: "%.2f g", $0.weightGrams) } ?? "—")
+                MetricRow(title: "Flow", value: bluetooth.latestSample?.flowGramsPerSecond.map { String(format: "%.2f g/s", $0) } ?? "—")
+                MetricRow(title: "Battery", value: bluetooth.latestSample?.batteryPercent.map { "\($0)%" } ?? bluetooth.latestBatteryPercent.map { "\($0)%" } ?? "—")
+            }
+
+            if includesStopAction {
+                Section {
+                    stopAction
+                }
+            }
+        }
+        .scaleBenchListBackdrop()
+    }
+
+    private var stopAction: some View {
+        Button(role: .destructive, action: stop) {
+            Label("Stop and View Results", systemImage: "stop.circle.fill")
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .scaleBenchProminentButtonStyle()
+        .tint(.red)
+        .frame(maxWidth: 360)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
 private struct RecordingResultsView: View {
     @Environment(\.dismiss) private var dismiss
     let recording: ScaleRecording
-    let save: (ScaleRecording) -> SavedScaleRecording?
+    let savedStatusMessage: String
     let exportJSON: (ScaleRecording) -> URL?
     let exportScorecard: (ScaleRecording) throws -> URL
     let explain: (ScaleRecording) -> Void
 
-    @State private var didSave = false
     @State private var jsonURL: URL?
-    @State private var scorecardURL: URL?
-    @State private var statusMessage: String?
+    @State private var scoreCardShareItem: ShareSheetItem?
     @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    ScoreHero(metrics: recording.metrics, profile: recording.scoringProfile)
+                    ScoreHero(mode: recording.mode, metrics: recording.metrics)
                     Text(resultNarrative(for: recording))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -635,24 +1918,16 @@ private struct RecordingResultsView: View {
                     RecordingSummaryRows(recording: recording, metrics: recording.metrics)
                 }
 
-                Section("Deductions") {
-                    ScoreDeductionsView(recording: recording, metrics: recording.metrics)
+                Section("How it was calculated") {
+                    ScoreBreakdownView(recording: recording, metrics: recording.metrics)
+                }
+
+                Section {
+                    Label(savedStatusMessage, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Actions") {
-                    Button {
-                        if save(recording) != nil {
-                            didSave = true
-                            statusMessage = "Recording saved."
-                            errorMessage = nil
-                        } else {
-                            errorMessage = "Save failed."
-                        }
-                    } label: {
-                        Label(didSave ? "Saved" : "Save Recording", systemImage: didSave ? "checkmark.circle.fill" : "tray.and.arrow.down")
-                    }
-                    .disabled(didSave)
-
                     Button {
                         jsonURL = exportJSON(recording)
                         errorMessage = jsonURL == nil ? "JSON export failed." : nil
@@ -662,7 +1937,7 @@ private struct RecordingResultsView: View {
 
                     Button {
                         do {
-                            scorecardURL = try exportScorecard(recording)
+                            scoreCardShareItem = ShareSheetItem(url: try exportScorecard(recording))
                             errorMessage = nil
                         } catch {
                             errorMessage = error.localizedDescription
@@ -678,12 +1953,6 @@ private struct RecordingResultsView: View {
                     }
                 }
 
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption)
@@ -695,13 +1964,8 @@ private struct RecordingResultsView: View {
                         Label("Share JSON \(jsonURL.lastPathComponent)", systemImage: "square.and.arrow.up")
                     }
                 }
-
-                if let scorecardURL {
-                    ShareLink(item: scorecardURL) {
-                        Label("Share Official Scorecard \(scorecardURL.lastPathComponent)", systemImage: "photo")
-                    }
-                }
             }
+            .scaleBenchListBackdrop()
             .navigationTitle("Results")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -709,6 +1973,9 @@ private struct RecordingResultsView: View {
                         dismiss()
                     }
                 }
+            }
+            .sheet(item: $scoreCardShareItem) { item in
+                ShareSheet(items: [item.url])
             }
         }
     }
@@ -718,7 +1985,7 @@ private struct SavedRecordingDetailView: View {
     let saved: SavedScaleRecording
     let explain: () -> Void
     @State private var jsonURL: URL?
-    @State private var scorecardURL: URL?
+    @State private var scoreCardShareItem: ShareSheetItem?
     @State private var exportErrorMessage: String?
 
     private var recording: ScaleRecording { saved.recording }
@@ -727,7 +1994,7 @@ private struct SavedRecordingDetailView: View {
     var body: some View {
         List {
             Section {
-                ScoreHero(metrics: metrics, profile: recording.scoringProfile)
+                ScoreHero(mode: recording.mode, metrics: metrics)
                 Text(resultNarrative(for: recording))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -738,8 +2005,8 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Saved", value: saved.savedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
-            Section("Deductions") {
-                ScoreDeductionsView(recording: recording, metrics: metrics)
+            Section("How it was calculated") {
+                ScoreBreakdownView(recording: recording, metrics: metrics)
             }
 
             Section("Packet visualizer") {
@@ -750,9 +2017,7 @@ private struct SavedRecordingDetailView: View {
                 Button(action: explain) {
                     Label("Explain This Score", systemImage: "questionmark.circle")
                 }
-                MetricRow(title: "Transport", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
-                MetricRow(title: "Stability", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
-                MetricRow(title: "Metadata", value: metrics.metadataScore.map { "\($0)/100" } ?? "—")
+                BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
             }
 
             Section("Export") {
@@ -769,7 +2034,7 @@ private struct SavedRecordingDetailView: View {
 
                 Button {
                     do {
-                        scorecardURL = try ScoreCardExporter.exportOfficial(recording)
+                        scoreCardShareItem = ShareSheetItem(url: try ScoreCardExporter.exportOfficial(recording))
                         exportErrorMessage = nil
                     } catch {
                         exportErrorMessage = error.localizedDescription
@@ -781,12 +2046,6 @@ private struct SavedRecordingDetailView: View {
                 if let jsonURL {
                     ShareLink(item: jsonURL) {
                         Label("Share JSON \(jsonURL.lastPathComponent)", systemImage: "square.and.arrow.up")
-                    }
-                }
-
-                if let scorecardURL {
-                    ShareLink(item: scorecardURL) {
-                        Label("Share Official Scorecard \(scorecardURL.lastPathComponent)", systemImage: "photo")
                     }
                 }
 
@@ -803,33 +2062,48 @@ private struct SavedRecordingDetailView: View {
                 }
             }
         }
+        .scaleBenchListBackdrop()
         .navigationTitle(saved.title)
+        .sheet(item: $scoreCardShareItem) { item in
+            ShareSheet(items: [item.url])
+        }
     }
 }
 
 private struct ScoreHero: View {
+    let mode: RecordingMode
     let metrics: ScaleQualityMetrics
-    let profile: ScoringProfile
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(profile.isStandardBenchmark ? "Official score" : "Custom score")
+                Text(benchmarkScoreTitle(mode))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(metrics.overallScore.map { "\($0)" } ?? "—")
+                Text(benchmarkScoreDisplay(mode: mode, metrics: metrics))
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .monospacedDigit()
             }
 
             Spacer()
 
-            Text(profile.isStandardBenchmark ? "Standard v1" : "Custom")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.quaternary, in: Capsule())
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Standard v1")
+                    .font(.caption.weight(.semibold))
+                if mode == .shot || mode == .transportStress,
+                   let protocolDetail = protocolDetailDisplay(metrics) {
+                    Text(protocolDetail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.quaternary, in: Capsule())
         }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .scaleBenchGlassSurface(tint: .accentColor.opacity(0.16), cornerRadius: 20)
         .accessibilityElement(children: .combine)
     }
 }
@@ -840,8 +2114,9 @@ private struct RecordingSummaryRows: View {
 
     var body: some View {
         MetricRow(title: "Mode", value: recording.mode.displayName)
-        MetricRow(title: "Scoring", value: recording.scoringProfile.name)
-        MetricRow(title: "Duration", value: formatDuration(recordingDuration(recording)))
+        MetricRow(title: "Scoring", value: "ScaleBench Standard v1")
+        MetricRow(title: "Model", value: metrics.scoringModelVersion ?? ScaleRecording.scoringModelVersion)
+        MetricRow(title: "Duration", value: recordingDurationDisplay(recording: recording, metrics: metrics))
         MetricRow(title: "Protocol", value: recording.device?.kind.displayName ?? recording.samples.last?.scaleKind.displayName ?? "—")
         MetricRow(title: "Samples", value: "\(recording.samples.count)")
         MetricRow(title: "Packets", value: "\(recording.rawPackets.count)")
@@ -856,284 +2131,202 @@ private struct RecordingSummaryRows: View {
     }
 }
 
-private struct ScoreDeductionsView: View {
+private struct BenchmarkScoreRows: View {
+    let mode: RecordingMode
+    let metrics: ScaleQualityMetrics
+
+    var body: some View {
+        MetricRow(title: "Benchmark", value: "ScaleBench Standard v1")
+        MetricRow(title: benchmarkScoreTitle(mode), value: benchmarkScoreDisplay(mode: mode, metrics: metrics))
+
+        if let validity = metrics.validity {
+            MetricRow(title: "Validity", value: validity.isValid ? "Valid" : "Not valid")
+        }
+
+        if mode == .shot || mode == .transportStress {
+            MetricRow(title: "Delivered", value: deliveredUpdatesDisplay(metrics))
+            MetricRow(title: "Usable readings", value: usableReadingsDisplay(metrics))
+            MetricRow(
+                title: "Packet checks",
+                value: protocolDetailDisplay(metrics) ?? "—"
+            )
+        } else if mode == .idleStability {
+            MetricRow(title: "Noise component", value: metrics.idleNoiseScore.map { "\($0)/100" } ?? "—")
+            MetricRow(title: "Drift component", value: metrics.idleDriftScore.map { "\($0)/100" } ?? "—")
+        } else if mode == .stepResponse, let step = metrics.stepResponse {
+            MetricRow(title: "Step detected", value: step.stepDetected ? "Yes" : "No")
+            MetricRow(title: "10–90% rise", value: step.riseTime10To90Seconds.map(formatSeconds) ?? "—")
+            MetricRow(title: "Settling time", value: step.settlingTimeSeconds.map(formatSeconds) ?? "—")
+            MetricRow(title: "Overshoot", value: step.overshootPercent.map { String(format: "%.1f%%", $0) } ?? "—")
+        }
+    }
+}
+
+private struct ScoreBreakdownView: View {
     let recording: ScaleRecording
     let metrics: ScaleQualityMetrics
 
-    private var deductions: [WeightedScoreDeduction] {
-        let profile = recording.scoringProfile.normalized
-        var rows: [WeightedScoreDeduction] = []
-
-        if let transportScore = metrics.transportScore {
-            let points = Double(100 - transportScore) * profile.transportWeight
-            if points > 0.05 {
-                rows.append(WeightedScoreDeduction(
-                    title: "Transport",
-                    points: points,
-                    subscore: transportScore,
-                    detail: transportDeductionDetail(metrics: metrics)
-                ))
-            }
-        }
-
-        if let stabilityScore = metrics.stabilityScore {
-            let points = Double(100 - stabilityScore) * profile.stabilityWeight
-            if points > 0.05 {
-                rows.append(WeightedScoreDeduction(
-                    title: "Stability",
-                    points: points,
-                    subscore: stabilityScore,
-                    detail: stabilityDeductionDetail(recording: recording, metrics: metrics)
-                ))
-            }
-        }
-
-        if let metadataScore = metrics.metadataScore {
-            let points = Double(100 - metadataScore) * profile.metadataWeight
-            if points > 0.05 {
-                let components = metadataDeductionComponents(recording: recording, profile: profile)
-                rows.append(WeightedScoreDeduction(
-                    title: "Metadata",
-                    points: points,
-                    subscore: metadataScore,
-                    detail: metadataDeductionDetail(components: components),
-                    components: components
-                ))
-            }
-        }
-
-        return rows
-    }
-
     var body: some View {
-        if deductions.isEmpty {
-            Text("No weighted score deductions for this recording.")
+        if let validity = metrics.validity, !validity.isValid {
+            Text(invalidScoreSummary(recording: recording, metrics: metrics))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        } else {
-            Text("The score starts at 100. These rows show the weighted points removed by each subscore.")
+            ForEach(validity.reasons, id: \.self) { reason in
+                Label(validityReasonLabel(reason), systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+            }
+        }
+
+        switch recording.mode {
+        case .shot, .transportStress:
+            ScoreExplanationLines(lines: deliveryScoreExplanation(recording: recording, metrics: metrics))
+            ScoreInfoButtons()
+            Text("Delivery score uses delivered updates and usable readings. The formula is shown above so the score is auditable without opening the JSON.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
+            FrameClassificationRows(metrics: metrics)
+
+        case .idleStability:
+            Text("Idle Stability combines detrended residual noise and drift with an equal-weight geometric mean. It is separate from Delivery.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
+            MetricRow(title: "Residual std dev", value: metrics.idleNoiseStandardDeviationGrams.map { String(format: "%.3f g", $0) } ?? "—")
+            MetricRow(title: "Residual p-p", value: metrics.idleNoisePeakToPeakGrams.map { String(format: "%.3f g", $0) } ?? "—")
+            MetricRow(title: "Drift", value: metrics.driftGramsPerMinute.map { String(format: "%.3f g/min", $0) } ?? "—")
+            MetricRow(title: "Resolution", value: metrics.idleResolutionGrams.map { String(format: "%.3f g", $0) } ?? "—")
+            MetricRow(title: "Analysed frames", value: metrics.idleAnalysedSampleCount.map(String.init) ?? "—")
+
+        case .stepResponse:
+            Text("Step Response reports lag and settling metrics. Standard v1 does not turn them into a 0–100 score.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
+
+        case .tareLatency:
+            Text("Tare Latency is metrics-only in Standard v1; it does not produce a 0–100 score.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            ForEach(deductions) { deduction in
-                ScoreDeductionRow(deduction: deduction)
-            }
+        case .batteryStability:
+            Text("Battery Logging records telemetry only; it does not produce a 0–100 score.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-    }
-
-    private func transportDeductionDetail(metrics: ScaleQualityMetrics) -> String {
-        var parts: [String] = []
-        if let cadenceDetail = cadenceDeductionDetail(metrics: metrics) {
-            parts.append(cadenceDetail)
-        }
-        if metrics.longGapCount > 0 {
-            parts.append("\(metrics.longGapCount) parsed-sample long gap\(metrics.longGapCount == 1 ? "" : "s")")
-        }
-        if metrics.missingSequenceCount > 0 {
-            parts.append("\(metrics.missingSequenceCount) missing sequence step\(metrics.missingSequenceCount == 1 ? "" : "s")")
-        }
-        if metrics.duplicateOrOutOfOrderTimestampCount > 0 {
-            parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
-        }
-        if metrics.rejectedPacketCount > 0 {
-            parts.append("\(metrics.rejectedPacketCount) rejected packet\(metrics.rejectedPacketCount == 1 ? "" : "s")")
-        }
-        return parts.isEmpty ? "Transport subscore was below 100." : parts.joined(separator: ", ")
-    }
-
-    private func cadenceDeductionDetail(metrics: ScaleQualityMetrics) -> String? {
-        guard let p50 = metrics.packetIntervalP50Milliseconds,
-              let p95 = metrics.packetIntervalP95Milliseconds,
-              p50 > 0 else {
-            return nil
-        }
-
-        let p95Ratio = p95 / p50
-        let maxRatio = metrics.packetIntervalMaxMilliseconds.map { $0 / p50 } ?? 0
-        guard p95Ratio > 1.10 || maxRatio > 1.75 else { return nil }
-
-        if let max = metrics.packetIntervalMaxMilliseconds, maxRatio > 1.75 {
-            return String(
-                format: "cadence variation: p95 %.0f ms vs typical %.0f ms; max %.0f ms",
-                p95,
-                p50,
-                max
-            )
-        }
-
-        return String(
-            format: "cadence variation: p95 %.0f ms vs typical %.0f ms",
-            p95,
-            p50
-        )
-    }
-
-    private func stabilityDeductionDetail(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
-        if recording.mode != .idleStability {
-            return metrics.firmwareBumpCount > 0
-                ? "\(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? "" : "s")"
-                : "Dynamic stability subscore was below 100."
-        }
-
-        var parts: [String] = []
-        if let noise = metrics.idleNoisePeakToPeakGrams {
-            parts.append(String(format: "idle noise %.3f g p-p", noise))
-        }
-        if let drift = metrics.driftGramsPerMinute {
-            parts.append(String(format: "drift %.3f g/min", drift))
-        }
-        return parts.isEmpty ? "Idle stability subscore was below 100." : parts.joined(separator: ", ")
-    }
-
-    private func metadataDeductionDetail(components: [ScoreDeductionComponent]) -> String {
-        guard !components.isEmpty else {
-            return "Metadata subscore was below 100."
-        }
-
-        if let battery = components.first(where: { $0.title == "Battery" }) {
-            return "Battery reporting is missing, accounting for \(formatScorePoints(battery.points)) of the weighted deduction. Other optional telemetry accounts for the rest."
-        }
-
-        return "Missing or partial optional telemetry reduced the metadata subscore."
-    }
-
-    private func metadataDeductionComponents(recording: ScaleRecording, profile: ScoringProfile) -> [ScoreDeductionComponent] {
-        let sampleCount = max(recording.samples.count, 1)
-        let timestampCount = recording.samples.filter { $0.deviceTimestampMilliseconds != nil }.count
-        let sequenceCount = recording.samples.filter { $0.sequence != nil }.count
-        let sampleBatteryCount = recording.samples.filter { $0.batteryPercent != nil }.count
-        let firmwareQualityCount = recording.samples.filter { $0.firmwareQualityScore != nil }.count
-        let batteryCoverage = sampleBatteryCount > 0 || !recording.batteryEvents.isEmpty ? 1.0 : 0.0
-
-        return [
-            metadataComponent(
-                title: "Device timestamps",
-                coverage: Double(timestampCount) / Double(sampleCount),
-                metadataSubscoreWeight: 40,
-                profile: profile,
-                detail: metadataCoverageLabel(count: timestampCount, total: sampleCount)
-            ),
-            metadataComponent(
-                title: "Sequence numbers",
-                coverage: Double(sequenceCount) / Double(sampleCount),
-                metadataSubscoreWeight: 25,
-                profile: profile,
-                detail: metadataCoverageLabel(count: sequenceCount, total: sampleCount)
-            ),
-            metadataComponent(
-                title: "Battery",
-                coverage: batteryCoverage,
-                metadataSubscoreWeight: 20,
-                profile: profile,
-                detail: batteryCoverage > 0 ? "present" : "missing"
-            ),
-            metadataComponent(
-                title: "Firmware quality",
-                coverage: Double(firmwareQualityCount) / Double(sampleCount),
-                metadataSubscoreWeight: 15,
-                profile: profile,
-                detail: metadataCoverageLabel(count: firmwareQualityCount, total: sampleCount)
-            )
-        ]
-        .compactMap { $0 }
-    }
-
-    private func metadataComponent(
-        title: String,
-        coverage: Double,
-        metadataSubscoreWeight: Double,
-        profile: ScoringProfile,
-        detail: String
-    ) -> ScoreDeductionComponent? {
-        let missingCoverage = max(0, min(1, 1 - coverage))
-        let points = metadataSubscoreWeight * profile.metadataWeight * missingCoverage
-        guard points > 0.05 else { return nil }
-        return ScoreDeductionComponent(title: title, points: points, detail: detail)
-    }
-
-    private func metadataCoverageLabel(count: Int, total: Int) -> String {
-        if count == 0 { return "missing" }
-        if count == total { return "full" }
-        return "partial \(count)/\(total)"
     }
 }
 
-private struct WeightedScoreDeduction: Identifiable {
-    var id: String { title }
-    var title: String
-    var points: Double
-    var subscore: Int
-    var detail: String
-    var components: [ScoreDeductionComponent] = []
-}
-
-private struct ScoreDeductionComponent: Identifiable {
-    var id: String { title }
-    var title: String
-    var points: Double
-    var detail: String
-}
-
-private struct ScoreDeductionRow: View {
-    let deduction: WeightedScoreDeduction
+private struct ScoreExplanationLines: View {
+    let lines: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(deduction.title)
-                        .font(.headline)
-                    Text("Subscore \(deduction.subscore)/100")
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(lines, id: \.self) { line in
+                    Text(line)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-
-                Spacer()
-
-                Text(String(format: "−%.1f pts", deduction.points))
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(.red)
-            }
-
-            Text(deduction.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if !deduction.components.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(deduction.components) { component in
-                        HStack(alignment: .firstTextBaseline) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(component.title)
-                                Text(component.detail)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Text("−\(formatScorePoints(component.points))")
-                                .monospacedDigit()
-                                .foregroundStyle(.red)
-                        }
-                        .font(.caption)
-                    }
-                }
-                .padding(.top, 4)
             }
         }
-        .padding(.vertical, 4)
+    }
+}
+
+private struct ScoreInfoButtons: View {
+    @State private var selectedTopic: ScoreHelpTopic?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text("Help")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(ScoreHelpTopic.allCases) { topic in
+                Button {
+                    selectedTopic = topic
+                } label: {
+                    Image(systemName: "info.circle")
+                        .imageScale(.medium)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .accessibilityLabel(topic.title)
+                .accessibilityHint(topic.message)
+            }
+            Spacer(minLength: 0)
+        }
+        .alert(item: $selectedTopic) { topic in
+            Alert(
+                title: Text(topic.title),
+                message: Text(topic.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+}
+
+private enum ScoreHelpTopic: String, CaseIterable, Identifiable {
+    case delivered
+    case usable
+    case checks
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .delivered: "Delivered"
+        case .usable: "Usable"
+        case .checks: "Checks"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .delivered:
+            "Shot / Pour expects one usable weight update every 50 ms, or 20 per second. Missing updates reduce this part of the score."
+        case .usable:
+            "This counts how many received weight readings were usable for scoring. Unreadable, stale, implausible, or repeated readings reduce this part."
+        case .checks:
+            "Some scales expose more packet details than others. More checks make it easier for ScaleBench to prove what happened, but the main score still comes from delivered updates and usable readings."
+        }
+    }
+}
+
+private struct FrameClassificationRows: View {
+    let metrics: ScaleQualityMetrics
+
+    var body: some View {
+        if let frames = metrics.frameClassification {
+            MetricRow(title: "Usable frames", value: "\(frames.usable)")
+            MetricRow(title: "Unreadable packets", value: "\(frames.parseFailure)")
+            MetricRow(title: "Out of order", value: "\(frames.outOfOrder)")
+            MetricRow(title: "Stale readings", value: "\(frames.stale)")
+            MetricRow(title: "Implausible readings", value: "\(frames.implausible)")
+            MetricRow(title: "Repeated readings", value: "\(frames.duplicate)")
+        }
     }
 }
 
 private struct RecordingVisualizerView: View {
     let recording: ScaleRecording
     let metrics: ScaleQualityMetrics
+    private let analysis: ChartAnalysis
     @State private var selectedPacketID: UUID?
+    @State private var packetInspectorFilter: PacketInspectorFilter = .all
+
+    init(recording: ScaleRecording, metrics: ScaleQualityMetrics) {
+        self.recording = recording
+        self.metrics = metrics
+        analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
+    }
 
     private var timeline: PacketTimeline {
-        PacketTimeline.make(recording: recording, metrics: metrics)
+        analysis.packetTimeline
     }
 
     private var selectedEntry: PacketTimelineEntry? {
-        let entries = timeline.entries
+        let entries = inspectorEntries
         if let selectedPacketID,
            let selected = entries.first(where: { $0.id == selectedPacketID }) {
             return selected
@@ -1143,18 +2336,35 @@ private struct RecordingVisualizerView: View {
             ?? entries.first
     }
 
+    private var inspectorEntries: [PacketTimelineEntry] {
+        switch packetInspectorFilter {
+        case .all:
+            timeline.entries
+        case .badOnly:
+            timeline.entries.filter(\.isBadForInspector)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             PacketEvidenceSummary(metrics: metrics, timeline: timeline, mode: recording.mode)
 
+            if !analysis.signalDiagnostics.isEmpty {
+                SignalDiagnosticsSection(diagnostics: analysis.signalDiagnostics)
+            }
+
             VStack(alignment: .leading, spacing: 8) {
                 Label("Weight stream", systemImage: "waveform.path.ecg")
                     .font(.headline)
-                WeightStreamChart(recording: recording)
+                WeightStreamChart(recording: recording, timeline: timeline)
                     .frame(height: 180)
-                Text("Parsed weight samples over recording time.")
+                Text("Parsed weight samples over the full recording. Red markers frame missing-update gaps.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if !analysis.problemWindows.isEmpty {
+                ProblemAreasSection(analysis: analysis)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -1179,43 +2389,147 @@ private struct RecordingVisualizerView: View {
                     }
                 )
                     .frame(height: 116)
-                PacketLegend()
-                Text("Dense raw packet raster. Click or hover a tick to inspect it below. Red packet ticks are parser rejections; translucent red bands are parsed-sample gaps that directly affect the score.")
+                PacketLegend(timeline: timeline)
+                Text("Tap a tick to inspect the raw packet below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if !timeline.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Packet inspector", systemImage: "scope")
-                        .font(.headline)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(timeline.entries.prefix(120)) { entry in
-                                PacketChip(
-                                    entry: entry,
-                                    isSelected: selectedEntry?.id == entry.id
-                                ) {
-                                    selectedPacketID = entry.id
-                                }
+                    HStack {
+                        Label("Packet inspector", systemImage: "scope")
+                            .font(.headline)
+                        Spacer()
+                        Picker("Packet filter", selection: $packetInspectorFilter) {
+                            ForEach(PacketInspectorFilter.allCases) { filter in
+                                Text(filter.label).tag(filter)
                             }
                         }
-                        .padding(.vertical, 2)
+                        .pickerStyle(.segmented)
+                        .frame(maxWidth: 220)
                     }
-
-                    if timeline.entries.count > 120 {
-                        Text("\(timeline.entries.count - 120) more packets are included in the JSON export.")
+                    if inspectorEntries.isEmpty {
+                        Text("No bad raw packets in this recording. Delivered packets, usable readings, and packet checks are explained in the Score section.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    }
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(inspectorEntries.prefix(120)) { entry in
+                                    PacketChip(
+                                        entry: entry,
+                                        isSelected: selectedEntry?.id == entry.id
+                                    ) {
+                                        selectedPacketID = entry.id
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
 
-                    if let selectedEntry {
-                        RawPacketRow(entry: selectedEntry)
+                        if inspectorEntries.count > 120 {
+                            Text("\(inspectorEntries.count - 120) more \(packetInspectorFilter.summaryName) are included in the JSON export.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else if packetInspectorFilter == .badOnly {
+                            Text("Showing \(inspectorEntries.count) of \(timeline.entries.count) packets.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let selectedEntry {
+                            RawPacketRow(entry: selectedEntry)
+                        }
                     }
                 }
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct SignalDiagnosticsSection: View {
+    let diagnostics: SignalDiagnostics
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Signal diagnostics", systemImage: "waveform.path.ecg.rectangle")
+                .font(.headline)
+
+            if let flow = diagnostics.flowValidation {
+                MetricRow(
+                    title: "Reported flow error",
+                    value: String(format: "%.2f g/s median", flow.medianAbsoluteErrorGramsPerSecond)
+                )
+                if let lag = flow.lagMilliseconds {
+                    MetricRow(title: "Reported flow timing", value: flowLagDescription(lag))
+                }
+                Text("Compared \(flow.sampleCount) reported flow values with weight change measured across a centered 1-second window.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let clock = diagnostics.clockSkew {
+                MetricRow(title: "Scale clock drift", value: clockSkewDescription(clock.skewPartsPerMillion))
+                Text("Compared the scale's free-running clock with the phone or Mac clock across \(clock.sampleCount) updates.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let packet = diagnostics.packetCoalescing {
+                MetricRow(
+                    title: "Frames per occupied slot",
+                    value: String(format: "%.2fx", packet.framesPerServedSlot)
+                )
+                Text("Average weight frames received in each occupied 50 ms scoring slot. Values above 1 mean extra updates arrived together or faster than 20 Hz.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func flowLagDescription(_ milliseconds: Double) -> String {
+        if abs(milliseconds) < 25 { return "Aligned with weight" }
+        return String(format: "%.0f ms %@ weight", abs(milliseconds), milliseconds > 0 ? "behind" : "ahead of")
+    }
+
+    private func clockSkewDescription(_ ppm: Double) -> String {
+        let secondsPerHour = ppm * 3_600 / 1_000_000
+        return String(
+            format: "%+.0f ppm (%+.2f s/hour)",
+            ppm,
+            secondsPerHour
+        )
+    }
+}
+
+private enum PacketInspectorFilter: String, CaseIterable, Identifiable {
+    case all
+    case badOnly
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: "All"
+        case .badOnly: "Bad only"
+        }
+    }
+
+    var summaryName: String {
+        switch self {
+        case .all: "packets"
+        case .badOnly: "bad packets"
+        }
+    }
+}
+
+private extension PacketTimelineEntry {
+    var isBadForInspector: Bool {
+        severity == .warning || severity == .penalty
     }
 }
 
@@ -1234,12 +2548,12 @@ private struct PacketEvidenceSummary: View {
                 .foregroundStyle(.secondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], alignment: .leading, spacing: 10) {
-                EvidencePill(title: "Rejected", value: "\(metrics.rejectedPacketCount)", severity: metrics.rejectedPacketCount > 0 ? .penalty : .normal)
-                EvidencePill(title: "Long gaps", value: "\(metrics.longGapCount)", severity: metrics.longGapCount > 0 ? .penalty : .normal)
-                EvidencePill(title: "Missing seq", value: "\(metrics.missingSequenceCount)", severity: metrics.missingSequenceCount > 0 ? .penalty : .normal)
-                EvidencePill(title: "Timestamp", value: "\(metrics.duplicateOrOutOfOrderTimestampCount)", severity: metrics.duplicateOrOutOfOrderTimestampCount > 0 ? .penalty : .normal)
-                EvidencePill(title: "Bumps", value: "\(metrics.firmwareBumpCount)", severity: bumpSeverity)
-                EvidencePill(title: "Near gaps", value: "\(timeline.warningIntervalCount)", severity: timeline.warningIntervalCount > 0 ? .warning : .normal)
+                EvidencePill(title: "Parse failed", value: "\(metrics.frameClassification?.parseFailure ?? 0)", severity: classificationSeverity(metrics.frameClassification?.parseFailure))
+                EvidencePill(title: "Out of order", value: "\(metrics.frameClassification?.outOfOrder ?? 0)", severity: classificationSeverity(metrics.frameClassification?.outOfOrder))
+                EvidencePill(title: "Stale", value: "\(metrics.frameClassification?.stale ?? 0)", severity: classificationSeverity(metrics.frameClassification?.stale))
+                EvidencePill(title: "Implausible", value: "\(metrics.frameClassification?.implausible ?? 0)", severity: classificationSeverity(metrics.frameClassification?.implausible))
+                EvidencePill(title: "Duplicates", value: "\(metrics.frameClassification?.duplicate ?? 0)", severity: classificationSeverity(metrics.frameClassification?.duplicate))
+                EvidencePill(title: "Longest outage", value: formatMilliseconds(metrics.longestUnservedRunMilliseconds), severity: (metrics.longestUnservedRunMilliseconds ?? 0) > 0 ? .warning : .normal)
             }
         }
         .padding(12)
@@ -1247,41 +2561,86 @@ private struct PacketEvidenceSummary: View {
     }
 
     private var scoreEvidenceSummary: String {
-        let dynamicBumps = mode == .idleStability ? 0 : metrics.firmwareBumpCount
-        let directIssues = metrics.rejectedPacketCount
-            + metrics.longGapCount
-            + metrics.missingSequenceCount
-            + metrics.duplicateOrOutOfOrderTimestampCount
-            + dynamicBumps
-        if directIssues == 0 {
-            if metrics.firmwareBumpCount > 0 {
-                return "No direct score penalties are visible. Bump/disturbance flags are warning context in Idle Stability mode."
-            }
-            return "No direct score penalties are visible in this recording. The score is mostly driven by arrival cadence and stability; optional telemetry is reported separately unless a custom profile weights it."
+        if let validity = metrics.validity, !validity.isValid {
+            return "This recording is not valid for an official score. Diagnostics and frame classifications remain available."
         }
-
-        var parts: [String] = []
-        if metrics.longGapCount > 0 {
-            parts.append("\(metrics.longGapCount) long gap\(metrics.longGapCount == 1 ? "" : "s")")
+        if mode == .shot || mode == .transportStress,
+           let coverage = metrics.delivery?.coverage,
+           let purity = metrics.delivery?.purity {
+            return "Delivery multiplies \(formatPercent(coverage)) coverage by \(formatPercent(purity)) purity. Each unusable frame receives exactly one class."
         }
-        if metrics.rejectedPacketCount > 0 {
-            parts.append("\(metrics.rejectedPacketCount) rejected packet\(metrics.rejectedPacketCount == 1 ? "" : "s")")
+        if mode == .idleStability {
+            return "Idle Stability uses detrended residual noise and drift; packet classifications remain diagnostic evidence."
         }
-        if metrics.missingSequenceCount > 0 {
-            parts.append("\(metrics.missingSequenceCount) missing sequence step\(metrics.missingSequenceCount == 1 ? "" : "s")")
-        }
-        if metrics.duplicateOrOutOfOrderTimestampCount > 0 {
-            parts.append("\(metrics.duplicateOrOutOfOrderTimestampCount) timestamp issue\(metrics.duplicateOrOutOfOrderTimestampCount == 1 ? "" : "s")")
-        }
-        if dynamicBumps > 0 {
-            parts.append("\(metrics.firmwareBumpCount) bump/disturbance event\(metrics.firmwareBumpCount == 1 ? "" : "s")")
-        }
-        return "Score-impacting evidence: \(parts.joined(separator: ", "))."
+        return "This mode reports diagnostics without a 0–100 score."
     }
 
-    private var bumpSeverity: PacketSeverity {
-        guard metrics.firmwareBumpCount > 0 else { return .normal }
-        return mode == .idleStability ? .warning : .penalty
+    private func classificationSeverity(_ count: Int?) -> PacketSeverity {
+        (count ?? 0) > 0 ? .penalty : .normal
+    }
+}
+
+private struct ProblemAreasSection: View {
+    let analysis: ChartAnalysis
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Problem areas", systemImage: "scope")
+                .font(.headline)
+            Text("Zoomed windows around the first scoring gaps or packet penalties.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(analysis.problemWindows) { window in
+                VStack(alignment: .leading, spacing: 6) {
+                    MetricRow(
+                        title: window.title,
+                        value: "\(formatSeconds(window.startSeconds))-\(formatSeconds(window.endSeconds))"
+                    )
+                    ProblemAreaWeightChart(points: analysis.weightPoints, window: window)
+                        .frame(height: 150)
+                }
+                .padding(10)
+                .background(window.severity.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+}
+
+private struct ProblemAreaWeightChart: View {
+    let points: [ChartPoint]
+    let window: ChartProblemWindow
+
+    private var visiblePoints: [ChartPoint] {
+        let visible = points.filter { $0.seconds >= window.startSeconds && $0.seconds <= window.endSeconds }
+        if visible.count >= 2 { return visible }
+        let before = points.last { $0.seconds < window.startSeconds }
+        let after = points.first { $0.seconds > window.endSeconds }
+        let fallback = [before, after].compactMap(\.self)
+        return fallback.count >= 2 ? fallback : Array(points.prefix(2))
+    }
+
+    var body: some View {
+        if visiblePoints.count >= 2 {
+            Chart {
+                ForEach(visiblePoints) { point in
+                    LineMark(
+                        x: .value("Seconds", point.seconds),
+                        y: .value("Weight", point.value)
+                    )
+                    .interpolationMethod(.linear)
+                    .foregroundStyle(.blue)
+                }
+                RuleMark(x: .value("Start", window.startSeconds))
+                    .foregroundStyle(window.severity.color.opacity(0.35))
+                RuleMark(x: .value("End", window.endSeconds))
+                    .foregroundStyle(window.severity.color.opacity(0.35))
+            }
+            .chartXAxisLabel("seconds")
+            .chartYAxisLabel("grams")
+        } else {
+            EmptyVisualizerChart(message: "No zoomable weight stream.")
+        }
     }
 }
 
@@ -1311,28 +2670,86 @@ private struct EvidencePill: View {
 
 private struct WeightStreamChart: View {
     let recording: ScaleRecording
+    let timeline: PacketTimeline
+    @State private var selectedSeconds: Double?
+
+    private var samples: [ScaleSample] {
+        recording.samples.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
+    }
+
+    private var referenceTime: Double? {
+        recording.recordingStartMonotonicSeconds ?? samples.first?.monotonicSeconds
+    }
+
+    private var selectedSample: ScaleSample? {
+        guard let selectedSeconds, let referenceTime else { return nil }
+        return samples.min { lhs, rhs in
+            abs((lhs.monotonicSeconds - referenceTime) - selectedSeconds)
+                < abs((rhs.monotonicSeconds - referenceTime) - selectedSeconds)
+        }
+    }
 
     var body: some View {
-        if recording.samples.count >= 2, let firstTime = recording.samples.first?.monotonicSeconds {
-            Chart(recording.samples) { sample in
-                LineMark(
-                    x: .value("Seconds", sample.monotonicSeconds - firstTime),
-                    y: .value("Weight", sample.weightGrams)
-                )
-                .interpolationMethod(.linear)
-                .foregroundStyle(.blue)
-
-                if sample.diagnosticFlags?.recentBump == true {
-                    PointMark(
-                        x: .value("Seconds", sample.monotonicSeconds - firstTime),
+        if samples.count >= 2, let referenceTime {
+            let chart = Chart {
+                ForEach(samples) { sample in
+                    LineMark(
+                        x: .value("Seconds", sample.monotonicSeconds - referenceTime),
                         y: .value("Weight", sample.weightGrams)
                     )
-                    .foregroundStyle(.yellow)
-                    .symbolSize(45)
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.blue)
+
+                    if sample.diagnosticFlags?.recentBump == true {
+                        PointMark(
+                            x: .value("Seconds", sample.monotonicSeconds - referenceTime),
+                            y: .value("Weight", sample.weightGrams)
+                        )
+                        .foregroundStyle(.yellow)
+                        .symbolSize(45)
+                    }
+                }
+
+                ForEach(timeline.scoringGaps) { gap in
+                    RuleMark(x: .value("Gap start", gap.startRelativeSeconds))
+                        .foregroundStyle(.red.opacity(0.55))
+                    RuleMark(x: .value("Gap end", gap.endRelativeSeconds))
+                        .foregroundStyle(.red.opacity(0.55))
+                }
+
+                if let selectedSample {
+                    let seconds = selectedSample.monotonicSeconds - referenceTime
+                    RuleMark(x: .value("Selected time", seconds))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                    PointMark(
+                        x: .value("Selected time", seconds),
+                        y: .value("Selected weight", selectedSample.weightGrams)
+                    )
+                    .foregroundStyle(.blue)
+                    .symbolSize(55)
+                    .annotation(position: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(formatSeconds(seconds))
+                            Text(String(format: "%.2f g", selectedSample.weightGrams))
+                        }
+                        .font(.caption2.monospacedDigit())
+                        .padding(6)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                    }
                 }
             }
+            .chartXScale(domain: 0...max(timeline.durationSeconds, 0.001))
             .chartXAxisLabel("seconds")
             .chartYAxisLabel("grams")
+            .chartXSelection(value: $selectedSeconds)
+
+            if recording.mode == .transportStress, timeline.durationSeconds > 30 {
+                chart
+                    .chartScrollableAxes(.horizontal)
+                    .chartXVisibleDomain(length: 30)
+            } else {
+                chart
+            }
         } else {
             EmptyVisualizerChart(message: "No parsed weight stream.")
         }
@@ -1502,7 +2919,7 @@ private struct PacketTimelineCanvas: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        SpatialTapGesture()
                             .onEnded { value in
                                 guard let entry = hitTestEntry(at: value.location, size: proxy.size) else { return }
                                 onSelect(entry)
@@ -1587,41 +3004,30 @@ private struct TimelineCanvasLayout {
 }
 
 private struct PacketLegend: View {
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                legendItems
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                legendItems
-            }
-        }
-        .font(.caption2)
-    }
-
-    @ViewBuilder
-    private var legendItems: some View {
-        LegendItem(color: .blue, title: "weight")
-        LegendItem(color: .green, title: "battery")
-        LegendItem(color: .purple, title: "control")
-        LegendItem(color: .orange, title: "warning")
-        LegendItem(color: .red, title: "penalty")
-        LegendItem(color: .gray, title: "unknown")
-    }
-}
-
-private struct LegendItem: View {
-    let color: Color
-    let title: String
+    let timeline: PacketTimeline
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-            Text(title)
-                .foregroundStyle(.secondary)
+        Text(summary)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var summary: String {
+        let warningCount = timeline.entries.filter { $0.severity == .warning }.count
+        let penaltyCount = timeline.entries.filter { $0.severity == .penalty }.count
+        let metadataCount = timeline.entries.filter { $0.packet.role != .weight }.count
+        var parts = ["Blue ticks are weight packets."]
+        if metadataCount > 0 {
+            parts.append("Other colors are metadata or unknown packets.")
         }
+        if warningCount > 0 || penaltyCount > 0 {
+            parts.append("Orange/red ticks need attention.")
+        }
+        if !timeline.scoringGaps.isEmpty {
+            parts.append("Red bands are scoring gaps.")
+        }
+        return parts.joined(separator: " ")
     }
 }
 
@@ -1725,6 +3131,7 @@ private struct RawPacketRow: View {
     let entry: PacketTimelineEntry
 
     private var packet: RawScalePacket { entry.packet }
+    private var fields: [PacketFieldAnnotation] { PacketFieldDecoder.annotations(for: packet) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1753,318 +3160,129 @@ private struct RawPacketRow: View {
             Text(packet.characteristicUUID)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text(packet.bytesHex)
+            Text(annotatedHex)
                 .font(.caption2.monospaced())
                 .textSelection(.enabled)
+
+            if !fields.isEmpty {
+                Divider()
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)],
+                    alignment: .leading,
+                    spacing: 6
+                ) {
+                    ForEach(fields) { field in
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(field.semantic.color)
+                                .frame(width: 7, height: 7)
+                            Text(field.label)
+                                .font(.caption2.weight(.semibold))
+                            Text(field.decodedValue)
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
         }
         .padding(10)
         .background(entry.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var annotatedHex: AttributedString {
+        guard let bytes = PacketFieldDecoder.bytes(fromHex: packet.bytesHex) else {
+            return AttributedString(packet.bytesHex)
+        }
+        var result = AttributedString()
+        for (index, byte) in bytes.enumerated() {
+            var component = AttributedString(String(format: "%02X", byte))
+            component.foregroundColor = fields.first(where: {
+                $0.startByte <= index && index < $0.endByteExclusive
+            })?.semantic.color ?? .gray
+            result.append(component)
+            if index < bytes.count - 1 {
+                result.append(AttributedString((index + 1).isMultiple(of: 10) ? "\n" : " "))
+            }
+        }
+        return result
+    }
+}
+
+private extension PacketFieldSemantic {
+    var color: Color {
+        switch self {
+        case .header: .blue
+        case .timestamp: .cyan
+        case .weight: .green
+        case .flow: .mint
+        case .battery: .yellow
+        case .sequence: .purple
+        case .status: .orange
+        case .quality: .indigo
+        case .sampleRate: .teal
+        case .checksum: .red
+        case .unit: .pink
+        case .payload: .gray
+        }
     }
 }
 
 private struct ScoreExplanationView: View {
     @Environment(\.dismiss) private var dismiss
     let recording: ScaleRecording
-    let profile: ScoringProfile
 
     private var metrics: ScaleQualityMetrics { recording.metrics }
-    private var normalizedProfile: ScoringProfile { profile.normalized }
 
     var body: some View {
         NavigationStack {
             List {
                 Section("This recording") {
-                    ScoreHero(metrics: metrics, profile: profile)
+                    ScoreHero(mode: recording.mode, metrics: metrics)
                     Text(resultNarrative(for: recording))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     RecordingSummaryRows(recording: recording, metrics: metrics)
                 }
 
-                Section("Benchmark identity") {
-                    MetricRow(title: "Profile", value: profile.name)
-                    MetricRow(title: "Comparable badge", value: profile.isStandardBenchmark ? "ScaleBench Standard v1" : "Custom")
-                    Text("Use ScaleBench Standard v1 when publishing tester scores. Custom profiles are saved into JSON exports, but they are not directly comparable to Standard v1 results.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Section("Standard v1") {
+                    ScoreBreakdownView(recording: recording, metrics: metrics)
                 }
 
-                Section("Formula") {
-                    Text("Overall score is the weighted sum of transport, stability, and metadata scores. Standard v1 gives metadata zero weight and reports telemetry coverage separately.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    MetricRow(title: "Transport weight", value: formatPercent(normalizedProfile.transportWeight))
-                    MetricRow(title: "Stability weight", value: formatPercent(normalizedProfile.stabilityWeight))
-                    MetricRow(title: "Metadata weight", value: formatPercent(normalizedProfile.metadataWeight))
-                    MetricRow(title: "Overall", value: metrics.overallScore.map { "\($0)/100" } ?? "—")
+                if protocolDetailDisplay(metrics) != nil,
+                   let verification = metrics.protocolVerification,
+                   recording.mode == .shot || recording.mode == .transportStress {
+                    Section("Packet checks") {
+                        MetricRow(title: "Available checks", value: protocolDetailDisplay(metrics) ?? "—")
+                        MetricRow(title: "Checked", value: verification.verifiableClasses.joined(separator: ", "))
+                        MetricRow(title: "Not checked", value: verification.unverifiableClasses.joined(separator: ", "))
+                        Text("Packet checks describe what this scale exposes for diagnosis. More checks make problems easier to prove, but the main score comes from delivered packets and usable readings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                Section("Transport") {
-                    MetricRow(title: "Score", value: metrics.transportScore.map { "\($0)/100" } ?? "—")
-                    MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+                Section("Diagnostics") {
+                    MetricRow(title: "Relevant frames", value: metrics.relevantWeightFrameCount.map(String.init) ?? "—")
+                    MetricRow(title: "Excluded frames", value: metrics.excludedFrameCount.map(String.init) ?? "—")
+                    MetricRow(title: "Usable rate", value: formatRate(metrics.usableRateHz))
+                    MetricRow(title: "Frame rate", value: formatRate(metrics.frameRateHz))
                     MetricRow(title: "p50 interval", value: formatMilliseconds(metrics.packetIntervalP50Milliseconds))
                     MetricRow(title: "p95 interval", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
-                    MetricRow(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
-                    MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
-                    MetricRow(title: "Missing sequence", value: "\(metrics.missingSequenceCount)")
-                    MetricRow(title: "Timestamp issues", value: "\(metrics.duplicateOrOutOfOrderTimestampCount)")
-                    MetricRow(title: "Rejected packets", value: "\(metrics.rejectedPacketCount)")
-                    MetricRow(title: "Long-gap floor", value: formatMilliseconds(profile.minimumLongGapMilliseconds))
-                    MetricRow(title: "Long-gap multiplier", value: String(format: "%.2fx", profile.longGapMultiplier))
-                }
-
-                Section("Stability") {
-                    MetricRow(title: "Score", value: metrics.stabilityScore.map { "\($0)/100" } ?? "—")
-                    MetricRow(title: "Idle noise", value: metrics.idleNoisePeakToPeakGrams.map { String(format: "%.3f g p-p", $0) } ?? "—")
-                    MetricRow(title: "Idle std dev", value: metrics.idleNoiseStandardDeviationGrams.map { String(format: "%.3f g", $0) } ?? "—")
-                    MetricRow(title: "Drift", value: metrics.driftGramsPerMinute.map { String(format: "%.3f g/min", $0) } ?? "—")
-                    MetricRow(title: "Bump count", value: "\(metrics.firmwareBumpCount)")
-                }
-
-                Section("Metadata") {
-                    MetricRow(title: "Score", value: metrics.metadataScore.map { "\($0)/100" } ?? "—")
-                    MetricRow(title: "Battery range", value: batteryRange(metrics))
-                    MetricRow(title: "Firmware quality", value: metrics.firmwareQualityAverage.map { String(format: "%.1f/100", $0) } ?? "—")
-                    Text("Metadata reports optional telemetry coverage such as device timestamps, sequence numbers, battery, and firmware-side quality. Standard v1 gives metadata zero weight so good legacy scales are not penalized just for having a simpler packet.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    MetricRow(title: "Longest outage", value: formatMilliseconds(metrics.longestUnservedRunMilliseconds))
+                    MetricRow(title: "Disconnects", value: metrics.disconnectCount.map(String.init) ?? "0")
+                    MetricRow(title: "Resolution estimate", value: metrics.estimatedResolutionGrams.map { String(format: "%.3f g", $0) } ?? "—")
                 }
             }
-            .navigationTitle("Explain Score")
+            .navigationTitle("Explain Result")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
                 }
             }
         }
     }
-
-    private func batteryRange(_ metrics: ScaleQualityMetrics) -> String {
-        switch (metrics.batteryMinPercent, metrics.batteryMaxPercent) {
-        case let (.some(minimum), .some(maximum)) where minimum == maximum:
-            "\(minimum)%"
-        case let (.some(minimum), .some(maximum)):
-            "\(minimum)-\(maximum)%"
-        default:
-            "—"
-        }
-    }
-}
-
-private struct ScoringProfileEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: ScoringProfile
-    let existingID: UUID?
-    let onSave: (ScoringProfile, UUID?) -> Void
-
-    init(
-        customProfile: CustomScoringProfile?,
-        baseProfile: ScoringProfile,
-        onSave: @escaping (ScoringProfile, UUID?) -> Void
-    ) {
-        let initialProfile: ScoringProfile
-        if let customProfile {
-            initialProfile = customProfile.profile
-        } else {
-            var copy = baseProfile
-            copy.name = baseProfile.isStandardBenchmark
-                ? "Custom Standard v1"
-                : "\(baseProfile.name) Copy"
-            initialProfile = copy
-        }
-
-        _draft = State(initialValue: initialProfile)
-        existingID = customProfile?.id
-        self.onSave = onSave
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Identity") {
-                    TextField("Profile name", text: $draft.name)
-                    Text("Custom profiles are stored locally and embedded in JSON exports. Use ScaleBench Standard v1 for public apples-to-apples comparisons.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Weights") {
-                    DoubleSettingRow(
-                        title: "Transport",
-                        value: $draft.transportWeight,
-                        range: 0...1,
-                        step: 0.01,
-                        format: formatPercent
-                    )
-                    DoubleSettingRow(
-                        title: "Stability",
-                        value: $draft.stabilityWeight,
-                        range: 0...1,
-                        step: 0.01,
-                        format: formatPercent
-                    )
-                    DoubleSettingRow(
-                        title: "Metadata",
-                        value: $draft.metadataWeight,
-                        range: 0...1,
-                        step: 0.01,
-                        format: formatPercent
-                    )
-                    MetricRow(title: "Normalized total", value: draftWeightTotal > 0 ? "100%" : "Invalid")
-                    if draftWeightTotal <= 0 {
-                        Text("At least one weight must be above zero.")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                Section("Transport penalties") {
-                    DoubleSettingRow(
-                        title: "Minimum long gap",
-                        value: $draft.minimumLongGapMilliseconds,
-                        range: 50...1_000,
-                        step: 10,
-                        format: { String(format: "%.0f ms", $0) }
-                    )
-                    DoubleSettingRow(
-                        title: "Gap multiplier",
-                        value: $draft.longGapMultiplier,
-                        range: 1...8,
-                        step: 0.25,
-                        format: { String(format: "%.2fx", $0) }
-                    )
-                    IntSettingRow(title: "Long gap penalty", value: $draft.longGapPenalty, range: 0...25)
-                    IntSettingRow(title: "Missing seq penalty", value: $draft.missingSequencePenalty, range: 0...25)
-                    IntSettingRow(title: "Timestamp penalty", value: $draft.timestampIssuePenalty, range: 0...25)
-                    DoubleSettingRow(
-                        title: "Rejected packet scale",
-                        value: $draft.rejectedPacketRatePenaltyScale,
-                        range: 0...300,
-                        step: 5,
-                        format: { String(format: "%.0f", $0) }
-                    )
-                }
-
-                Section("Stability penalties") {
-                    DoubleSettingRow(
-                        title: "Free p-p noise",
-                        value: $draft.idleNoiseFreePeakToPeakGrams,
-                        range: 0...1,
-                        step: 0.01,
-                        format: { String(format: "%.2f g", $0) }
-                    )
-                    DoubleSettingRow(
-                        title: "p-p penalty scale",
-                        value: $draft.idleNoisePeakToPeakPenaltyScale,
-                        range: 0...50,
-                        step: 1,
-                        format: { String(format: "%.0f", $0) }
-                    )
-                    DoubleSettingRow(
-                        title: "Free std dev",
-                        value: $draft.idleStandardDeviationFreeGrams,
-                        range: 0...0.5,
-                        step: 0.01,
-                        format: { String(format: "%.2f g", $0) }
-                    )
-                    DoubleSettingRow(
-                        title: "Std dev penalty scale",
-                        value: $draft.idleStandardDeviationPenaltyScale,
-                        range: 0...150,
-                        step: 1,
-                        format: { String(format: "%.0f", $0) }
-                    )
-                    DoubleSettingRow(
-                        title: "Drift penalty scale",
-                        value: $draft.driftPenaltyScale,
-                        range: 0...20,
-                        step: 0.5,
-                        format: { String(format: "%.1f", $0) }
-                    )
-                }
-            }
-            .navigationTitle(existingID == nil ? "New Scoring Profile" : "Edit Scoring Profile")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        onSave(draft, existingID)
-                        dismiss()
-                    }
-                    .disabled(!canSave)
-                }
-            }
-        }
-    }
-
-    private var draftWeightTotal: Double {
-        draft.transportWeight + draft.stabilityWeight + draft.metadataWeight
-    }
-
-    private var canSave: Bool {
-        !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draftWeightTotal > 0
-    }
-}
-
-private struct DoubleSettingRow: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let step: Double
-    let format: (Double) -> String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text(format(value))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            Slider(value: $value, in: range, step: step)
-        }
-    }
-}
-
-private struct IntSettingRow: View {
-    let title: String
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        Stepper(value: $value, in: range) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("\(value)")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-private var helpToolbarPlacement: ToolbarItemPlacement {
-#if os(macOS)
-    .automatic
-#else
-    .topBarLeading
-#endif
-}
-
-private var resetToolbarPlacement: ToolbarItemPlacement {
-#if os(macOS)
-    .automatic
-#else
-    .topBarTrailing
-#endif
 }
 
 private struct MetricRow: View {
@@ -2095,10 +3313,10 @@ private struct ComparisonRow: View {
                 Text(row.score.map { "\($0)/100" } ?? "—")
                     .monospacedDigit()
             }
-            Text("\(row.protocolKind.displayName) · \(row.mode.displayName) · \(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds))")
+            Text("\(row.protocolKind.displayName) · \(row.mode.displayName) · \(platformDisplayName(row.platform)) · checks \(protocolDetailDisplay(verifiableCount: row.verificationCoveragePercent.map { Int(round(Double($0) * 5.0 / 100.0)) }, totalCount: 5) ?? "—")")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("gaps \(row.longGapCount) · rejected \(row.rejectedPacketCount) · max \(formatMilliseconds(row.maxGapMilliseconds))")
+            Text("\(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds)) · max \(formatMilliseconds(row.maxGapMilliseconds))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -2114,17 +3332,32 @@ private struct SavedRecordingRow: View {
                 Text(saved.title)
                     .font(.headline)
                 Spacer()
-                Text(saved.scoreSnapshot.overallScore.map { "\($0)/100" } ?? "—")
+                Text(benchmarkScoreDisplay(mode: saved.recording.mode, metrics: saved.scoreSnapshot))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Text("\(saved.protocolKind.displayName) · \(formatDuration(recordingDuration(saved.recording))) · \(saved.recording.samples.count) samples · \(formatRate(saved.scoreSnapshot.effectiveSampleRateHz))")
+            Text("\(saved.protocolKind.displayName) · \(platformDisplayName(saved.recording.platform)) · \(recordingDurationDisplay(recording: saved.recording, metrics: saved.scoreSnapshot)) · protocol detail \(protocolDetailDisplay(saved.scoreSnapshot) ?? "—")")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(saved.notes)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private extension View {
+    func recordingDeleteAction(_ delete: @escaping () -> Void) -> some View {
+        swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive, action: delete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button(role: .destructive, action: delete) {
+                Label("Delete Recording", systemImage: "trash")
             }
         }
     }
@@ -2152,8 +3385,8 @@ private struct RecordingActionButtons: View {
     @ViewBuilder
     private var buttons: some View {
         Button(isRecording ? "Stop Recording" : "Start Recording", action: startOrStop)
-            .buttonStyle(.borderedProminent)
-            .disabled(!canRecord)
+            .scaleBenchProminentButtonStyle()
+            .disabled(!canRecord && !isRecording)
 
         Button("Export JSON", action: export)
             .buttonStyle(.bordered)
@@ -2161,90 +3394,7 @@ private struct RecordingActionButtons: View {
     }
 }
 
-private struct PacketTimeline: Equatable {
-    var entries: [PacketTimelineEntry]
-    var sampleIntervals: [SampleIntervalEntry]
-    var scoringGaps: [ScoringGap]
-    var longGapThresholdMilliseconds: Double
-
-    var durationSeconds: Double {
-        let rawEnd = entries.last?.relativeSeconds ?? 0
-        let sampleEnd = sampleIntervals.last?.relativeSeconds ?? 0
-        return max(0, rawEnd, sampleEnd)
-    }
-
-    var warningIntervalCount: Int {
-        sampleIntervals.filter { $0.severity == .warning }.count
-    }
-
-    static func make(recording: ScaleRecording, metrics _: ScaleQualityMetrics) -> PacketTimeline {
-        let packets = recording.rawPackets.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
-        let firstReferenceTime = packets.first?.monotonicSeconds ?? recording.samples.first?.monotonicSeconds ?? 0
-        let threshold = packetLongGapThresholdMilliseconds(recording: recording)
-        let sampleIntervals = sampleIntervalEntries(
-            samples: recording.samples,
-            firstReferenceTime: firstReferenceTime,
-            thresholdMilliseconds: threshold
-        )
-        let scoringGaps = sampleIntervals.compactMap { entry -> ScoringGap? in
-            guard entry.severity == .penalty else { return nil }
-            return ScoringGap(
-                id: entry.index,
-                startRelativeSeconds: entry.previousRelativeSeconds,
-                endRelativeSeconds: entry.relativeSeconds,
-                intervalMilliseconds: entry.intervalMilliseconds
-            )
-        }
-
-        guard !packets.isEmpty else {
-            return PacketTimeline(
-                entries: [],
-                sampleIntervals: sampleIntervals,
-                scoringGaps: scoringGaps,
-                longGapThresholdMilliseconds: threshold
-            )
-        }
-
-        var entries: [PacketTimelineEntry] = []
-        var previousPacket: RawScalePacket?
-        for packet in packets {
-            let interval = previousPacket.map { max(0, packet.monotonicSeconds - $0.monotonicSeconds) * 1_000 }
-            let relative = packet.monotonicSeconds - firstReferenceTime
-            let previousRelative = previousPacket.map { $0.monotonicSeconds - firstReferenceTime }
-            let severity = packetSeverity(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
-            let evidence = packetEvidence(packet: packet, intervalMilliseconds: interval, longGapThresholdMilliseconds: threshold)
-
-            entries.append(
-                PacketTimelineEntry(
-                    id: packet.id,
-                    packet: packet,
-                    relativeSeconds: relative,
-                    previousRelativeSeconds: previousRelative,
-                    intervalMilliseconds: interval,
-                    severity: severity,
-                    evidence: evidence
-                )
-            )
-            previousPacket = packet
-        }
-
-        return PacketTimeline(
-            entries: entries,
-            sampleIntervals: sampleIntervals,
-            scoringGaps: scoringGaps,
-            longGapThresholdMilliseconds: threshold
-        )
-    }
-}
-
-private struct SampleIntervalEntry: Identifiable, Equatable {
-    var id: Int { index }
-    var index: Int
-    var previousRelativeSeconds: Double
-    var relativeSeconds: Double
-    var intervalMilliseconds: Double
-    var severity: PacketSeverity
-
+private extension SampleIntervalEntry {
     var color: Color {
         switch severity {
         case .penalty:
@@ -2257,41 +3407,7 @@ private struct SampleIntervalEntry: Identifiable, Equatable {
     }
 }
 
-private struct ScoringGap: Identifiable, Equatable {
-    var id: Int
-    var startRelativeSeconds: Double
-    var endRelativeSeconds: Double
-    var intervalMilliseconds: Double
-}
-
-private struct PacketTimelineEntry: Identifiable, Equatable {
-    var id: UUID
-    var packet: RawScalePacket
-    var relativeSeconds: Double
-    var previousRelativeSeconds: Double?
-    var intervalMilliseconds: Double?
-    var severity: PacketSeverity
-    var evidence: [String]
-
-    var hasLongGapBefore: Bool {
-        guard intervalMilliseconds != nil else { return false }
-        return severity == .penalty && evidence.contains { $0.localizedCaseInsensitiveContains("long gap") }
-    }
-
-    var lane: PacketLane {
-        if severity == .penalty { return .penalty }
-        switch packet.role {
-        case .weight:
-            return .weight
-        case .battery:
-            return .metadata
-        case .capabilities, .commandAck:
-            return .control
-        case .unknown:
-            return .unknown
-        }
-    }
-
+private extension PacketTimelineEntry {
     var color: Color {
         switch severity {
         case .penalty:
@@ -2338,12 +3454,7 @@ private struct PacketTimelineEntry: Identifiable, Equatable {
     }
 }
 
-private enum PacketSeverity: Int, Equatable {
-    case normal
-    case info
-    case warning
-    case penalty
-
+private extension PacketSeverity {
     var color: Color {
         switch self {
         case .normal:
@@ -2356,153 +3467,6 @@ private enum PacketSeverity: Int, Equatable {
             .red
         }
     }
-
-    var label: String {
-        switch self {
-        case .normal:
-            "normal"
-        case .info:
-            "metadata or control"
-        case .warning:
-            "warning"
-        case .penalty:
-            "score penalty"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .normal:
-            "checkmark.circle"
-        case .info:
-            "info.circle"
-        case .warning:
-            "exclamationmark.triangle"
-        case .penalty:
-            "xmark.octagon"
-        }
-    }
-}
-
-private enum PacketLane: CaseIterable {
-    case weight
-    case metadata
-    case control
-    case penalty
-    case unknown
-
-    var index: Int {
-        switch self {
-        case .weight:
-            0
-        case .metadata:
-            1
-        case .control:
-            2
-        case .penalty:
-            3
-        case .unknown:
-            4
-        }
-    }
-}
-
-private func packetLongGapThresholdMilliseconds(recording: ScaleRecording) -> Double {
-    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(recording.samples)
-    let typicalInterval = percentile(intervals, 0.50)
-    return ScaleQualityAnalyzer.longGapThresholdMilliseconds(
-        forTypicalIntervalMilliseconds: typicalInterval,
-        profile: recording.scoringProfile.normalized
-    )
-}
-
-private func sampleIntervalEntries(
-    samples inputSamples: [ScaleSample],
-    firstReferenceTime: Double,
-    thresholdMilliseconds: Double
-) -> [SampleIntervalEntry] {
-    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(inputSamples)
-    guard intervals.count == inputSamples.count - 1 else { return [] }
-
-    return intervals.enumerated().map { index, interval in
-        let previous = inputSamples[index]
-        let current = inputSamples[index + 1]
-        let severity: PacketSeverity
-        if interval >= thresholdMilliseconds {
-            severity = .penalty
-        } else if interval >= thresholdMilliseconds * 0.66 {
-            severity = .warning
-        } else {
-            severity = .normal
-        }
-        return SampleIntervalEntry(
-            index: index,
-            previousRelativeSeconds: previous.monotonicSeconds - firstReferenceTime,
-            relativeSeconds: current.monotonicSeconds - firstReferenceTime,
-            intervalMilliseconds: interval,
-            severity: severity
-        )
-    }
-}
-
-private func packetSeverity(
-    packet: RawScalePacket,
-    intervalMilliseconds: Double?,
-    longGapThresholdMilliseconds: Double
-) -> PacketSeverity {
-    if packet.rejectionReason != nil {
-        return .penalty
-    }
-    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
-        return .warning
-    }
-    switch packet.role {
-    case .unknown:
-        return .warning
-    case .battery, .capabilities, .commandAck:
-        return .info
-    case .weight:
-        return .normal
-    }
-}
-
-private func packetEvidence(
-    packet: RawScalePacket,
-    intervalMilliseconds: Double?,
-    longGapThresholdMilliseconds: Double
-) -> [String] {
-    var evidence: [String] = []
-    if let rejectionReason = packet.rejectionReason {
-        evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
-    }
-    if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
-        evidence.append("Raw packet interval before this packet: \(formatMilliseconds(intervalMilliseconds)). Scoring uses parsed sample intervals; see the cadence chart for direct gap penalties.")
-    } else if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
-        evidence.append("Near-threshold raw packet interval before this packet: \(formatMilliseconds(intervalMilliseconds)). Warning only.")
-    }
-    if packet.role == .unknown {
-        evidence.append("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.")
-    }
-    if packet.role == .battery {
-        evidence.append("Battery/metadata packet. This can improve metadata coverage when parsed.")
-    }
-    if packet.role == .capabilities {
-        evidence.append("Capability packet. Useful context for WMB+ features and parser behavior.")
-    }
-    if packet.role == .commandAck {
-        evidence.append("Command acknowledgement packet. Useful context around tare/start/stop actions.")
-    }
-    if evidence.isEmpty {
-        evidence.append("Normal parsed packet. No direct score penalty attached.")
-    }
-    return evidence
-}
-
-private func percentile(_ values: [Double], _ p: Double) -> Double? {
-    guard !values.isEmpty else { return nil }
-    let sorted = values.sorted()
-    let index = min(sorted.count - 1, max(0, Int(round(Double(sorted.count - 1) * p))))
-    return sorted[index]
 }
 
 private func formatRate(_ value: Double?) -> String {
@@ -2521,12 +3485,8 @@ private func formatPercent(_ value: Double) -> String {
     String(format: "%.0f%%", value * 100)
 }
 
-private func formatScorePoints(_ value: Double) -> String {
-    let roundedWhole = value.rounded()
-    if abs(value - roundedWhole) < 0.005 {
-        return String(format: "%.0f pts", roundedWhole)
-    }
-    return String(format: "%.2f pts", value)
+private func formatScorePercent(_ value: Double) -> String {
+    String(format: "%.1f%%", value * 100)
 }
 
 private func formatSeconds(_ value: Double) -> String {
@@ -2536,6 +3496,19 @@ private func formatSeconds(_ value: Double) -> String {
 private func recordingDuration(_ recording: ScaleRecording, now: Date = Date()) -> TimeInterval {
     let end = recording.endedAt ?? now
     return max(0, end.timeIntervalSince(recording.startedAt))
+}
+
+private func recordingDurationDisplay(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
+    let hasData = !recording.samples.isEmpty || !recording.rawPackets.isEmpty || (metrics.relevantWeightFrameCount ?? 0) > 0
+    let missingBoundaries = metrics.validity?.reasons.contains("recordingBoundariesMissing") == true
+
+    if let span = metrics.recordingSpanSeconds, span > 0 {
+        return formatDuration(span)
+    }
+    if missingBoundaries || !hasData {
+        return "—"
+    }
+    return formatDuration(recordingDuration(recording))
 }
 
 private func formatDuration(_ value: TimeInterval) -> String {
@@ -2561,22 +3534,235 @@ private func weightRangeLabel(_ recording: ScaleRecording) -> String {
     return String(format: "%.2f–%.2f g", minimum, maximum)
 }
 
+private func benchmarkScoreTitle(_ mode: RecordingMode) -> String {
+    switch mode {
+    case .shot, .transportStress: "Delivery score"
+    case .idleStability: "Idle Stability score"
+    case .stepResponse: "Step Response"
+    case .tareLatency: "Tare Latency"
+    case .batteryStability: "Battery Logging"
+    }
+}
+
+private func platformDisplayName(_ platform: String) -> String {
+    switch platform {
+    case "ios": "iOS / iPadOS"
+    case "macos-catalyst": "macOS Catalyst"
+    case "android": "Android"
+    default: "Unknown platform"
+    }
+}
+
+private func benchmarkScore(mode: RecordingMode, metrics: ScaleQualityMetrics) -> Int? {
+    switch mode {
+    case .shot, .transportStress: metrics.delivery?.deliveryScore
+    case .idleStability: metrics.stabilityScore
+    case .stepResponse, .tareLatency, .batteryStability: nil
+    }
+}
+
+private func benchmarkScoreDisplay(mode: RecordingMode, metrics: ScaleQualityMetrics) -> String {
+    guard let score = benchmarkScore(mode: mode, metrics: metrics) else {
+        return mode == .stepResponse || mode == .tareLatency || mode == .batteryStability ? "Metrics only" : "—"
+    }
+    return "\(score)/100"
+}
+
+private func deliveredUpdatesDisplay(_ metrics: ScaleQualityMetrics) -> String {
+    if let served = metrics.servedSlots,
+       let total = metrics.slotCount,
+       total > 0,
+       let coverage = metrics.delivery?.coverage {
+        return "\(served)/\(total) (\(formatScorePercent(coverage)))"
+    }
+    return metrics.delivery?.coverage.map(formatScorePercent) ?? "—"
+}
+
+private func usableReadingsDisplay(_ metrics: ScaleQualityMetrics) -> String {
+    if let usable = metrics.usableSampleCount,
+       let total = metrics.relevantWeightFrameCount,
+       total > 0,
+       let purity = metrics.delivery?.purity {
+        return "\(usable)/\(total) (\(formatScorePercent(purity)))"
+    }
+    return metrics.delivery?.purity.map(formatScorePercent) ?? "—"
+}
+
+private func deliveryScoreExplanation(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> [String] {
+    guard let delivery = metrics.delivery,
+          let score = delivery.deliveryScore,
+          let coverage = delivery.coverage,
+          let purity = delivery.purity else {
+        return ["Delivery score needs a valid recording plus enough packet evidence to compute coverage and purity."]
+    }
+
+    let coverageScore = 100 * coverage
+    let finalScore = coverageScore * purity
+    let coverageCost = max(0, 100 - coverageScore)
+    let frameCost = max(0, coverageScore - finalScore)
+    var lines: [String] = []
+
+    if let servedSlots = metrics.servedSlots,
+       let slotCount = metrics.slotCount,
+       slotCount > 0 {
+        lines.append("Delivered packets: \(servedSlots)/\(slotCount) expected (\(formatScorePercent(coverage))).")
+    } else if let rate = metrics.effectiveSampleRateHz {
+        lines.append("Delivered packets: \(formatScorePercent(coverage)). Effective rate was \(String(format: "%.1f Hz", rate)); Shot / Pour expects 20 per second.")
+    }
+
+    if let usable = metrics.usableSampleCount,
+       let total = metrics.relevantWeightFrameCount,
+       total > 0 {
+        lines.append("Usable readings: \(usable)/\(total) (\(formatScorePercent(purity))).")
+    } else {
+        lines.append("Usable readings: \(formatScorePercent(purity)).")
+    }
+
+    lines.append("Score: round(100 × \(formatMultiplier(coverage)) × \(formatMultiplier(purity))) = \(score)/100.")
+    lines.append("Biggest deduction: delivered packets cost \(formatPointValue(coverageCost)); unusable or repeated readings cost \(formatPointValue(frameCost)).")
+
+    var drivers: [String] = []
+    if metrics.longGapCount > 0 {
+        drivers.append("\(metrics.longGapCount) long \(metrics.longGapCount == 1 ? "gap" : "gaps")")
+    }
+    if let longest = metrics.longestUnservedRunMilliseconds, longest >= 100 {
+        drivers.append("longest empty run \(formatMilliseconds(longest))")
+    }
+    if metrics.rejectedPacketCount > 0 {
+        drivers.append("\(metrics.rejectedPacketCount) rejected \(metrics.rejectedPacketCount == 1 ? "packet" : "packets")")
+    }
+    if let frames = metrics.frameClassification {
+        if frames.parseFailure > 0 { drivers.append("\(frames.parseFailure) unreadable \(frames.parseFailure == 1 ? "packet" : "packets")") }
+        if frames.outOfOrder > 0 { drivers.append("\(frames.outOfOrder) out-of-order") }
+        if frames.stale > 0 { drivers.append("\(frames.stale) stale \(frames.stale == 1 ? "reading" : "readings")") }
+        if frames.implausible > 0 { drivers.append("\(frames.implausible) implausible \(frames.implausible == 1 ? "reading" : "readings")") }
+        if frames.duplicate > 0 { drivers.append("\(frames.duplicate) repeated \(frames.duplicate == 1 ? "reading" : "readings")") }
+    }
+    if metrics.missingSequenceCount > 0 {
+        drivers.append("\(metrics.missingSequenceCount) missing sequence \(metrics.missingSequenceCount == 1 ? "step" : "steps")")
+    }
+
+    if drivers.isEmpty {
+        lines.append("Packet inspector: no bad packets found. The score dropped because too few updates arrived.")
+    } else {
+        lines.append("Other issues found: \(drivers.joined(separator: ", ")).")
+    }
+
+    if let detail = protocolDetailDisplay(metrics) {
+        lines.append("Packet checks available: \(detail).")
+    }
+    return lines
+}
+
+private func formatPointValue(_ value: Double) -> String {
+    String(format: "%.0f points", value)
+}
+
+private func formatMultiplier(_ value: Double) -> String {
+    String(format: "%.3f", value)
+}
+
+private func protocolDetailDisplay(_ metrics: ScaleQualityMetrics) -> String? {
+    let frameCount = metrics.relevantWeightFrameCount ?? metrics.usableSampleCount ?? 0
+    guard frameCount > 0, let verification = metrics.protocolVerification else {
+        return nil
+    }
+    return protocolDetailDisplay(
+        verifiableCount: verification.verifiableClasses.count,
+        totalCount: verification.verifiableClasses.count + verification.unverifiableClasses.count
+    )
+}
+
+private func protocolDetailDisplay(verifiableCount: Int?, totalCount: Int) -> String? {
+    guard let verifiableCount, totalCount > 0 else {
+        return nil
+    }
+    return "\(verifiableCount) of \(totalCount) available"
+}
+
+private func validityReasonLabel(_ reason: String) -> String {
+    switch reason {
+    case "recordingBoundariesMissing": "Recording was not started and stopped cleanly"
+    case "durationBelowMinimum": "Recording is shorter than the required duration"
+    case "usableFrameCountBelowMinimum": "Too few usable weight frames"
+    case "idleAnalysedFrameCountBelowMinimum": "Too few idle frames remain after settling"
+    case "stepBaselineFrameCountBelowMinimum": "Too few baseline frames for Step Response"
+    case "stepFinalFrameCountBelowMinimum": "Too few final-window frames for Step Response"
+    case "disconnectDuringRecording": "The scale disconnected during the recording"
+    case "appLeftForeground": "ScaleBench left the foreground during the recording"
+    case "unknownMode": "The recording mode is unknown"
+    default: reason
+    }
+}
+
+private func invalidScoreSummary(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> String {
+    let reasons = metrics.validity?.reasons ?? []
+    if recording.samples.isEmpty && recording.rawPackets.isEmpty {
+        return "No official score was produced because this recording has no usable scale data."
+    }
+    if reasons.contains("recordingBoundariesMissing") {
+        return "No official score was produced because ScaleBench could not find a clean recording start and stop."
+    }
+    return "No official score was produced because this recording did not meet the Standard v1 requirements."
+}
+
 private func resultNarrative(for recording: ScaleRecording) -> String {
     let metrics = recording.metrics
-    guard let score = metrics.overallScore else {
-        return "No score yet. A recording needs at least two parsed samples before ScaleBench can calculate transport and stability metrics."
+    if let validity = metrics.validity, !validity.isValid {
+        let reasons = validity.reasons.map(validityReasonLabel).joined(separator: "; ")
+        return "\(invalidScoreSummary(recording: recording, metrics: metrics)) \(reasons). Diagnostics are still available."
+    }
+
+    if recording.mode == .stepResponse {
+        guard let step = metrics.stepResponse, step.stepDetected else {
+            return "No valid mass step was detected. Step Response needs a settled baseline, a single increase of at least 5 g, and a settled final window."
+        }
+        var parts = ["Step Response is metrics-only in Standard v1."]
+        if let rise = step.riseTime10To90Seconds { parts.append("10–90% rise was \(formatSeconds(rise)).") }
+        if let settling = step.settlingTimeSeconds { parts.append("Settling took \(formatSeconds(settling)).") }
+        if let overshoot = step.overshootPercent { parts.append("Overshoot was \(String(format: "%.1f%%", overshoot)).") }
+        return parts.joined(separator: " ")
+    }
+
+    if recording.mode == .tareLatency || recording.mode == .batteryStability {
+        return "This mode reports metrics only and does not produce a Standard v1 score."
+    }
+
+    guard let score = benchmarkScore(mode: recording.mode, metrics: metrics) else {
+        return "No score is available for this recording."
     }
 
     var parts: [String] = []
     switch score {
     case 90...100:
-        parts.append("Excellent capture.")
+        parts.append(recording.mode == .idleStability ? "Excellent idle stability." : "Excellent delivery.")
     case 75..<90:
-        parts.append("Good capture with some measurable imperfections.")
+        parts.append("Good result with some measurable imperfections.")
     case 50..<75:
-        parts.append("Usable capture, but quality issues are affecting the score.")
+        parts.append("Usable result, but measured defects are affecting the score.")
     default:
-        parts.append("Poor capture. This recording has significant transport, parsing, or stability issues.")
+        parts.append(recording.mode == .shot || recording.mode == .transportStress ? "Poor Delivery result." : "Poor result. This recording has significant measured defects.")
+    }
+
+    if recording.mode == .shot || recording.mode == .transportStress,
+       let delivery = metrics.delivery,
+       let coverage = delivery.coverage,
+       let purity = delivery.purity {
+        let coverageCost = max(0, 100 - (100 * coverage))
+        let frameCost = max(0, (100 * coverage) - (100 * coverage * purity))
+        if coverageCost >= frameCost {
+            parts.append("The largest deduction was delivered packets: \(deliveredUpdatesDisplay(metrics)).")
+        } else {
+            parts.append("The largest deduction was usable readings: \(usableReadingsDisplay(metrics)).")
+        }
+    }
+
+    if let verification = metrics.protocolVerification {
+        let detail = protocolDetailDisplay(
+            verifiableCount: verification.verifiableClasses.count,
+            totalCount: verification.verifiableClasses.count + verification.unverifiableClasses.count
+        ) ?? "limited packet checks"
+        parts.append("Packet checks available: \(detail).")
     }
 
     if let rate = metrics.effectiveSampleRateHz {
@@ -2604,6 +3790,13 @@ private func resultNarrative(for recording: ScaleRecording) -> String {
     }
 
     return parts.joined(separator: " ")
+}
+
+@MainActor
+private enum RecordingWakeLock {
+    static func setActive(_ active: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = active
+    }
 }
 
 #Preview {

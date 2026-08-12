@@ -10,8 +10,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     @Published private(set) var latestBatteryPercent: Int?
     @Published private(set) var currentRecording: ScaleRecording = .empty()
     @Published private(set) var currentMetrics: ScaleQualityMetrics = .empty
+    @Published private(set) var completedRecording: ScaleRecording?
     @Published private(set) var isRecording = false
     @Published private(set) var isScanning = false
+    @Published private(set) var isConnectionReady = false
     @Published private(set) var statusMessage = "Idle"
     @Published private(set) var bluetoothStateTitle = "Bluetooth initializing"
 
@@ -24,6 +26,9 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private var acaiaCodec = AcaiaParser.Codec()
     private var timemoreDotCodec = TimemoreDotParser.Codec()
     private var didSendInitialConfiguration = false
+    private var reconnectPending = false
+    private var notifyingMeasurementCharacteristicUUIDs: Set<String> = []
+    private var recordingAppIsForeground = true
     private let liveMetricsRefreshIntervalSeconds: Double = 1.0
     private var lastLiveMetricsRefreshSeconds = -Double.infinity
 
@@ -65,6 +70,9 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         latestBatteryPercent = nil
         writeCharacteristic = nil
         wmbPlusCapabilities = nil
+        isConnectionReady = false
+        notifyingMeasurementCharacteristicUUIDs.removeAll()
+        reconnectPending = false
         connectedDevice = device
         activeProtocol = device.kind
         peripheral.delegate = self
@@ -73,17 +81,27 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func startRecording(mode: RecordingMode, scoringProfile: ScoringProfile = .standard) {
+        guard isConnectionReady else {
+            statusMessage = "Wait for the scale to finish connecting"
+            return
+        }
+        let recordingStart = CACurrentMediaTime()
+        recordingAppIsForeground = true
+        completedRecording = nil
         isRecording = true
         currentRecording = ScaleRecording.empty(mode: mode, scoringProfile: scoringProfile)
+        currentRecording.recordingStartMonotonicSeconds = recordingStart
+        currentRecording.recordingEndMonotonicSeconds = nil
         if let connectedDevice {
             currentRecording.device = ScaleDeviceIdentity(
                 name: connectedDevice.name,
-                identifier: connectedDevice.id,
+                identifier: connectedDevice.id.uuidString,
                 kind: activeProtocol,
                 advertisedServices: advertisedServicesByID[connectedDevice.id] ?? []
             )
         }
         currentRecording.capabilities = wmbPlusCapabilities
+        currentRecording.protocolCapabilities = baseScoringCapabilities(for: activeProtocol)
         if let batteryPercent = latestSample?.batteryPercent ?? latestBatteryPercent,
            (0...100).contains(batteryPercent) {
             currentRecording.batteryEvents.append(ScaleBatteryEvent(
@@ -98,22 +116,61 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         statusMessage = "Recording \(mode.displayName)"
     }
 
-    func stopRecording() {
+    func stopRecording(atMonotonicSeconds recordingEnd: Double = CACurrentMediaTime()) {
+        guard isRecording else { return }
         isRecording = false
+        reconnectPending = false
         currentRecording.endedAt = Date()
+        currentRecording.recordingEndMonotonicSeconds = recordingEnd
         currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
         currentMetrics = currentRecording.metrics
+        completedRecording = currentRecording
         lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = "Recording stopped"
     }
 
+    func noteAppEnteredBackground(atMonotonicSeconds timestamp: Double = CACurrentMediaTime()) {
+        guard isRecording, recordingAppIsForeground else { return }
+        recordingAppIsForeground = false
+        currentRecording.events.append(ScaleRecordingEvent(
+            type: .appBackgrounded,
+            monotonicSeconds: timestamp
+        ))
+        statusMessage = "Recording continued, but this result is not eligible for an official score"
+    }
+
+    func noteAppBecameForeground(atMonotonicSeconds timestamp: Double = CACurrentMediaTime()) {
+        guard isRecording, !recordingAppIsForeground else {
+            recordingAppIsForeground = true
+            return
+        }
+        recordingAppIsForeground = true
+        currentRecording.events.append(ScaleRecordingEvent(
+            type: .appForegrounded,
+            monotonicSeconds: timestamp
+        ))
+        statusMessage = "Recording resumed; app backgrounding invalidated the official result"
+    }
+
     func resetRecording() {
+        recordingAppIsForeground = true
+        completedRecording = nil
         isRecording = false
         currentRecording = .empty()
         currentMetrics = .empty
         latestSample = nil
         lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = connectedDevice == nil ? "Idle" : "Connected"
+    }
+
+    func takeCompletedRecording() -> ScaleRecording? {
+        defer { completedRecording = nil }
+        return completedRecording
+    }
+
+    var connectedAdvertisedServices: [String] {
+        guard let connectedDevice else { return [] }
+        return advertisedServicesByID[connectedDevice.id] ?? []
     }
 
     func applyScoringProfile(_ profile: ScoringProfile) {
@@ -125,6 +182,9 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     func finalizedCurrentRecording(notes: String = "") -> ScaleRecording {
         var finalized = currentRecording
         finalized.endedAt = finalized.endedAt ?? Date()
+        if finalized.recordingEndMonotonicSeconds == nil {
+            finalized.recordingEndMonotonicSeconds = CACurrentMediaTime()
+        }
         finalized.notes = notes
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
         return finalized
@@ -166,6 +226,18 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         connectedDevice.flatMap { peripheralsByID[$0.id] }
     }
 
+    private func scheduleTransportReconnect(to peripheral: CBPeripheral) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self, weak peripheral] in
+            guard let self, let peripheral,
+                  self.isRecording,
+                  self.currentRecording.mode == .transportStress,
+                  self.connectedDevice?.id == peripheral.identifier,
+                  !self.isConnectionReady else { return }
+            self.statusMessage = "Reconnecting to \(self.connectedDevice?.name ?? "scale")"
+            self.centralManager.connect(peripheral)
+        }
+    }
+
     private func performOnMain(_ work: @escaping () -> Void) {
         if Thread.isMainThread {
             work()
@@ -179,20 +251,36 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         characteristic: CBCharacteristic,
         role: PacketRole,
         rejectionReason: ParseRejectionReason?,
+        sample: ScaleSample? = nil,
         arrivalTime: Date = Date(),
         monotonicSeconds: Double = CACurrentMediaTime()
     ) {
         guard isRecording else { return }
 
+        let packetKind = sample?.scaleKind ?? activeProtocol
+        let characteristicUUID = characteristic.uuid.uuidString.uppercased()
+
         currentRecording.rawPackets.append(RawScalePacket(
             arrivalTime: arrivalTime,
             monotonicSeconds: monotonicSeconds,
-            scaleKind: activeProtocol,
-            characteristicUUID: characteristic.uuid.uuidString.uppercased(),
+            scaleKind: packetKind,
+            characteristicUUID: characteristicUUID,
             role: role,
             bytesHex: data.hexString,
-            rejectionReason: rejectionReason
+            rejectionReason: rejectionReason,
+            weightGrams: sample?.weightGrams,
+            sequence: sample?.sequence,
+            deviceTimestampMilliseconds: sample?.deviceTimestampMilliseconds,
+            fields: PacketFieldDecoder.annotations(
+                scaleKind: packetKind,
+                characteristicUUID: characteristicUUID,
+                bytes: [UInt8](data)
+            )
         ))
+
+        if let sample {
+            updateScoringCapabilities(for: sample, characteristic: characteristic)
+        }
     }
 
     private func receiveSample(_ sample: ScaleSample) {
@@ -233,24 +321,74 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private func handleParserEvent(_ event: ScaleParserEvent, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
         switch event {
         case let .sample(sample):
-            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
+            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, sample: sample, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveSample(sample)
         case let .battery(percent):
             recordRawPacket(data: data, characteristic: characteristic, role: .battery, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveBattery(percent, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         case let .rejected(reason):
-            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
+            let role: PacketRole = reason == .unsupportedFrame ? .unknown : .weight
+            recordRawPacket(data: data, characteristic: characteristic, role: role, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         }
     }
 
     private func handleResult(_ result: Result<ScaleSample, ParseRejectionReason>, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
         switch result {
         case let .success(sample):
-            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
+            recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, sample: sample, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveSample(sample)
         case let .failure(reason):
             recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         }
+    }
+
+    private func baseScoringCapabilities(for kind: ScaleKind) -> ProtocolScoringCapabilities {
+        let hasChecksum: Bool
+        switch kind {
+        case .bookoo, .bookooMini, .bookooUltra, .weighMyBruPlus, .acaia, .difluid, .difluidTi, .timemoreDot:
+            hasChecksum = true
+        default:
+            hasChecksum = false
+        }
+        let clockSemantics: DeviceClockSemantics
+        switch kind {
+        case .decent, .espressi:
+            clockSemantics = .shotTimer
+        default:
+            clockSemantics = .none
+        }
+        return ProtocolScoringCapabilities(
+            hasChecksum: hasChecksum,
+            hasSequence: false,
+            sequenceModulus: 256,
+            hasDeviceClock: false,
+            deviceClockSemantics: clockSemantics,
+            deviceClockModulus: nil
+        )
+    }
+
+    private func updateScoringCapabilities(for sample: ScaleSample, characteristic: CBCharacteristic) {
+        var capabilities = currentRecording.protocolCapabilities ?? baseScoringCapabilities(for: sample.scaleKind)
+        if characteristic.uuid.uuidString.uppercased() == WeighMyBruParser.weight20UUID {
+            capabilities.hasChecksum = true
+        }
+        capabilities.hasSequence = capabilities.hasSequence || sample.sequence != nil
+        capabilities.hasDeviceClock = capabilities.hasDeviceClock || sample.deviceTimestampMilliseconds != nil
+        if sample.deviceTimestampMilliseconds != nil {
+            switch sample.scaleKind {
+            case .decent, .espressi:
+                capabilities.deviceClockSemantics = .shotTimer
+            case .bookoo, .bookooMini, .bookooUltra, .weighMyBruPlus:
+                capabilities.deviceClockSemantics = .freeRunning
+                capabilities.deviceClockModulus = 1 << 24
+            case .difluid, .difluidTi:
+                capabilities.deviceClockSemantics = .freeRunning
+                capabilities.deviceClockModulus = 1 << 32
+            default:
+                capabilities.deviceClockSemantics = .freeRunning
+            }
+        }
+        currentRecording.protocolCapabilities = capabilities
     }
 
     private func identifyScale(name: String?, services: [String]) -> ScaleKind {
@@ -412,6 +550,27 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         }
     }
 
+    private func isMeasurementCharacteristic(_ uuid: String) -> Bool {
+        switch uuid {
+        case BookooParser.notifyUUID,
+             WeighMyBruParser.weight20UUID,
+             WeighMyBruParser.float32UUID,
+             AcaiaParser.modernCharUUID,
+             AcaiaParser.fullModernCharUUID,
+             AcaiaParser.legacyNotifyUUID,
+             DecentEspressiParser.notifyUUID,
+             DiFluidParser.charUUID,
+             EurekaPrecisaParser.notifyUUID,
+             FelicitaParser.charUUID,
+             FutulaParser.notifyUUID,
+             Skale2Parser.notifyUUID,
+             TimemoreDotParser.notifyUUID:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func writeType(for characteristic: CBCharacteristic) -> CBCharacteristicWriteType {
         characteristic.properties.contains(.writeWithoutResponse) ? .withoutResponse : .withResponse
     }
@@ -468,6 +627,10 @@ extension BluetoothScaleManager: CBCentralManagerDelegate {
         }
         performOnMain {
             self.bluetoothStateTitle = title
+            if central.state != .poweredOn {
+                self.isConnectionReady = false
+                self.notifyingMeasurementCharacteristicUUIDs.removeAll()
+            }
         }
     }
 
@@ -495,7 +658,9 @@ extension BluetoothScaleManager: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         performOnMain {
-            self.statusMessage = "Connected to \(peripheral.name ?? "scale")"
+            self.isConnectionReady = false
+            self.notifyingMeasurementCharacteristicUUIDs.removeAll()
+            self.statusMessage = "Configuring \(peripheral.name ?? "scale")"
             peripheral.delegate = self
             self.didSendInitialConfiguration = false
             self.acaiaCodec = AcaiaParser.Codec()
@@ -507,33 +672,53 @@ extension BluetoothScaleManager: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         performOnMain {
             guard self.connectedDevice?.id == peripheral.identifier else { return }
-            self.statusMessage = "Connection failed: \(error?.localizedDescription ?? "unknown error")"
-            self.connectedDevice = nil
-            self.activeProtocol = .unknown
+            self.isConnectionReady = false
+            self.notifyingMeasurementCharacteristicUUIDs.removeAll()
             self.writeCharacteristic = nil
             self.latestSample = nil
             self.latestBatteryPercent = nil
+            if self.isRecording, self.currentRecording.mode == .transportStress {
+                self.reconnectPending = true
+                self.statusMessage = "Reconnect failed; retrying"
+                self.scheduleTransportReconnect(to: peripheral)
+            } else {
+                self.statusMessage = "Connection failed: \(error?.localizedDescription ?? "unknown error")"
+                self.connectedDevice = nil
+                self.activeProtocol = .unknown
+                self.reconnectPending = false
+            }
         }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        let disconnectedAt = CACurrentMediaTime()
         performOnMain {
             guard self.connectedDevice?.id == peripheral.identifier else { return }
+            self.isConnectionReady = false
+            self.notifyingMeasurementCharacteristicUUIDs.removeAll()
+            self.writeCharacteristic = nil
+            self.didSendInitialConfiguration = false
+            self.acaiaCodec = AcaiaParser.Codec()
+            self.timemoreDotCodec = TimemoreDotParser.Codec()
             if self.isRecording {
-                self.stopRecording()
+                self.currentRecording.events.append(ScaleRecordingEvent(type: .disconnect, monotonicSeconds: disconnectedAt))
+                if self.currentRecording.mode == .transportStress {
+                    self.reconnectPending = true
+                    self.statusMessage = "Disconnected; Transport Stress is reconnecting"
+                    self.scheduleTransportReconnect(to: peripheral)
+                    return
+                }
+                self.stopRecording(atMonotonicSeconds: disconnectedAt)
                 self.statusMessage = "Disconnected; recording stopped"
             } else {
                 self.statusMessage = "Disconnected"
             }
             self.connectedDevice = nil
             self.activeProtocol = .unknown
-            self.writeCharacteristic = nil
             self.wmbPlusCapabilities = nil
             self.latestSample = nil
             self.latestBatteryPercent = nil
-            self.didSendInitialConfiguration = false
-            self.acaiaCodec = AcaiaParser.Codec()
-            self.timemoreDotCodec = TimemoreDotParser.Codec()
+            self.reconnectPending = false
         }
     }
 }
@@ -612,19 +797,55 @@ extension BluetoothScaleManager: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         performOnMain {
+            let uuid = characteristic.uuid.uuidString.uppercased()
+            let isMeasurement = self.isMeasurementCharacteristic(uuid)
             if let error {
-                self.statusMessage = "Notification setup failed: \(error.localizedDescription)"
+                if isMeasurement {
+                    self.notifyingMeasurementCharacteristicUUIDs.remove(uuid)
+                    if self.notifyingMeasurementCharacteristicUUIDs.isEmpty {
+                        self.isConnectionReady = false
+                        self.statusMessage = "Weight notification setup failed: \(error.localizedDescription)"
+                    }
+                }
                 return
             }
+
+            guard isMeasurement else { return }
             if characteristic.isNotifying {
+                self.notifyingMeasurementCharacteristicUUIDs.insert(uuid)
                 self.sendInitialConfigurationIfNeeded()
+                if !self.isConnectionReady {
+                    self.isConnectionReady = true
+                    if self.reconnectPending {
+                        if self.isRecording {
+                            self.currentRecording.events.append(ScaleRecordingEvent(
+                                type: .reconnect,
+                                monotonicSeconds: CACurrentMediaTime()
+                            ))
+                        }
+                        self.reconnectPending = false
+                        self.statusMessage = self.isRecording
+                            ? "Reconnected; recording \(self.currentRecording.mode.displayName)"
+                            : "Ready"
+                    } else {
+                        self.statusMessage = self.isRecording
+                            ? "Recording \(self.currentRecording.mode.displayName)"
+                            : "Ready"
+                    }
+                }
+            } else {
+                self.notifyingMeasurementCharacteristicUUIDs.remove(uuid)
+                if self.notifyingMeasurementCharacteristicUUIDs.isEmpty {
+                    self.isConnectionReady = false
+                    self.statusMessage = "Weight notifications stopped"
+                }
             }
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        let arrival = Date()
         let monotonic = CACurrentMediaTime()
+        let arrival = Date()
         if let error {
             performOnMain {
                 self.statusMessage = "Value update failed: \(error.localizedDescription)"
@@ -648,6 +869,7 @@ extension BluetoothScaleManager {
         ]
         manager.connectedDevice = manager.discoveredScales.first
         manager.activeProtocol = .weighMyBruPlus
+        manager.isConnectionReady = true
         manager.currentRecording.samples = [
             ScaleSample(
                 arrivalTime: Date(),

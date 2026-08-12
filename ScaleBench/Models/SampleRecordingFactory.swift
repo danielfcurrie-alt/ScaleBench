@@ -135,7 +135,10 @@ enum SampleRecordingFactory {
                         quality: sample.firmwareQualityScore,
                         includeMetadata: includeMetadata
                     ),
-                    rejectionReason: nil
+                    rejectionReason: nil,
+                    weightGrams: sample.weightGrams,
+                    sequence: sample.sequence,
+                    deviceTimestampMilliseconds: sample.deviceTimestampMilliseconds
                 )
             )
 
@@ -185,6 +188,8 @@ enum SampleRecordingFactory {
         recording.id = deterministicRecordingID(title)
         recording.startedAt = startedAt
         recording.endedAt = startedAt.addingTimeInterval(rawPackets.last?.monotonicSeconds ?? duration)
+        recording.recordingStartMonotonicSeconds = 0
+        recording.recordingEndMonotonicSeconds = duration + (gapAt == nil ? 0 : 1.15)
         recording.notes = notes
         recording.device = ScaleDeviceIdentity(
             name: deviceName,
@@ -205,6 +210,14 @@ enum SampleRecordingFactory {
             extensionPacketVersion: 1,
             extensionPacketLength: 20
         ) : nil
+        recording.protocolCapabilities = ProtocolScoringCapabilities(
+            hasChecksum: kind == .weighMyBru || kind == .weighMyBruPlus,
+            hasSequence: includeMetadata,
+            sequenceModulus: includeMetadata ? 256 : nil,
+            hasDeviceClock: includeMetadata,
+            deviceClockSemantics: includeMetadata ? .freeRunning : .none,
+            deviceClockModulus: includeMetadata ? 1 << 24 : nil
+        )
         recording.metrics = ScaleQualityAnalyzer.analyze(recording)
 
         return Example(title: title, notes: notes, recording: recording)
@@ -363,14 +376,14 @@ enum SampleRecordingFactory {
         }
     }
 
-    private static func deterministicDeviceID(_ name: String) -> UUID {
+    private static func deterministicDeviceID(_ name: String) -> String {
         switch name {
         case "Example WMB+ Scale":
-            UUID(uuidString: "20000000-0000-0000-0000-000000000001")!
+            "20000000-0000-0000-0000-000000000001"
         case "Example WeighMyBru":
-            UUID(uuidString: "20000000-0000-0000-0000-000000000002")!
+            "20000000-0000-0000-0000-000000000002"
         default:
-            UUID(uuidString: "20000000-0000-0000-0000-000000000003")!
+            "20000000-0000-0000-0000-000000000003"
         }
     }
 }

@@ -1,0 +1,116 @@
+{
+  "appBuild": "fixture",
+  "appName": "ScaleBench",
+  "appVersion": "fixture",
+  "batteryEvents": [],
+  "device": {
+    "advertisedServices": [
+      "FFF0"
+    ],
+    "identifier": "AA:BB:CC:DD:EE:FF",
+    "kind": "eureka",
+    "name": "Fixture Android Solo Barista"
+  },
+  "id": "22222222-bbbb-4bbb-8bbb-222222222222",
+  "endedAtMillis": 1785600100400,
+  "events": [],
+  "link": {
+    "negotiatedMtu": 185,
+    "requestedConnectionPriority": "high",
+    "requestedMtu": 185
+  },
+  "metrics": {
+    "duplicateOrOutOfOrderTimestampCount": 0,
+    "effectiveSampleRateHz": 10,
+    "firmwareBumpCount": 0,
+    "longGapCount": 0,
+    "metadataScore": null,
+    "missingSequenceCount": 0,
+    "overallScore": 67,
+    "packetIntervalMaxMilliseconds": 100,
+    "packetIntervalP50Milliseconds": 100,
+    "packetIntervalP95Milliseconds": 100,
+    "rejectedPacketCount": 1,
+    "scoringModelVersion": "standard-1.0.0",
+    "scoringProfileName": "ScaleBench Standard v1",
+    "stabilityScore": null,
+    "transportScore": null,
+    "validity": {
+      "isValid": true,
+      "reasons": []
+    }
+  },
+  "mode": "shot",
+  "notes": "Fixture exported by the shared Android recording payload.",
+  "platform": "android",
+  "title": "Fixture Android Eureka Shot",
+  "protocolCapabilities": {
+    "deviceClockModulus": null,
+    "deviceClockSemantics": "none",
+    "hasChecksum": false,
+    "hasDeviceClock": false,
+    "hasSequence": false,
+    "sequenceModulus": null
+  },
+  "rawPackets": [
+    {
+      "arrivalTimeMillis": 1785600100000,
+      "bytesHex": "AA 09 41",
+      "characteristicUUID": "FFF1",
+      "monotonicSeconds": 0,
+      "role": "weight",
+      "scaleKind": "eureka",
+      "weightGrams": 0,
+      "fields": [
+        { "startByte": 0, "endByteExclusive": 3, "label": "Header", "decodedValue": "AA 09 41", "semantic": "header" }
+      ]
+    },
+    {
+      "arrivalTimeMillis": 1785600100100,
+      "bytesHex": "00",
+      "characteristicUUID": "FFF1",
+      "monotonicSeconds": 0.1,
+      "rejectionReason": "invalidLength",
+      "role": "weight",
+      "scaleKind": "eureka",
+      "weightGrams": null
+    },
+    {
+      "arrivalTimeMillis": 1785600100200,
+      "bytesHex": "AA 09 41",
+      "characteristicUUID": "FFF1",
+      "monotonicSeconds": 0.2,
+      "role": "weight",
+      "scaleKind": "eureka",
+      "weightGrams": 2
+    }
+  ],
+  "recordingEndMonotonicSeconds": 0.4,
+  "recordingStartMonotonicSeconds": 0,
+  "samples": [
+    {
+      "arrivalTimeMillis": 1785600100000,
+      "monotonicSeconds": 0,
+      "scaleKind": "eureka",
+      "weightGrams": 0
+    },
+    {
+      "arrivalTimeMillis": 1785600100200,
+      "monotonicSeconds": 0.2,
+      "scaleKind": "eureka",
+      "weightGrams": 2
+    },
+    {
+      "arrivalTimeMillis": 1785600100300,
+      "monotonicSeconds": 0.3,
+      "scaleKind": "eureka",
+      "weightGrams": 3
+    }
+  ],
+  "schemaVersion": 6,
+  "scoringModelVersion": "standard-1.0.0",
+  "scoringProfile": {
+    "name": "ScaleBench Standard v1"
+  },
+  "startedAtMillis": 1785600100000
+}

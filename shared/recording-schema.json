@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scalebench.app/schemas/recording-schema.json",
+  "title": "ScaleBench Recording",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schemaVersion",
+    "appName",
+    "appVersion",
+    "appBuild",
+    "platform",
+    "scoringModelVersion",
+    "mode",
+    "startedAtMillis",
+    "notes",
+    "scoringProfile",
+    "link",
+    "metrics",
+    "samples",
+    "batteryEvents",
+    "events",
+    "rawPackets"
+  ],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "schemaVersion": { "const": 6 },
+    "appName": { "type": "string" },
+    "appVersion": { "type": "string" },
+    "appBuild": { "type": "string" },
+    "platform": { "type": "string" },
+    "scoringModelVersion": { "type": "string" },
+    "title": { "type": ["string", "null"] },
+    "mode": { "$ref": "#/$defs/recordingMode" },
+    "startedAtMillis": { "type": "integer" },
+    "endedAtMillis": { "type": ["integer", "null"] },
+    "recordingStartMonotonicSeconds": { "type": ["number", "null"] },
+    "recordingEndMonotonicSeconds": { "type": ["number", "null"] },
+    "notes": { "type": "string" },
+    "scoringProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "const": "ScaleBench Standard v1" }
+      }
+    },
+    "device": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["name", "identifier", "kind", "advertisedServices"],
+      "properties": {
+        "name": { "type": "string" },
+        "identifier": { "type": "string" },
+        "kind": { "$ref": "#/$defs/scaleKind" },
+        "advertisedServices": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "protocolCapabilities": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["hasChecksum", "hasSequence", "hasDeviceClock", "deviceClockSemantics"],
+      "properties": {
+        "hasChecksum": { "type": "boolean" },
+        "hasSequence": { "type": "boolean" },
+        "sequenceModulus": { "type": ["integer", "null"] },
+        "hasDeviceClock": { "type": "boolean" },
+        "deviceClockSemantics": { "type": "string", "enum": ["none", "freeRunning", "shotTimer"] },
+        "deviceClockModulus": { "type": ["integer", "null"] }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requestedConnectionPriority": { "type": ["string", "null"] },
+        "requestedMtu": { "type": ["integer", "null"] },
+        "negotiatedMtu": { "type": ["integer", "null"] }
+      }
+    },
+    "metrics": { "$ref": "#/$defs/qualityMetrics" },
+    "samples": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sample" }
+    },
+    "batteryEvents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/batteryEvent" }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "monotonicSeconds"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["disconnect", "reconnect", "appBackgrounded", "appForegrounded"]
+          },
+          "monotonicSeconds": { "type": "number" }
+        }
+      }
+    },
+    "rawPackets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rawPacket" }
+    }
+  },
+  "$defs": {
+    "recordingMode": {
+      "type": "string",
+      "enum": ["shot", "idleStability", "stepResponse", "tareLatency", "transportStress", "batteryStability"]
+    },
+    "scaleKind": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "bookoo",
+        "bookooMini",
+        "bookooUltra",
+        "weighMyBru",
+        "weighMyBruPlus",
+        "eureka",
+        "acaia",
+        "decent",
+        "espressi",
+        "difluid",
+        "difluidTi",
+        "felicita",
+        "futula",
+        "skale2",
+        "timemoreDot"
+      ]
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arrivalTimeMillis", "monotonicSeconds", "scaleKind", "weightGrams"],
+      "properties": {
+        "arrivalTimeMillis": { "type": "integer" },
+        "monotonicSeconds": { "type": "number" },
+        "scaleKind": { "$ref": "#/$defs/scaleKind" },
+        "weightGrams": { "type": "number" },
+        "deviceTimestampMilliseconds": { "type": ["integer", "null"] },
+        "sequence": { "type": ["integer", "null"], "minimum": 0, "maximum": 255 },
+        "batteryPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "flowGramsPerSecond": { "type": ["number", "null"] },
+        "firmwareQualityScore": { "type": ["integer", "null"] },
+        "detectedSampleRateHz": { "type": ["integer", "null"] },
+        "statusFlags": { "anyOf": [{ "$ref": "#/$defs/statusFlags" }, { "type": "null" }] },
+        "diagnosticFlags": { "anyOf": [{ "$ref": "#/$defs/diagnosticFlags" }, { "type": "null" }] }
+      }
+    },
+    "batteryEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arrivalTimeMillis", "monotonicSeconds", "scaleKind", "percent"],
+      "properties": {
+        "arrivalTimeMillis": { "type": "integer" },
+        "monotonicSeconds": { "type": "number" },
+        "scaleKind": { "$ref": "#/$defs/scaleKind" },
+        "percent": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "rawPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arrivalTimeMillis", "monotonicSeconds", "scaleKind", "characteristicUUID", "role", "bytesHex"],
+      "properties": {
+        "arrivalTimeMillis": { "type": "integer" },
+        "monotonicSeconds": { "type": "number" },
+        "scaleKind": { "$ref": "#/$defs/scaleKind" },
+        "characteristicUUID": { "type": "string" },
+        "role": { "$ref": "#/$defs/packetRole" },
+        "bytesHex": {
+          "type": "string",
+          "pattern": "^([0-9A-F]{2}( [0-9A-F]{2})*)?$"
+        },
+        "rejectionReason": {
+          "anyOf": [
+            { "$ref": "#/$defs/parseRejectionReason" },
+            { "type": "null" }
+          ]
+        },
+        "weightGrams": { "type": ["number", "null"] },
+        "sequence": { "type": ["integer", "null"], "minimum": 0, "maximum": 255 },
+        "deviceTimestampMilliseconds": { "type": ["integer", "null"] },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "packet-fields-schema.json#/$defs/field" }
+        }
+      }
+    },
+    "packetRole": {
+      "type": "string",
+      "enum": ["weight", "capabilities", "battery", "commandAck", "unknown"]
+    },
+    "parseRejectionReason": {
+      "type": "string",
+      "enum": [
+        "invalidLength",
+        "invalidProduct",
+        "invalidMessageType",
+        "invalidChecksum",
+        "invalidHeader",
+        "invalidUnit",
+        "invalidRange",
+        "invalidCRC",
+        "invalidFloat",
+        "unsupportedFrame",
+        "unsupportedCharacteristic"
+      ]
+    },
+    "statusFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timerRunning", "hx711Connected", "tarePending", "atomicTareStartPending", "batteryLow", "batteryCritical", "batteryPresent", "displayPresent"],
+      "properties": {
+        "timerRunning": { "type": "boolean" },
+        "hx711Connected": { "type": "boolean" },
+        "tarePending": { "type": "boolean" },
+        "atomicTareStartPending": { "type": "boolean" },
+        "batteryLow": { "type": "boolean" },
+        "batteryCritical": { "type": "boolean" },
+        "batteryPresent": { "type": "boolean" },
+        "displayPresent": { "type": "boolean" }
+      }
+    },
+    "diagnosticFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recentBump", "longGapSeen", "cadenceValid", "detected80SPS", "detected10SPS", "qualityValid", "flowPresent", "extensionPresent"],
+      "properties": {
+        "recentBump": { "type": "boolean" },
+        "longGapSeen": { "type": "boolean" },
+        "cadenceValid": { "type": "boolean" },
+        "detected80SPS": { "type": "boolean" },
+        "detected10SPS": { "type": "boolean" },
+        "qualityValid": { "type": "boolean" },
+        "flowPresent": { "type": "boolean" },
+        "extensionPresent": { "type": "boolean" }
+      }
+    },
+    "qualityMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "longGapCount",
+        "missingSequenceCount",
+        "duplicateOrOutOfOrderTimestampCount",
+        "rejectedPacketCount",
+        "firmwareBumpCount"
+      ],
+      "properties": {
+        "overallScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "transportScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "stabilityScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "metadataScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "effectiveSampleRateHz": { "type": ["number", "null"], "minimum": 0 },
+        "packetIntervalP50Milliseconds": { "type": ["number", "null"], "minimum": 0 },
+        "packetIntervalP95Milliseconds": { "type": ["number", "null"], "minimum": 0 },
+        "packetIntervalMaxMilliseconds": { "type": ["number", "null"], "minimum": 0 },
+        "longGapCount": { "type": "integer", "minimum": 0 },
+        "missingSequenceCount": { "type": "integer", "minimum": 0 },
+        "duplicateOrOutOfOrderTimestampCount": { "type": "integer", "minimum": 0 },
+        "rejectedPacketCount": { "type": "integer", "minimum": 0 },
+        "idleNoisePeakToPeakGrams": { "type": ["number", "null"], "minimum": 0 },
+        "idleNoiseStandardDeviationGrams": { "type": ["number", "null"], "minimum": 0 },
+        "driftGramsPerMinute": { "type": ["number", "null"] },
+        "batteryMinPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "batteryMaxPercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "firmwareQualityAverage": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+        "firmwareBumpCount": { "type": "integer", "minimum": 0 },
+        "scoringModelVersion": { "type": ["string", "null"] },
+        "scoringProfileName": { "type": ["string", "null"] },
+        "validity": { "anyOf": [{ "$ref": "#/$defs/scoringValidity" }, { "type": "null" }] },
+        "delivery": { "anyOf": [{ "$ref": "#/$defs/deliveryMetrics" }, { "type": "null" }] },
+        "frameClassification": { "anyOf": [{ "$ref": "#/$defs/frameClassificationMetrics" }, { "type": "null" }] },
+        "protocolVerification": { "anyOf": [{ "$ref": "#/$defs/protocolVerificationMetrics" }, { "type": "null" }] },
+        "signalUnreconstructable": { "type": ["boolean", "null"] },
+        "relevantWeightFrameCount": { "type": ["integer", "null"], "minimum": 0 },
+        "excludedFrameCount": { "type": ["integer", "null"], "minimum": 0 },
+        "usableSampleCount": { "type": ["integer", "null"], "minimum": 0 },
+        "recordingSpanSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "recordingBoundaryInferred": { "type": ["boolean", "null"] },
+        "frameRateHz": { "type": ["number", "null"], "minimum": 0 },
+        "usableRateHz": { "type": ["number", "null"], "minimum": 0 },
+        "estimatedResolutionGrams": { "type": ["number", "null"], "minimum": 0 },
+        "slotCount": { "type": ["integer", "null"], "minimum": 0 },
+        "servedSlots": { "type": ["integer", "null"], "minimum": 0 },
+        "longestUnservedRunMilliseconds": { "type": ["number", "null"], "minimum": 0 },
+        "robustCoefficientOfVariation": { "type": ["number", "null"], "minimum": 0 },
+        "disconnectCount": { "type": ["integer", "null"], "minimum": 0 },
+        "idleNoiseScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "idleDriftScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "idleAnalysedSampleCount": { "type": ["integer", "null"], "minimum": 0 },
+        "idleResolutionGrams": { "type": ["number", "null"], "minimum": 0 },
+        "stepResponse": { "anyOf": [{ "$ref": "#/$defs/stepResponseMetrics" }, { "type": "null" }] }
+      }
+    },
+    "scoringValidity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isValid", "reasons"],
+      "properties": {
+        "isValid": { "type": "boolean" },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "deliveryMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicable"],
+      "properties": {
+        "applicable": { "type": "boolean" },
+        "deliveryScore": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "coverage": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "purity": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "purityIsUpperBound": { "type": ["boolean", "null"] }
+      }
+    },
+    "frameClassificationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usable", "parseFailure", "outOfOrder", "stale", "duplicate", "implausible"],
+      "properties": {
+        "usable": { "type": "integer", "minimum": 0 },
+        "parseFailure": { "type": "integer", "minimum": 0 },
+        "outOfOrder": { "type": "integer", "minimum": 0 },
+        "stale": { "type": "integer", "minimum": 0 },
+        "duplicate": { "type": "integer", "minimum": 0 },
+        "implausible": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "protocolVerificationMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifiableClasses", "unverifiableClasses", "verificationCoveragePercent", "purityIsUpperBound"],
+      "properties": {
+        "verifiableClasses": { "type": "array", "items": { "type": "string" } },
+        "unverifiableClasses": { "type": "array", "items": { "type": "string" } },
+        "verificationCoveragePercent": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "purityIsUpperBound": { "type": "boolean" }
+      }
+    },
+    "stepResponseMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepDetected"],
+      "properties": {
+        "stepDetected": { "type": "boolean" },
+        "onsetSecondsFromRecordingStart": { "type": ["number", "null"], "minimum": 0 },
+        "baselineGrams": { "type": ["number", "null"] },
+        "finalGrams": { "type": ["number", "null"] },
+        "amplitudeGrams": { "type": ["number", "null"] },
+        "riseTime10To90Seconds": { "type": ["number", "null"], "minimum": 0 },
+        "settlingTimeSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "overshootPercent": { "type": ["number", "null"] }
+      }
+    }
+  }
+}

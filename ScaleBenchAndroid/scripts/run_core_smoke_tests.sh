@@ -2,16 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/build/core-smoke"
+REPO_ROOT="$(cd "$ROOT/.." && pwd)"
+SCHEMA_PYTHON="${SCALEBENCH_PYTHON:-python3}"
 
-rm -rf "$OUT"
-mkdir -p "$OUT/classes"
-
-javac --release 17 \
-  -d "$OUT/classes" \
-  "$ROOT/app/src/main/java/app/scalebench/android/CoreModels.java" \
-  "$ROOT/app/src/main/java/app/scalebench/android/ScaleParsers.java" \
-  "$ROOT/app/src/main/java/app/scalebench/android/ScaleQualityAnalyzer.java" \
-  "$ROOT/app/src/test/java/app/scalebench/android/CoreSmokeTest.java"
-
-java -cp "$OUT/classes" app.scalebench.android.CoreSmokeTest
+"$ROOT/gradlew" --no-daemon --console=plain -p "$ROOT" \
+  :app:testDebugUnitTest --tests app.scalebench.android.CoreSmokeTest
+"$SCHEMA_PYTHON" "$REPO_ROOT/scripts/validate_json_contracts.py" \
+  --recording "$REPO_ROOT/build/contract-output/android-recording.json" \
+  --analysis "$REPO_ROOT/build/contract-output/android-analysis.json" \
+  --chart-analysis "$REPO_ROOT/build/contract-output/android-chart-analysis.json" \
+  --scorecard "$REPO_ROOT/build/contract-output/android-scorecard.json"

@@ -45,6 +45,7 @@ enum ScaleKind: String, Codable, CaseIterable, Identifiable {
 enum RecordingMode: String, Codable, CaseIterable, Identifiable {
     case idleStability
     case shot
+    case stepResponse
     case tareLatency
     case transportStress
     case batteryStability
@@ -55,6 +56,7 @@ enum RecordingMode: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .idleStability: "Idle Stability"
         case .shot: "Shot / Pour"
+        case .stepResponse: "Step Response"
         case .tareLatency: "Tare Latency"
         case .transportStress: "Transport Stress"
         case .batteryStability: "Battery Logging"
@@ -67,6 +69,8 @@ enum RecordingMode: String, Codable, CaseIterable, Identifiable {
             "Leave the scale untouched. Measures noise, drift, cadence, packet gaps, and bump/disturbance behavior."
         case .shot:
             "Record a real espresso shot or pour. This is the normal mode for public ScaleBench score comparisons."
+        case .stepResponse:
+            "Measure response speed. Start empty, wait 2 seconds, add at least 5 g in one motion, then let the scale settle."
         case .tareLatency:
             "Record while testing tare behavior. Start recording, trigger tare on the app or scale, then stop after it settles."
         case .transportStress:
@@ -79,17 +83,59 @@ enum RecordingMode: String, Codable, CaseIterable, Identifiable {
     var suggestedDuration: String {
         switch self {
         case .idleStability:
-            "Suggested: 30–60 seconds on a stable surface."
+            "Minimum: 60 seconds untouched on a stable surface; the first 5 seconds are discarded."
         case .shot:
-            "Suggested: one normal shot or pour from tare through finish."
+            "Minimum: 20 seconds. Tare and settle before Start; stop before removing the vessel."
+        case .stepResponse:
+            "Minimum: 10 seconds with at least 2 seconds before and after the mass step."
         case .tareLatency:
-            "Suggested: 5–10 seconds around the tare action."
+            "Minimum: 5 seconds around one tare action."
         case .transportStress:
-            "Suggested: 30–60 seconds while intentionally stressing the BLE link."
+            "Minimum: 120 seconds while intentionally stressing the BLE link."
         case .batteryStability:
-            "Suggested: several minutes or longer, unplugged if you are testing battery reporting."
+            "Minimum: 60 seconds while capturing exposed battery telemetry."
         }
     }
+}
+
+enum DeviceClockSemantics: String, Codable {
+    case none
+    case freeRunning
+    case shotTimer
+}
+
+struct ProtocolScoringCapabilities: Codable, Equatable {
+    var hasChecksum: Bool
+    var hasSequence: Bool
+    var sequenceModulus: UInt64?
+    var hasDeviceClock: Bool
+    var deviceClockSemantics: DeviceClockSemantics
+    var deviceClockModulus: UInt64?
+}
+
+struct ScaleLinkMetadata: Codable, Equatable {
+    var requestedConnectionPriority: String?
+    var requestedMtu: Int?
+    var negotiatedMtu: Int?
+
+    static let appleManaged = ScaleLinkMetadata(
+        requestedConnectionPriority: nil,
+        requestedMtu: nil,
+        negotiatedMtu: nil
+    )
+}
+
+enum ScaleRecordingEventType: String, Codable {
+    case disconnect
+    case reconnect
+    case appBackgrounded
+    case appForegrounded
+}
+
+struct ScaleRecordingEvent: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var type: ScaleRecordingEventType
+    var monotonicSeconds: Double
 }
 
 enum ScoringPreset: String, Codable, CaseIterable, Identifiable {
@@ -137,8 +183,8 @@ struct ScoringProfile: Codable, Equatable {
 
     static let standard = ScoringProfile(
         name: standardBenchmarkName,
-        transportWeight: 0.65,
-        stabilityWeight: 0.35,
+        transportWeight: 1.00,
+        stabilityWeight: 0.00,
         metadataWeight: 0.00,
         minimumLongGapMilliseconds: 300,
         longGapMultiplier: 3,
@@ -264,6 +310,33 @@ enum PacketRole: String, Codable {
     case unknown
 }
 
+enum PacketFieldSemantic: String, Codable, CaseIterable {
+    case header
+    case timestamp
+    case weight
+    case flow
+    case battery
+    case sequence
+    case status
+    case quality
+    case sampleRate
+    case checksum
+    case unit
+    case payload
+}
+
+struct PacketFieldAnnotation: Codable, Equatable, Identifiable {
+    var startByte: Int
+    var endByteExclusive: Int
+    var label: String
+    var decodedValue: String
+    var semantic: PacketFieldSemantic
+
+    var id: String {
+        "\(startByte)-\(endByteExclusive)-\(semantic.rawValue)-\(label)"
+    }
+}
+
 enum ParseRejectionReason: String, Codable, Equatable, Error {
     case invalidLength
     case invalidProduct
@@ -293,7 +366,7 @@ struct DiscoveredScale: Identifiable, Equatable {
 
 struct ScaleDeviceIdentity: Codable, Equatable {
     var name: String
-    var identifier: UUID
+    var identifier: String
     var kind: ScaleKind
     var advertisedServices: [String]
 }
@@ -307,6 +380,10 @@ struct RawScalePacket: Codable, Identifiable, Equatable {
     var role: PacketRole
     var bytesHex: String
     var rejectionReason: ParseRejectionReason?
+    var weightGrams: Double? = nil
+    var sequence: UInt8? = nil
+    var deviceTimestampMilliseconds: UInt32? = nil
+    var fields: [PacketFieldAnnotation]? = nil
 }
 
 struct ScaleSample: Codable, Identifiable, Equatable {
@@ -399,21 +476,31 @@ struct WMBPlusCapabilities: Codable, Equatable {
 }
 
 struct ScaleRecording: Codable, Equatable {
-    static let schemaVersion = 5
+    static let schemaVersion = 6
+    static let scoringModelVersion = "standard-1.0.0"
 
     var id: UUID
     var schemaVersion: Int
     var appName: String
     var appVersion: String
+    var appBuild: String
+    var platform: String
+    var scoringModelVersion: String
+    var title: String?
     var mode: RecordingMode
     var device: ScaleDeviceIdentity?
     var startedAt: Date
     var endedAt: Date?
+    var recordingStartMonotonicSeconds: Double?
+    var recordingEndMonotonicSeconds: Double?
     var notes: String
     var rawPackets: [RawScalePacket]
     var samples: [ScaleSample]
     var batteryEvents: [ScaleBatteryEvent]
+    var events: [ScaleRecordingEvent]
     var capabilities: WMBPlusCapabilities?
+    var protocolCapabilities: ProtocolScoringCapabilities?
+    var link: ScaleLinkMetadata
     var scoringProfile: ScoringProfile
     var metrics: ScaleQualityMetrics
 
@@ -421,16 +508,25 @@ struct ScaleRecording: Codable, Equatable {
         id: UUID = UUID(),
         schemaVersion: Int = Self.schemaVersion,
         appName: String = "ScaleBench",
-        appVersion: String = "0.1.1",
+        appVersion: String = ScaleRecording.currentAppVersion,
+        appBuild: String = ScaleRecording.currentAppBuild,
+        platform: String = ScaleRecording.currentPlatform,
+        scoringModelVersion: String = Self.scoringModelVersion,
+        title: String? = nil,
         mode: RecordingMode,
         device: ScaleDeviceIdentity? = nil,
         startedAt: Date,
         endedAt: Date? = nil,
+        recordingStartMonotonicSeconds: Double? = nil,
+        recordingEndMonotonicSeconds: Double? = nil,
         notes: String,
         rawPackets: [RawScalePacket],
         samples: [ScaleSample],
         batteryEvents: [ScaleBatteryEvent] = [],
+        events: [ScaleRecordingEvent] = [],
         capabilities: WMBPlusCapabilities? = nil,
+        protocolCapabilities: ProtocolScoringCapabilities? = nil,
+        link: ScaleLinkMetadata = .appleManaged,
         scoringProfile: ScoringProfile,
         metrics: ScaleQualityMetrics
     ) {
@@ -438,20 +534,29 @@ struct ScaleRecording: Codable, Equatable {
         self.schemaVersion = schemaVersion
         self.appName = appName
         self.appVersion = appVersion
+        self.appBuild = appBuild
+        self.platform = platform
+        self.scoringModelVersion = scoringModelVersion
+        self.title = title
         self.mode = mode
         self.device = device
         self.startedAt = startedAt
         self.endedAt = endedAt
+        self.recordingStartMonotonicSeconds = recordingStartMonotonicSeconds
+        self.recordingEndMonotonicSeconds = recordingEndMonotonicSeconds
         self.notes = notes
         self.rawPackets = rawPackets
         self.samples = samples
         self.batteryEvents = batteryEvents
+        self.events = events
         self.capabilities = capabilities
+        self.protocolCapabilities = protocolCapabilities
+        self.link = link
         self.scoringProfile = scoringProfile
         self.metrics = metrics
     }
 
-    static func empty(mode: RecordingMode = .idleStability, scoringProfile: ScoringProfile = .standard) -> ScaleRecording {
+    static func empty(mode: RecordingMode = .shot, scoringProfile: ScoringProfile = .standard) -> ScaleRecording {
         ScaleRecording(
             mode: mode,
             device: nil,
@@ -461,10 +566,30 @@ struct ScaleRecording: Codable, Equatable {
             rawPackets: [],
             samples: [],
             batteryEvents: [],
+            events: [],
             capabilities: nil,
+            protocolCapabilities: nil,
             scoringProfile: scoringProfile,
             metrics: .empty
         )
+    }
+
+    private static var currentAppVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+    }
+
+    private static var currentAppBuild: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+    }
+
+    private static var currentPlatform: String {
+        #if targetEnvironment(macCatalyst)
+        "macos-catalyst"
+        #elseif os(iOS)
+        "ios"
+        #else
+        "macos"
+        #endif
     }
 
     enum CodingKeys: String, CodingKey {
@@ -472,15 +597,24 @@ struct ScaleRecording: Codable, Equatable {
         case schemaVersion
         case appName
         case appVersion
+        case appBuild
+        case platform
+        case scoringModelVersion
+        case title
         case mode
         case device
         case startedAt
         case endedAt
+        case recordingStartMonotonicSeconds
+        case recordingEndMonotonicSeconds
         case notes
         case rawPackets
         case samples
         case batteryEvents
+        case events
         case capabilities
+        case protocolCapabilities
+        case link
         case scoringProfile
         case metrics
     }
@@ -490,16 +624,25 @@ struct ScaleRecording: Codable, Equatable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         appName = try container.decodeIfPresent(String.self, forKey: .appName) ?? "ScaleBench"
-        appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? "0.1.1"
+        appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? "unknown"
+        appBuild = try container.decodeIfPresent(String.self, forKey: .appBuild) ?? "unknown"
+        platform = try container.decodeIfPresent(String.self, forKey: .platform) ?? "unknown"
+        scoringModelVersion = try container.decodeIfPresent(String.self, forKey: .scoringModelVersion) ?? Self.scoringModelVersion
+        title = try container.decodeIfPresent(String.self, forKey: .title)
         mode = try container.decodeIfPresent(RecordingMode.self, forKey: .mode) ?? .shot
         device = try container.decodeIfPresent(ScaleDeviceIdentity.self, forKey: .device)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
         endedAt = try container.decodeIfPresent(Date.self, forKey: .endedAt)
+        recordingStartMonotonicSeconds = try container.decodeIfPresent(Double.self, forKey: .recordingStartMonotonicSeconds)
+        recordingEndMonotonicSeconds = try container.decodeIfPresent(Double.self, forKey: .recordingEndMonotonicSeconds)
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         rawPackets = try container.decodeIfPresent([RawScalePacket].self, forKey: .rawPackets) ?? []
         samples = try container.decodeIfPresent([ScaleSample].self, forKey: .samples) ?? []
         batteryEvents = try container.decodeIfPresent([ScaleBatteryEvent].self, forKey: .batteryEvents) ?? []
+        events = try container.decodeIfPresent([ScaleRecordingEvent].self, forKey: .events) ?? []
         capabilities = try container.decodeIfPresent(WMBPlusCapabilities.self, forKey: .capabilities)
+        protocolCapabilities = try container.decodeIfPresent(ProtocolScoringCapabilities.self, forKey: .protocolCapabilities)
+        link = try container.decodeIfPresent(ScaleLinkMetadata.self, forKey: .link) ?? .appleManaged
         scoringProfile = try container.decodeIfPresent(ScoringProfile.self, forKey: .scoringProfile) ?? .standard
         metrics = try container.decodeIfPresent(ScaleQualityMetrics.self, forKey: .metrics) ?? .empty
     }
@@ -528,11 +671,11 @@ struct SavedScaleRecording: Codable, Identifiable, Equatable {
         finalized.notes = inputNotes
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
 
-        let title = inputTitle?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? inputTitle!
-            : defaultTitle(for: finalized)
+        let title = firstNonEmpty(inputTitle, finalized.title) ?? defaultTitle(for: finalized)
+        finalized.title = title
 
         return SavedScaleRecording(
+            id: finalized.id,
             savedAt: Date(),
             title: title,
             notes: inputNotes,
@@ -547,6 +690,13 @@ struct SavedScaleRecording: Codable, Identifiable, Equatable {
             ?? "Unknown Scale"
         return "\(protocolName) · \(recording.mode.displayName)"
     }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        values.compactMap { value in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed?.isEmpty == false ? trimmed : nil
+        }.first
+    }
 }
 
 struct ProtocolComparisonRow: Identifiable, Equatable {
@@ -554,7 +704,10 @@ struct ProtocolComparisonRow: Identifiable, Equatable {
     var title: String
     var protocolKind: ScaleKind
     var mode: RecordingMode
+    var platform: String
     var score: Int?
+    var verificationCoveragePercent: Int?
+    var purityIsUpperBound: Bool
     var sampleRateHz: Double?
     var p95IntervalMilliseconds: Double?
     var maxGapMilliseconds: Double?
@@ -568,7 +721,7 @@ struct ProtocolComparison: Equatable {
     var rows: [ProtocolComparisonRow]
 
     var bestOverall: ProtocolComparisonRow? {
-        rows.max { lhs, rhs in
+        rows.filter { !$0.purityIsUpperBound }.max { lhs, rhs in
             (lhs.score ?? -1) < (rhs.score ?? -1)
         }
     }
@@ -586,7 +739,10 @@ struct ProtocolComparison: Equatable {
                 title: saved.title,
                 protocolKind: saved.protocolKind,
                 mode: saved.recording.mode,
+                platform: saved.recording.platform,
                 score: saved.scoreSnapshot.overallScore,
+                verificationCoveragePercent: saved.scoreSnapshot.protocolVerification?.verificationCoveragePercent,
+                purityIsUpperBound: saved.scoreSnapshot.delivery?.purityIsUpperBound == true,
                 sampleRateHz: saved.scoreSnapshot.effectiveSampleRateHz,
                 p95IntervalMilliseconds: saved.scoreSnapshot.packetIntervalP95Milliseconds,
                 maxGapMilliseconds: saved.scoreSnapshot.packetIntervalMaxMilliseconds,
@@ -604,6 +760,46 @@ struct ProtocolComparison: Equatable {
         }
         return lhs.title < rhs.title
     }
+}
+
+struct ScoringValidity: Codable, Equatable {
+    var isValid: Bool
+    var reasons: [String]
+}
+
+struct DeliveryQualityMetrics: Codable, Equatable {
+    var applicable: Bool
+    var deliveryScore: Int?
+    var coverage: Double?
+    var purity: Double?
+    var purityIsUpperBound: Bool?
+}
+
+struct FrameClassificationMetrics: Codable, Equatable {
+    var usable: Int
+    var parseFailure: Int
+    var outOfOrder: Int
+    var stale: Int
+    var duplicate: Int
+    var implausible: Int
+}
+
+struct ProtocolVerificationMetrics: Codable, Equatable {
+    var verifiableClasses: [String]
+    var unverifiableClasses: [String]
+    var verificationCoveragePercent: Int
+    var purityIsUpperBound: Bool
+}
+
+struct StepResponseMetrics: Codable, Equatable {
+    var stepDetected: Bool
+    var onsetSecondsFromRecordingStart: Double?
+    var baselineGrams: Double?
+    var finalGrams: Double?
+    var amplitudeGrams: Double?
+    var riseTime10To90Seconds: Double?
+    var settlingTimeSeconds: Double?
+    var overshootPercent: Double?
 }
 
 struct ScaleQualityMetrics: Codable, Equatable {
@@ -626,6 +822,31 @@ struct ScaleQualityMetrics: Codable, Equatable {
     var batteryMaxPercent: Int?
     var firmwareQualityAverage: Double?
     var firmwareBumpCount: Int
+    var scoringModelVersion: String? = nil
+    var scoringProfileName: String? = nil
+    var validity: ScoringValidity? = nil
+    var delivery: DeliveryQualityMetrics? = nil
+    var frameClassification: FrameClassificationMetrics? = nil
+    var protocolVerification: ProtocolVerificationMetrics? = nil
+    var signalUnreconstructable: Bool? = nil
+    var relevantWeightFrameCount: Int? = nil
+    var excludedFrameCount: Int? = nil
+    var usableSampleCount: Int? = nil
+    var recordingSpanSeconds: Double? = nil
+    var recordingBoundaryInferred: Bool? = nil
+    var frameRateHz: Double? = nil
+    var usableRateHz: Double? = nil
+    var estimatedResolutionGrams: Double? = nil
+    var slotCount: Int? = nil
+    var servedSlots: Int? = nil
+    var longestUnservedRunMilliseconds: Double? = nil
+    var robustCoefficientOfVariation: Double? = nil
+    var disconnectCount: Int? = nil
+    var idleNoiseScore: Int? = nil
+    var idleDriftScore: Int? = nil
+    var idleAnalysedSampleCount: Int? = nil
+    var idleResolutionGrams: Double? = nil
+    var stepResponse: StepResponseMetrics? = nil
 
     static let empty = ScaleQualityMetrics(
         overallScore: nil,

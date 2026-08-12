@@ -1,146 +1,112 @@
 # ScaleBench Help
 
-ScaleBench records Bluetooth scale data and turns it into a repeatable quality score. Use it when you want to compare scales, protocols, firmware builds, or Bluetooth behavior.
-
 ## Quick start
 
-1. Turn on the scale.
-2. Open ScaleBench.
-3. Tap **Scan**.
-4. Tap your scale when it appears.
-5. Leave **Scoring** on **ScaleBench Standard v1** for public/comparable results.
-6. Choose a recording mode.
-7. Tap **Start Recording**.
-8. Run the test.
-9. Tap **Stop and View Results**.
-10. Save the recording, export JSON, or export the official scorecard.
+1. Power on the scale, tap **Scan**, and connect it.
+2. Choose the mode before starting. Use **Shot / Pour** for normal public comparisons.
+3. Follow the procedure for that mode.
+4. Tap **Start Recording**. Keep ScaleBench in the foreground; it keeps the screen awake while recording.
+5. Tap **Stop and View Results**. ScaleBench saves the recording automatically; export JSON only when you want a file copy.
 
-## Which mode should I use?
+## Official test procedures
 
-Most users should start with **Shot / Pour**.
+| Mode | Minimum | Procedure | Result |
+| --- | ---: | --- | --- |
+| Shot / Pour | 20 s | Tare and settle before Start; stop before removing the vessel | Delivery |
+| Transport Stress | 120 s | Deliberately stress the BLE link with range, motion, or interference | Delivery |
+| Idle Stability | 60 s | Leave the scale untouched on a stable surface; first 5 s are settling | Idle Stability |
+| Step Response | 10 s | Start empty, wait at least 2 s, add at least 5 g once, hold through the final window | Metrics only |
+| Tare Latency | 5 s | Record around one tare action | Metrics only |
+| Battery Logging | 60 s | Capture exposed battery telemetry | Telemetry only |
 
-| Mode | Use it for | What to do |
-| --- | --- | --- |
-| **Shot / Pour** | Normal public comparison score | Start before the shot or pour, stop after it finishes. |
-| **Idle Stability** | Noise, drift, and still-scale behavior | Leave the scale untouched for 30–60 seconds. |
-| **Tare Latency** | Capturing tare behavior | Start recording, trigger tare, wait for it to settle, stop recording. |
-| **Transport Stress** | Bluetooth gap/jitter testing | Move the phone, change distance, or add interference while recording. |
-| **Battery Logging** | Battery telemetry capture | Leave the scale running while battery values are reported. |
+If a validity gate fails, ScaleBench keeps the diagnostics and shows the reason, but does not issue an official score.
 
-The modes label the recording and select the appropriate stability calculation. Idle Stability scores noise and drift; the dynamic modes avoid treating normal weight movement as drift. They do not yet run fully guided test procedures.
+All official tests must stay in the foreground. If the app is backgrounded or you switch apps during a recording, the JSON keeps that event and the recording remains available for diagnosis, but it cannot receive an official result.
 
-ScaleBench Standard v1 scores measured transport cadence and stability. Optional telemetry such as battery, sequence numbers, device timestamps, and firmware-side quality is reported as coverage, but it is not a Standard v1 score deduction by itself.
+## Delivery score
 
-## What happens when I start recording?
+Shot / Pour and Transport Stress use:
 
-ScaleBench opens a live recording screen showing:
+```text
+Delivery = round(100 x coverage x purity)
+```
 
-- elapsed recording time
-- parsed sample count
-- raw packet count
-- latest weight
-- flow, if available
-- battery, if available
+**Coverage** is the share of complete 50 ms recording slots that received at least one usable weight frame. Clean 20 Hz reaches 100%; faster streams saturate instead of earning bonus points. Clean 10 Hz scores 50% coverage, 5 Hz scores 25%, and 2 Hz scores 10%.
 
-This confirms that the app is actively recording.
+**Purity** is usable weight frames divided by all relevant weight frames. Status, battery, capability, and other non-weight frames are excluded. Bad weight frames are classified once, in this order:
 
-## What happens when I stop?
+```text
+parse failure -> out of order -> stale -> implausible -> duplicate -> usable
+```
 
-ScaleBench shows a results screen with:
+The score multiplies coverage and purity, so missing time and bad frames compound. Half coverage with half purity is 25, not 50.
 
-- score for the selected profile, clearly marked as Standard v1 or custom
-- duration
-- protocol
-- sample and packet counts
-- effective sample rate
-- p95 packet interval
-- max packet gap
-- long gaps
-- rejected packets
-- a short explanation of what affected this recording
+## What causes deductions
 
-From there you can save, export JSON, export the official scorecard, or open the score explanation.
+- Missing or late usable frames leave 50 ms slots empty and reduce coverage.
+- Checksum, CRC, length, header, or unit failures reduce purity when the protocol exposes them.
+- Sequence numbers can expose out-of-order frames; free-running device clocks can expose stale frames.
+- Isolated implausible weight spikes reduce purity in Shot / Pour and Idle Stability. Sustained Shot / Pour motion is not treated as packet corruption.
+- Avoidable duplicate weight values reduce purity in Shot / Pour only when a distinct value should have been achievable.
+- A disconnect invalidates normal modes; Transport Stress records disconnects without invalidating because provoking link trouble is the point.
+- Leaving ScaleBench during a recording invalidates every official mode because iOS and Android schedule background Bluetooth differently.
+
+Available checks depend on both the scale protocol and the selected mode. Transport Stress deliberately disables weight-physics and duplicate checks, so even a full-detail protocol reports `3 of 5 available`. When every defect class is not checked, Delivery is shown as an upper bound such as `<=100`.
+
+## Other results
+
+Idle Stability scores detrended residual noise and drift after discarding the first 5 seconds. Noise and drift are combined geometrically so one bad term cannot be hidden by one good term.
+
+Step Response reports onset, rise time, settling time, and overshoot. It is not a 0-100 score because real hardware data is still needed before thresholds are credible.
+
+Tare Latency and Battery Logging are metrics-only modes.
 
 ## Saved recordings
 
-Saved recordings keep:
+Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported, using the current ScaleBench Standard v1 analyzer. Open a saved recording to inspect charts, packet cadence, classifications, notes, validity reasons, and raw packet preview.
 
-- raw BLE packets
-- parsed samples
-- score snapshot
-- scoring profile
-- recording mode
-- device/protocol identity
-- notes
+Compare only recordings made with the same mode and platform. Keep the `scoringModelVersion`, platform, and available protocol checks with any published result.
 
-Tap a saved recording to open its detail view.
+## Device Utility
 
-## Packet visualizer
+Device Utility, or DU, is separate from scoring. Use it to inspect connected-device update capability and export a device report.
 
-The packet visualizer explains why a recording scored well or poorly.
+Android can start classic Nordic nRF5 Secure/Legacy DFU from a firmware ZIP package when the connected device exposes a compatible DFU bootloader. SMP/McuManager update support is detected but not active yet. Device Utility is not exposed in the iOS/iPadOS app.
 
-Color meaning:
+Mac DU also scans for cabled USB serial devices. When it sees a likely `/dev/cu.*` or `/dev/tty.*` port, it can run ESP32 backup and app-binary flash through local `esptool`/`esptool.py`/`python -m esptool`. Backup reads 4 MB from address `0x00000`; flash defaults to app offset `0x10000` and requires a successful backup first. Full images still need the exact bootloader, partition, and app offsets.
 
-| Color | Meaning |
-| --- | --- |
-| Blue | normal parsed weight packet |
-| Green | battery or metadata packet |
-| Purple | capability or command acknowledgement packet |
-| Orange | warning or near-threshold interval |
-| Red | score-impacting problem, such as rejected packet or long gap |
-| Gray | unknown packet |
+Android DU can detect attached USB devices and records them in the device report. Actual cabled ESP32 backup/flash on Android needs a native Espressif `esp-serial-flasher` bridge, so the app blocks those buttons with a clear status until that backend is added.
 
-The visualizer includes:
+Full firmware image backup is usually not possible over BLE. Cabled backup is possible only for devices whose bootloader/debug path permits readback. ScaleBench backup means exporting device metadata, advertised services, app/build identity, cable/tool detection, and latest telemetry unless the firmware or ESP32 serial bootloader allows readback.
 
-- **Score evidence**: counts of rejected packets, long gaps, missing sequence steps, timestamp issues, bump flags, and near gaps.
-- **Weight stream**: parsed weight over time.
-- **Packet cadence**: interval before each parsed sample, with the long-gap threshold marked.
-- **Packet timeline**: dense packet raster showing where normal packets, metadata, warnings, and penalties occurred.
-- **Packet inspector**: tap packet chips to inspect raw hex, UUID, interval, and score evidence.
+## Visualizer
 
-## Official scorecards
+Use the visualizer to understand why a recording scored well or poorly.
 
-The official scorecard always uses **ScaleBench Standard v1**, even if you are viewing or experimenting with a custom scoring profile.
+- **Weight stream** shows parsed sample weight over time.
+- **Packet cadence** shows arrival intervals and gap behavior.
+- **Scorecard** shows coverage, purity, protocol detail, validity, and frame-class counts.
+- **Packet inspector** lists packets by time and event. Tap one to see selectable raw hex; matching colors connect byte ranges to parser-decoded fields.
+- **Signal diagnostics** compare a scale's reported flow with weight change measured across a centered 1-second window, estimate drift for genuine free-running BooKoo and WMB+ clocks, and show how many weight frames occupy each 50 ms scoring slot.
 
-Use official scorecards for tester comparisons and public claims.
+Signal diagnostics, color, and emphasis do not add or remove score points. Decent's shot timer is intentionally not treated as a free-running device clock. The official numbers always come from Standard v1.
 
-## JSON export
+## Exports
 
-Use JSON export when you want deeper analysis or want to share the full recording with someone else.
+JSON is the complete evidence record: raw packets, parsed samples, recording boundaries, app-state events, link setup, protocol capabilities, validity, score details, and diagnostics. Scorecard images are available only for valid scored modes and always use ScaleBench Standard v1.
 
-The JSON includes raw packets, parsed samples, protocol identity, notes, scoring profile, and calculated metrics.
+## Source & legal
+
+ScaleBench is open source. The repository includes the app code, shared schemas, test fixtures, scoring documentation, privacy policy, and MIT license:
+
+- GitHub repository: https://github.com/danielfcurrie-alt/ScaleBench
+- Privacy policy: https://github.com/danielfcurrie-alt/ScaleBench/blob/main/PRIVACY.md
+- MIT license: https://github.com/danielfcurrie-alt/ScaleBench/blob/main/LICENSE
 
 ## Troubleshooting
 
-### I do not see my scale
+If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and Protocol detail. Backgrounding the app invalidates an official result; low-power mode, distance, interference, and unstable Bluetooth conditions can affect the captured data.
 
-- Make sure Bluetooth is enabled.
-- Power-cycle the scale.
-- Tap **Scan** again.
-- Keep the phone close to the scale.
-- Check whether another app is already connected to the scale.
+If battery or flow is missing, the connected protocol probably did not expose it. ScaleBench records only what the scale sends.
 
-### The score is lower than expected
-
-Open the saved recording and check:
-
-- red packet markers
-- long-gap count
-- rejected packet count
-- max gap
-- p95 interval
-- packet cadence chart
-
-Low phone power mode, poor Bluetooth conditions, distance, interference, and app backgrounding can all affect the score.
-
-### Battery is missing
-
-Not every scale exposes battery over Bluetooth. ScaleBench can only show battery when the connected protocol provides it.
-
-### Flow is missing
-
-Flow appears only when the scale or protocol reports it. Otherwise ScaleBench records weight and packet timing.
-
-### Saved recordings are local
-
-Saved recordings are stored locally on the device. Export JSON if you want a portable copy.
+Saved recordings are local to the device until exported as JSON.

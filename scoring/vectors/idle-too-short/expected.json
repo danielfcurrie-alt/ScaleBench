@@ -1,0 +1,72 @@
+{
+  "delivery": {
+    "applicable": false,
+    "coverage": null,
+    "deliveryScore": null,
+    "purity": null,
+    "purityIsUpperBound": null
+  },
+  "diagnostics": {
+    "disconnectCount": 0,
+    "estimatedResolutionGrams": 0.01,
+    "excludedFrames": 1,
+    "frameRateHz": 20.0,
+    "intervalMaxMs": 50.0,
+    "intervalP50Ms": 50.0,
+    "longestUnservedRunMs": 0.0,
+    "recordingBoundaryInferred": false,
+    "relevantWeightFrames": 800,
+    "robustCoefficientOfVariation": 0.0,
+    "servedSlots": 800,
+    "slotCount": 800,
+    "spanSeconds": 40.0,
+    "usableRateHz": 20.0,
+    "usableSampleCount": 800
+  },
+  "frameClassification": {
+    "duplicate": 0,
+    "implausible": 0,
+    "outOfOrder": 0,
+    "parseFailure": 0,
+    "stale": 0,
+    "usable": 800
+  },
+  "idle": {
+    "analysedSampleCount": 700,
+    "driftGramsPerMinute": 0.000208,
+    "driftScore": 100,
+    "idleStabilityScore": null,
+    "noiseScore": 100,
+    "residualPeakToPeakGrams": 0.018075,
+    "residualStandardDeviationGrams": 0.004825,
+    "resolutionGrams": 0.001
+  },
+  "mode": "idleStability",
+  "protocolVerification": {
+    "purityIsUpperBound": true,
+    "unverifiableClasses": [
+      "duplicate",
+      "outOfOrder",
+      "parseFailure",
+      "stale"
+    ],
+    "verifiableClasses": [
+      "implausible"
+    ],
+    "verificationCoveragePercent": 20
+  },
+  "scoringModelVersion": "standard-1.0.0",
+  "scoringProfileName": "ScaleBench Standard v1",
+  "signalDiagnostics": {
+    "clockSkew": null,
+    "flowValidation": null,
+    "packetCoalescing": null
+  },
+  "signalUnreconstructable": false,
+  "validity": {
+    "isValid": false,
+    "reasons": [
+      "durationBelowMinimum"
+    ]
+  }
+}

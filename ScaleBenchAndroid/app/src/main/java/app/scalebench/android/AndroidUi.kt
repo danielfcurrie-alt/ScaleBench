@@ -1,0 +1,1081 @@
+package app.scalebench.android
+
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.database.Cursor
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
+import android.provider.OpenableColumns
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
+import kotlinx.coroutines.delay
+import org.json.JSONObject
+import no.nordicsemi.android.dfu.DfuProgressListenerAdapter
+import no.nordicsemi.android.dfu.DfuServiceInitiator
+import no.nordicsemi.android.dfu.DfuServiceListenerHelper
+
+@Composable
+internal fun ScaleBenchTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val colors = if (dark) {
+        darkColorScheme(
+            primary = Color(0xFF7FDBD6),
+            onPrimary = Color(0xFF003735),
+            primaryContainer = Color(0xFF164F4E),
+            onPrimaryContainer = Color(0xFFB1F1ED),
+            secondary = Color(0xFFE4C16D),
+            onSecondary = Color(0xFF3D2F00),
+            secondaryContainer = Color(0xFF54450F),
+            onSecondaryContainer = Color(0xFFFFE291),
+            tertiary = Color(0xFFC9C3FF),
+            onTertiary = Color(0xFF302B60),
+            tertiaryContainer = Color(0xFF484273),
+            onTertiaryContainer = Color(0xFFE4DFFF),
+            background = Color(0xFF091014),
+            onBackground = Color(0xFFE6F0F1),
+            surface = Color(0xFF10191D),
+            onSurface = Color(0xFFE6F0F1),
+            surfaceVariant = Color(0xFF243235),
+            onSurfaceVariant = Color(0xFFB9C9CB),
+            outline = Color(0xFF839396),
+            outlineVariant = Color(0xFF3E4C4F),
+            error = Color(0xFFFFB4AB),
+            onError = Color(0xFF690005),
+            errorContainer = Color(0xFF93000A),
+            onErrorContainer = Color(0xFFFFDAD6)
+        )
+    } else {
+        lightColorScheme(
+            primary = Color(0xFF236A68),
+            onPrimary = Color.White,
+            primaryContainer = Color(0xFFA6EFEB),
+            onPrimaryContainer = Color(0xFF00201F),
+            secondary = Color(0xFF7D5F2A),
+            onSecondary = Color.White,
+            secondaryContainer = Color(0xFFFFE08D),
+            onSecondaryContainer = Color(0xFF251A00),
+            tertiary = Color(0xFF5F5C8A),
+            onTertiary = Color.White,
+            tertiaryContainer = Color(0xFFE5DFFF),
+            onTertiaryContainer = Color(0xFF1B1943),
+            background = Color(0xFFF7FAFA),
+            onBackground = Color(0xFF171D1E),
+            surface = Color(0xFFFBFCFC),
+            onSurface = Color(0xFF171D1E),
+            surfaceVariant = Color(0xFFE2E8E7),
+            onSurfaceVariant = Color(0xFF3F494A),
+            outline = Color(0xFF6F797A),
+            outlineVariant = Color(0xFFBECAC9),
+            error = Color(0xFFBA1A1A),
+            onError = Color.White,
+            errorContainer = Color(0xFFFFDAD6),
+            onErrorContainer = Color(0xFF410002)
+        )
+    }
+    MaterialTheme(
+        colorScheme = colors,
+        content = content
+    )
+}
+
+@Composable
+internal fun ScaleBenchApp(
+    bluetooth: BluetoothScaleManager,
+    savedRecordingStore: SavedRecordingStore,
+    renderTick: Int,
+    onSave: (String) -> RecordingSaveResult,
+    onLoadExamples: () -> Unit,
+    onImportRecording: () -> Unit,
+    onDeleteSaved: (SavedRecordingSummary) -> Unit,
+    onExport: (String) -> Unit,
+    onExportSaved: (SavedRecordingSummary) -> Unit,
+    onShareScorecard: (String) -> Unit,
+    onShareSavedScorecard: (SavedRecordingSummary) -> Unit,
+    deviceUtilityState: DeviceUtilityState,
+    onChooseFirmware: () -> Unit,
+    onStartClassicDfu: () -> Unit,
+    onRefreshCabledEsp: () -> Unit,
+    onSelectCabledEsp: (String) -> Unit,
+    onBackupCabledEsp: () -> Unit,
+    onFlashCabledEsp: () -> Unit,
+    onExportDeviceReport: () -> Unit
+) {
+    renderTick.hashCode()
+    val context = LocalContext.current
+    val discoveredScales = bluetooth.discoveredScales()
+    val savedRecordings = savedRecordingStore.recordings()
+    var selectedModeName by rememberSaveable { mutableStateOf(RecordingMode.SHOT.name) }
+    val selectedMode = RecordingMode.valueOf(selectedModeName)
+    var recordingNotes by rememberSaveable { mutableStateOf(bluetooth.currentRecording().notes ?: "") }
+    var showRecordingResults by rememberSaveable { mutableStateOf(false) }
+    var handledCompletionKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var recordingSaveMessage by rememberSaveable { mutableStateOf("") }
+    var recordingSaveSucceeded by rememberSaveable { mutableStateOf(false) }
+    var recordingSaveRetryable by rememberSaveable { mutableStateOf(false) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
+    var selectedSavedDetails by remember { mutableStateOf<SavedRecordingDetails?>(null) }
+    val isConnected = bluetooth.isConnected
+    val connectedScaleAddress = bluetooth.connectedDevice()?.address?.takeIf { isConnected }
+    val completionKey = if (!bluetooth.isRecording) {
+        bluetooth.currentRecording().recordingEndMonotonicSeconds?.let {
+            "${bluetooth.currentRecording().id}:$it"
+        }
+    } else {
+        null
+    }
+
+    LaunchedEffect(completionKey) {
+        if (completionKey != null && completionKey != handledCompletionKey) {
+            handledCompletionKey = completionKey
+            val result = onSave(recordingNotes)
+            recordingSaveMessage = result.message
+            recordingSaveSucceeded = result.saved
+            recordingSaveRetryable = result.retryable
+            showRecordingResults = true
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) {
+            bluetooth.startScanning()
+        }
+    }
+    val startScan = {
+        if (hasBluetoothPermissions(context)) {
+            bluetooth.startScanning()
+        } else {
+            permissionLauncher.launch(bluetoothPermissions())
+        }
+    }
+
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("ScaleBench", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            nextStepTitle(
+                                isConnected = isConnected,
+                                hasRecordingData = bluetooth.currentRecording().samples.isNotEmpty()
+                                        || bluetooth.currentRecording().rawPackets.isNotEmpty(),
+                                savedCount = savedRecordings.size
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { showHelp = true }) {
+                        Text("Help")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                BluetoothSection(
+                    bluetooth = bluetooth,
+                    onScan = startScan,
+                    onStopScan = bluetooth::stopScanning
+                )
+            }
+
+            item {
+                ScalesSection(
+                    scales = discoveredScales,
+                    connectedAddress = connectedScaleAddress,
+                    isScanning = bluetooth.isScanning,
+                    onConnect = { scale ->
+                        bluetooth.connect(scale)
+                    }
+                )
+            }
+
+            item {
+                RecordingSection(
+                    bluetooth = bluetooth,
+                    canRecord = isConnected,
+                    selectedMode = selectedMode,
+                    onModeChanged = { selectedModeName = it.name },
+                    recordingNotes = recordingNotes,
+                    onRecordingNotesChanged = {
+                        recordingNotes = it
+                        bluetooth.currentRecording().notes = it
+                    },
+                    onRecord = {
+                        if (!bluetooth.isRecording) {
+                            bluetooth.startRecording(selectedMode)
+                            bluetooth.currentRecording().notes = recordingNotes
+                        }
+                    },
+                    onTare = bluetooth::sendAtomicTareAndStart,
+                    onExport = { onExport(recordingNotes) }
+                )
+            }
+
+            if (isConnected) {
+                item {
+                    LiveSection(bluetooth = bluetooth)
+                }
+            }
+
+            if (!bluetooth.isRecording &&
+                (bluetooth.currentRecording().samples.size >= 2 || bluetooth.currentRecording().rawPackets.size >= 2)
+            ) {
+                item {
+                    ScorecardSection(recording = bluetooth.currentRecording(), metrics = bluetooth.currentMetrics())
+                }
+                item {
+                    VisualizerSection(
+                        recording = bluetooth.currentRecording(),
+                        metrics = bluetooth.currentMetrics()
+                    )
+                }
+            }
+
+            item {
+                SavedRecordingsSection(
+                    recordings = savedRecordings,
+                    libraryWarning = savedRecordingStore.lastErrorMessage(),
+                    onLoadExamples = onLoadExamples,
+                    onImportRecording = onImportRecording,
+                    onDeleteSaved = onDeleteSaved,
+                    onOpenSaved = { saved ->
+                        selectedSavedDetails = readSavedRecordingDetails(savedRecordingStore, saved)
+                    }
+                )
+            }
+
+            item {
+                DeviceUtilitySection(
+                    bluetooth = bluetooth,
+                    state = deviceUtilityState,
+                    onChooseFirmware = onChooseFirmware,
+                    onStartClassicDfu = onStartClassicDfu,
+                    onRefreshCabledEsp = onRefreshCabledEsp,
+                    onSelectCabledEsp = onSelectCabledEsp,
+                    onBackupCabledEsp = onBackupCabledEsp,
+                    onFlashCabledEsp = onFlashCabledEsp,
+                    onExportDeviceReport = onExportDeviceReport
+                )
+            }
+        }
+
+        if (bluetooth.isRecording) {
+            RecordingTimerDialog(
+                bluetooth = bluetooth,
+                onStop = {
+                    bluetooth.stopRecording()
+                }
+            )
+        }
+
+        if (showRecordingResults && !bluetooth.isRecording) {
+            RecordingResultsDialog(
+                recording = bluetooth.currentRecording(),
+                metrics = bluetooth.currentMetrics(),
+                saveMessage = recordingSaveMessage,
+                saveSucceeded = recordingSaveSucceeded,
+                canRetrySave = recordingSaveRetryable,
+                onDismiss = { showRecordingResults = false },
+                onRetrySave = {
+                    val result = onSave(recordingNotes)
+                    recordingSaveMessage = result.message
+                    recordingSaveSucceeded = result.saved
+                    recordingSaveRetryable = result.retryable
+                },
+                onExport = { onExport(recordingNotes) },
+                onShareScorecard = { onShareScorecard(recordingNotes) }
+            )
+        }
+
+        if (selectedSavedDetails != null) {
+            SavedRecordingDetailsDialog(
+                details = selectedSavedDetails!!,
+                onExport = { onExportSaved(selectedSavedDetails!!.summary) },
+                onShareScorecard = { onShareSavedScorecard(selectedSavedDetails!!.summary) },
+                onDelete = {
+                    val summary = selectedSavedDetails!!.summary
+                    selectedSavedDetails = null
+                    onDeleteSaved(summary)
+                },
+                onDismiss = { selectedSavedDetails = null }
+            )
+        }
+
+        if (showHelp) {
+            ScaleBenchHelpDialog(onDismiss = { showHelp = false })
+        }
+    }
+}
+
+@Composable
+internal fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = content
+            )
+        }
+    }
+}
+
+@Composable
+internal fun OnboardingCard(
+    isConnected: Boolean,
+    isScanning: Boolean,
+    hasRecordingData: Boolean,
+    savedCount: Int,
+    onScan: () -> Unit,
+    onLoadExamples: () -> Unit,
+    onHelp: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(nextStepTitle(isConnected, hasRecordingData, savedCount), fontWeight = FontWeight.SemiBold)
+            Text(
+                nextStepDetail(isConnected, isScanning, hasRecordingData, savedCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!isConnected) {
+                    Button(onClick = onScan) {
+                        Text(if (isScanning) "Scanning..." else "Scan")
+                    }
+                }
+                if (savedCount == 0) {
+                    OutlinedButton(onClick = onLoadExamples) {
+                        Text("Load examples")
+                    }
+                }
+                TextButton(onClick = onHelp) {
+                    Text("Test guide")
+                }
+            }
+        }
+    }
+}
+
+internal fun nextStepTitle(isConnected: Boolean, hasRecordingData: Boolean, savedCount: Int): String {
+    return when {
+        !isConnected -> "Start by connecting a scale"
+        !hasRecordingData -> "Ready for a Shot / Pour test"
+        savedCount == 0 -> "Review results, then open the saved shot"
+        else -> "Open a saved recording or run another test"
+    }
+}
+
+internal fun nextStepDetail(
+    isConnected: Boolean,
+    isScanning: Boolean,
+    hasRecordingData: Boolean,
+    savedCount: Int
+): String {
+    return when {
+        !isConnected && isScanning -> "Keep the scale awake and nearby. Supported scales will appear in the Scales section."
+        !isConnected -> "Tap Scan, connect a supported BLE scale, then run Shot / Pour for at least 20 seconds."
+        !hasRecordingData -> "Tare and settle before Start Recording. Stop before removing the cup so the boundaries stay clean."
+        savedCount == 0 -> "The result screen explains deductions and charts packet gaps. ScaleBench saves real recordings automatically."
+        else -> "Saved recordings recalculate with the current analyzer and include charts, score evidence, raw packets, and JSON export."
+    }
+}
+
+@Composable
+internal fun ScaleBenchHelpDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val content = remember { SharedHelpContent.load(context) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(content.title) },
+        text = {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                content.sections.forEach { section ->
+                    item {
+                        HelpCard(section.title) {
+                            section.items.forEach { helpItem ->
+                                SharedHelpItemView(helpItem)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun SharedHelpItemView(item: SharedHelpItem) {
+    val context = LocalContext.current
+    when (item.type) {
+        SharedHelpItemType.STEP -> HelpStep(item.number ?: "", listOfNotNull(item.title, item.text).joinToString(": "))
+        SharedHelpItemType.ROW -> HelpProcedureRow(
+            title = item.title.orEmpty(),
+            detail = item.value ?: item.text.orEmpty()
+        )
+        SharedHelpItemType.BULLET -> Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("•", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(item.text.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        SharedHelpItemType.TEXT -> Text(
+            item.text.orEmpty(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SharedHelpItemType.LINK -> {
+            val url = item.value ?: item.text.orEmpty()
+            TextButton(
+                onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+            ) {
+                Text(item.title ?: url)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HelpProcedureRow(title: String, detail: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+internal fun HelpCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            content()
+        }
+    }
+}
+
+@Composable
+internal fun HelpStep(number: String, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        ) {
+            Text(
+                number,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+@Composable
+internal fun BluetoothSection(
+    bluetooth: BluetoothScaleManager,
+    onScan: () -> Unit,
+    onStopScan: () -> Unit
+) {
+    SectionCard("Bluetooth") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(if (bluetooth.connectedDevice() == null) "Bluetooth scale" else bluetooth.connectedDevice().name, fontWeight = FontWeight.SemiBold)
+                Text(
+                    bluetooth.status(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Button(
+                onClick = { if (bluetooth.isScanning) onStopScan() else onScan() }
+            ) {
+                Text(if (bluetooth.isScanning) "Stop" else "Scan")
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DeviceUtilitySection(
+    bluetooth: BluetoothScaleManager,
+    state: DeviceUtilityState,
+    onChooseFirmware: () -> Unit,
+    onStartClassicDfu: () -> Unit,
+    onRefreshCabledEsp: () -> Unit,
+    onSelectCabledEsp: (String) -> Unit,
+    onBackupCabledEsp: () -> Unit,
+    onFlashCabledEsp: () -> Unit,
+    onExportDeviceReport: () -> Unit
+) {
+    val device = bluetooth.connectedDevice()?.takeIf { bluetooth.isConnected }
+    SectionCard("Device Utility") {
+        if (device == null) {
+            Text("Connect a BLE scale or plug in a USB ESP32 scale to inspect firmware update and backup options.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            SwiftMetricRow("Connected", device.name)
+            SwiftMetricRow("Protocol", device.kind.displayName)
+            SwiftMetricRow("DFU capability", deviceUtilityCapabilityLabel(device.advertisedServices))
+            if (device.advertisedServices.isNotEmpty()) {
+                Text(
+                    device.advertisedServices.joinToString("\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Firmware update", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Classic Nordic DFU supports nRF5 Secure/Legacy DFU ZIP packages. SMP/McuManager is detected but not wired in this build.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onChooseFirmware) {
+                    Text("Choose ZIP")
+                }
+                Button(
+                    onClick = onStartClassicDfu,
+                    enabled = state.selectedFirmwareUri != null && !bluetooth.isRecording
+                ) {
+                    Text("Start DFU")
+                }
+            }
+            state.selectedFirmwareName?.let { SwiftMetricRow("Package", it) }
+            SwiftMetricRow("Status", state.status)
+            state.progress?.let { progress ->
+                LinearProgressIndicator(
+                    progress = { progress / 100f },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            state.log.takeLast(4).forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("ESP32 cable", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Android can detect USB devices now. Actual ESP32 backup/flash needs a native esp-serial-flasher bridge; the buttons are blocked until that backend lands.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(onClick = onRefreshCabledEsp) {
+                    Text("Refresh USB")
+                }
+                Button(onClick = onBackupCabledEsp, enabled = false) {
+                    Text("Backup ESP32")
+                }
+                Button(
+                    onClick = onFlashCabledEsp,
+                    enabled = false
+                ) {
+                    Text("Flash ESP32")
+                }
+            }
+            if (state.cabledUsbDevices.isEmpty()) {
+                Text("No USB devices detected yet.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                state.cabledUsbDevices.forEach { usb ->
+                    OutlinedButton(
+                        onClick = { onSelectCabledEsp(usb.deviceName) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                if (state.selectedUsbDeviceName == usb.deviceName) "${usb.displayName} selected" else usb.displayName,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "VID ${usb.vendorId.toString(16)} PID ${usb.productId.toString(16)} · permission ${if (usb.hasPermission) "yes" else "no"}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Backup", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Full firmware image backup usually requires firmware readback support. ScaleBench can export device metadata and latest telemetry now.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = onExportDeviceReport) {
+                Text("Export Device Report")
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ScalesSection(
+    scales: List<DiscoveredScale>,
+    connectedAddress: String?,
+    isScanning: Boolean,
+    onConnect: (DiscoveredScale) -> Unit
+) {
+    SectionCard("Scales") {
+        if (scales.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(if (isScanning) "Looking for scales" else "No scales yet", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (isScanning) "Keep the scale awake and close to this phone." else "Tap Scan above, then connect when your scale appears.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            scales.forEachIndexed { index, scale ->
+                ScaleListRow(
+                    scale = scale,
+                    isConnected = connectedAddress == scale.address,
+                    onConnect = { onConnect(scale) }
+                )
+                if (index < scales.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun RecordingSection(
+    bluetooth: BluetoothScaleManager,
+    canRecord: Boolean,
+    selectedMode: RecordingMode,
+    onModeChanged: (RecordingMode) -> Unit,
+    recordingNotes: String,
+    onRecordingNotesChanged: (String) -> Unit,
+    onRecord: () -> Unit,
+    onTare: () -> Unit,
+    onExport: () -> Unit
+) {
+    val hasRecordingData = bluetooth.currentRecording().samples.isNotEmpty()
+            || bluetooth.currentRecording().rawPackets.isNotEmpty()
+    SectionCard("Recording") {
+        var menuExpanded by remember { mutableStateOf(false) }
+        ExposedDropdownMenuBox(
+            expanded = menuExpanded,
+            onExpandedChange = { menuExpanded = it }
+        ) {
+            TextField(
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                    .fillMaxWidth(),
+                value = selectedMode.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Mode") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded) }
+            )
+            ExposedDropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                RecordingMode.values().forEach { mode ->
+                    DropdownMenuItem(
+                        text = { Text(mode.displayName) },
+                        onClick = {
+                            onModeChanged(mode)
+                            menuExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(recordingStatusLabel(bluetooth, canRecord, hasRecordingData), fontWeight = FontWeight.SemiBold)
+                Text(modeHelp(selectedMode), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        OutlinedTextField(
+            value = recordingNotes,
+            onValueChange = onRecordingNotesChanged,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Notes") },
+            minLines = 2,
+            maxLines = 4
+        )
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = onRecord,
+                enabled = canRecord || bluetooth.isRecording
+            ) {
+                Text(if (bluetooth.isRecording) "View Timer" else "Start Recording")
+            }
+            OutlinedButton(onClick = onTare, enabled = bluetooth.connectedDevice() != null) {
+                Text("Tare + Start")
+            }
+            OutlinedButton(onClick = onExport, enabled = !bluetooth.isRecording && hasRecordingData) {
+                Text("Save JSON...")
+            }
+        }
+    }
+}
+
+@Composable
+internal fun RecordingTimerDialog(
+    bluetooth: BluetoothScaleManager,
+    onStop: () -> Unit
+) {
+    var timerTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(bluetooth.isRecording) {
+        while (bluetooth.isRecording) {
+            delay(1000)
+            timerTick++
+        }
+    }
+    timerTick.hashCode()
+
+    val recording = bluetooth.currentRecording()
+    val sample = bluetooth.latestSample()
+    val elapsedMillis = (System.currentTimeMillis() - recording.startedAtMillis).coerceAtLeast(0)
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Recording") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    formatDuration(elapsedMillis),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(recording.mode.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                SwiftMetricRow("Samples", recording.samples.size.toString())
+                SwiftMetricRow("Packets", recording.rawPackets.size.toString())
+                SwiftMetricRow("Weight", sample?.weightGrams?.let { String.format(Locale.US, "%.2f g", it) } ?: "--")
+                SwiftMetricRow("Flow", sample?.flowGramsPerSecond?.let { String.format(Locale.US, "%.2f g/s", it) } ?: "--")
+                SwiftMetricRow("Battery", sample?.batteryPercent?.let { "$it%" } ?: bluetooth.latestBatteryPercent()?.let { "$it%" } ?: "--")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onStop) {
+                Text("Stop and View Results")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun RecordingResultsDialog(
+    recording: ScaleRecording,
+    metrics: ScaleQualityMetrics,
+    saveMessage: String,
+    saveSucceeded: Boolean,
+    canRetrySave: Boolean,
+    onDismiss: () -> Unit,
+    onRetrySave: () -> Unit,
+    onExport: () -> Unit,
+    onShareScorecard: () -> Unit
+) {
+    val hasRecordingData = recording.samples.isNotEmpty() || recording.rawPackets.isNotEmpty()
+    val canShareScorecard = hasRecordingData && canShareOfficialScorecard(recording.mode, metrics)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.fillMaxWidth(0.96f),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        title = { Text("Recording Results") },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 720.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(recording.defaultTitle(), fontWeight = FontWeight.SemiBold)
+                        if (!hasRecordingData) {
+                            Text(
+                                "No packets were captured. If the scale is connected, start recording again and leave this open while weight updates arrive.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        ScoreHero(
+                            title = standardScoreTitle(recording.mode),
+                            value = standardScoreDisplay(recording.mode, metrics),
+                            isValid = metrics.validity?.isValid
+                        )
+                        StandardScoreRows(recording.mode, metrics, showScore = false)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        Text("Recording summary", fontWeight = FontWeight.SemiBold)
+                        SwiftMetricRow("Samples", recording.samples.size.toString())
+                        SwiftMetricRow("Raw packets", recording.rawPackets.size.toString())
+                        SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+                        SwiftMetricRow("Interval p95", metrics.packetIntervalP95Milliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
+                        SwiftMetricRow("Max gap", metrics.packetIntervalMaxMilliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
+                        SwiftMetricRow("Long gaps", metrics.longGapCount.toString())
+                        SwiftMetricRow("Missing seq", metrics.missingSequenceCount.toString())
+                        SwiftMetricRow("Rejected", metrics.rejectedPacketCount.toString())
+                        SwiftMetricRow("Idle noise", metrics.idleNoisePeakToPeakGrams?.let { String.format(Locale.US, "%.2f g p-p", it) } ?: "--")
+                        SwiftMetricRow("Drift", metrics.driftGramsPerMinute?.let { String.format(Locale.US, "%.3f g/min", it) } ?: "--")
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                        ScoreBreakdownRows(recording, metrics)
+                    }
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            saveMessage.ifBlank {
+                                if (hasRecordingData) {
+                                    "Automatic save has not completed."
+                                } else {
+                                    "No saved shot was created because no packets were captured."
+                                }
+                            },
+                            color = if (saveSucceeded || !hasRecordingData) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (canRetrySave) {
+                            OutlinedButton(onClick = onRetrySave) {
+                                Text("Retry Save")
+                            }
+                        }
+                    }
+                }
+                if (hasRecordingData) {
+                    item {
+                        RecordingVisualizer(recording = recording, metrics = metrics)
+                    }
+                }
+                item {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(onClick = onShareScorecard, enabled = canShareScorecard) {
+                            Text("Share Scorecard")
+                        }
+                        OutlinedButton(onClick = onExport, enabled = hasRecordingData) {
+                            Text("Save JSON...")
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun LiveSection(bluetooth: BluetoothScaleManager) {
+    val sample = bluetooth.latestSample()
+    SectionCard("Live") {
+        SwiftMetricRow("Weight", sample?.weightGrams?.let { String.format(Locale.US, "%.2f g", it) } ?: "--")
+        SwiftMetricRow("Flow", sample?.flowGramsPerSecond?.let { String.format(Locale.US, "%.2f g/s", it) } ?: "--")
+        SwiftMetricRow("Battery", sample?.batteryPercent?.let { "$it%" } ?: bluetooth.latestBatteryPercent()?.let { "$it%" } ?: "--")
+        SwiftMetricRow("Protocol", sample?.scaleKind?.displayName ?: bluetooth.connectedDevice()?.kind?.displayName ?: "Unknown")
+        SwiftMetricRow("Packets", bluetooth.currentRecording().rawPackets.size.toString())
+        SwiftMetricRow("Samples", bluetooth.currentRecording().samples.size.toString())
+    }
+}

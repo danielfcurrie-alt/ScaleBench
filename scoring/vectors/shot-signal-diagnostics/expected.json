@@ -1,0 +1,71 @@
+{
+  "delivery": {
+    "applicable": true,
+    "coverage": 1.0,
+    "deliveryScore": 100,
+    "purity": 1.0,
+    "purityIsUpperBound": false
+  },
+  "diagnostics": {
+    "disconnectCount": 0,
+    "estimatedResolutionGrams": 0.01,
+    "excludedFrames": 0,
+    "frameRateHz": 20.0,
+    "intervalMaxMs": 50.0,
+    "intervalP50Ms": 50.0,
+    "longestUnservedRunMs": 0.0,
+    "recordingBoundaryInferred": false,
+    "relevantWeightFrames": 400,
+    "robustCoefficientOfVariation": 0.0,
+    "servedSlots": 400,
+    "slotCount": 400,
+    "spanSeconds": 20.0,
+    "usableRateHz": 20.0,
+    "usableSampleCount": 400
+  },
+  "frameClassification": {
+    "duplicate": 0,
+    "implausible": 0,
+    "outOfOrder": 0,
+    "parseFailure": 0,
+    "stale": 0,
+    "usable": 400
+  },
+  "mode": "shot",
+  "protocolVerification": {
+    "purityIsUpperBound": false,
+    "unverifiableClasses": [],
+    "verifiableClasses": [
+      "duplicate",
+      "implausible",
+      "outOfOrder",
+      "parseFailure",
+      "stale"
+    ],
+    "verificationCoveragePercent": 100
+  },
+  "scoringModelVersion": "standard-1.0.0",
+  "scoringProfileName": "ScaleBench Standard v1",
+  "signalDiagnostics": {
+    "clockSkew": {
+      "sampleCount": 400,
+      "skewPartsPerMillion": 112.500703
+    },
+    "flowValidation": {
+      "correlation": 1.0,
+      "lagMilliseconds": 200.0,
+      "medianAbsoluteErrorGramsPerSecond": 0.029024,
+      "sampleCount": 379
+    },
+    "packetCoalescing": {
+      "framesPerServedSlot": 1.0,
+      "observedFrameRateHz": 20.0,
+      "servedSlotRateHz": 20.0
+    }
+  },
+  "signalUnreconstructable": false,
+  "validity": {
+    "isValid": true,
+    "reasons": []
+  }
+}

@@ -25,6 +25,10 @@ import no.nordicsemi.android.support.v18.scanner.ScanResult;
 import no.nordicsemi.android.support.v18.scanner.ScanSettings;
 
 final class BluetoothScaleManager {
+    private static final long TRANSPORT_RECONNECT_DELAY_MILLIS = 750;
+    private static final long LIVE_UI_REFRESH_INTERVAL_MILLIS = 100;
+    private static final double LIVE_METRICS_REFRESH_INTERVAL_SECONDS = 1.0;
+
     interface Listener {
         void onStateChanged();
     }
@@ -32,6 +36,7 @@ final class BluetoothScaleManager {
     private final Context context;
     private final Listener listener;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable liveUiRefreshRunnable;
     private final Map<String, DiscoveredScale> discovered = new LinkedHashMap<>();
     private BluetoothAdapter adapter;
     private BluetoothLeScannerCompat scanner;
@@ -44,14 +49,23 @@ final class BluetoothScaleManager {
     private ScaleSample latestSample;
     private Integer latestBatteryPercent;
     private boolean scanning;
+    private boolean ready;
     private boolean recording;
+    private boolean recordingAppIsForeground = true;
     private boolean didSendInitialConfiguration;
+    private boolean reconnectPending;
+    private boolean liveUiRefreshPending;
+    private double lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
     private String status = "Idle";
-    private ScaleRecording currentRecording = ScaleRecording.empty(RecordingMode.IDLE_STABILITY);
+    private ScaleRecording currentRecording = ScaleRecording.empty(RecordingMode.SHOT);
 
     BluetoothScaleManager(Context context, Listener listener) {
         this.context = context.getApplicationContext();
         this.listener = listener;
+        this.liveUiRefreshRunnable = () -> {
+            liveUiRefreshPending = false;
+            this.listener.onStateChanged();
+        };
         BluetoothManager bluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         adapter = bluetoothManager == null ? null : bluetoothManager.getAdapter();
     }
@@ -62,6 +76,25 @@ final class BluetoothScaleManager {
 
     DiscoveredScale connectedDevice() {
         return connectedDevice;
+    }
+
+    @SuppressLint("MissingPermission")
+    void disconnect() {
+        if (recording) stopRecording();
+        reconnectPending = false;
+        mainHandler.removeCallbacks(transportReconnectRunnable);
+        if (session != null) {
+            session.close();
+            session = null;
+        }
+        connectedDevice = null;
+        ready = false;
+        activeKind = ScaleKind.UNKNOWN;
+        capabilities = null;
+        latestSample = null;
+        latestBatteryPercent = null;
+        status = "Disconnected";
+        notifyChanged();
     }
 
     ScaleSample latestSample() {
@@ -88,8 +121,24 @@ final class BluetoothScaleManager {
         return recording;
     }
 
+    boolean isConnected() {
+        return ready && connectedDevice != null;
+    }
+
     String status() {
         return status;
+    }
+
+    @SuppressLint("MissingPermission")
+    void shutdown() {
+        if (scanner != null && hasBluetoothPermissions()) scanner.stopScan(scanCallback);
+        scanning = false;
+        reconnectPending = false;
+        mainHandler.removeCallbacksAndMessages(null);
+        if (session != null) {
+            session.close();
+            session = null;
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -132,7 +181,10 @@ final class BluetoothScaleManager {
             session.close();
             session = null;
         }
+        mainHandler.removeCallbacks(transportReconnectRunnable);
+        reconnectPending = false;
         connectedDevice = scale;
+        ready = false;
         activeKind = scale.kind;
         capabilities = null;
         acaiaCodec = new AcaiaCodec();
@@ -144,20 +196,55 @@ final class BluetoothScaleManager {
         status = "Connecting to " + scale.name;
         session = new ScaleBleSession(context, new ScaleBleSession.Listener() {
             @Override
-            public void onReady() {
-                status = "Ready";
+            public void onReady(double monotonicSeconds) {
+                ready = true;
+                mainHandler.removeCallbacks(transportReconnectRunnable);
+                if (recording && reconnectPending) {
+                    ScaleRecordingEvent event = new ScaleRecordingEvent();
+                    event.type = RecordingEventType.RECONNECT;
+                    event.monotonicSeconds = monotonicSeconds;
+                    currentRecording.events.add(event);
+                }
+                boolean wasReconnecting = reconnectPending;
+                reconnectPending = false;
+                status = recording && wasReconnecting
+                        ? "Reconnected; recording " + currentRecording.mode.displayName
+                        : "Ready";
                 sendInitialConfigurationIfNeeded();
                 notifyChanged();
             }
 
             @Override
-            public void onDisconnected() {
-                status = "Disconnected";
+            public void onDisconnected(double monotonicSeconds) {
+                boolean wasReady = ready;
+                ready = false;
+                didSendInitialConfiguration = false;
+                acaiaCodec = new AcaiaCodec();
+                timemoreDotCodec = new TimemoreDotCodec();
+                if (recording && wasReady) {
+                    ScaleRecordingEvent event = new ScaleRecordingEvent();
+                    event.type = RecordingEventType.DISCONNECT;
+                    event.monotonicSeconds = monotonicSeconds;
+                    currentRecording.events.add(event);
+                }
+                if (recording && currentRecording.mode == RecordingMode.TRANSPORT_STRESS) {
+                    reconnectPending = true;
+                    status = "Disconnected; Transport Stress is reconnecting";
+                    scheduleTransportReconnect();
+                } else if (recording) {
+                    stopRecording(monotonicSeconds);
+                    status = "Disconnected; recording stopped";
+                } else {
+                    status = "Disconnected";
+                }
                 notifyChanged();
             }
 
             @Override
             public void onUnsupportedDevice() {
+                ready = false;
+                reconnectPending = false;
+                mainHandler.removeCallbacks(transportReconnectRunnable);
                 status = "No supported scale services found";
                 notifyChanged();
             }
@@ -172,9 +259,24 @@ final class BluetoothScaleManager {
     }
 
     void startRecording(RecordingMode mode) {
+        if (!isConnected()) {
+            status = "Connect a scale before recording";
+            notifyChanged();
+            return;
+        }
+        double recordingStart = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
+        recordingAppIsForeground = true;
         recording = true;
         currentRecording = ScaleRecording.empty(mode);
+        currentRecording.appVersion = BuildConfig.VERSION_NAME;
+        currentRecording.appBuild = String.valueOf(BuildConfig.VERSION_CODE);
+        currentRecording.recordingStartMonotonicSeconds = recordingStart;
+        currentRecording.recordingEndMonotonicSeconds = null;
         currentRecording.capabilities = capabilities;
+        currentRecording.protocolCapabilities = baseScoringCapabilities(activeKind);
+        currentRecording.link.requestedConnectionPriority = "high";
+        currentRecording.link.requestedMtu = 247;
+        currentRecording.link.negotiatedMtu = session == null ? null : session.negotiatedMtu();
         if (connectedDevice != null) {
             ScaleDeviceIdentity identity = new ScaleDeviceIdentity();
             identity.name = connectedDevice.name;
@@ -186,17 +288,76 @@ final class BluetoothScaleManager {
         if (latestBatteryPercent != null && latestBatteryPercent >= 0 && latestBatteryPercent <= 100) {
             receiveBattery(latestBatteryPercent);
         }
+        lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
         status = "Recording " + mode.displayName;
         notifyChanged();
     }
 
     void stopRecording() {
+        stopRecording(SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0);
+    }
+
+    void noteAppEnteredBackground() {
+        if (!recording || !recordingAppIsForeground) return;
+        recordingAppIsForeground = false;
+        ScaleRecordingEvent event = new ScaleRecordingEvent();
+        event.type = RecordingEventType.APP_BACKGROUNDED;
+        event.monotonicSeconds = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
+        currentRecording.events.add(event);
+        status = "Recording continued, but this result is not eligible for an official score";
+        notifyChanged();
+    }
+
+    void noteAppBecameForeground() {
+        if (!recording || recordingAppIsForeground) {
+            recordingAppIsForeground = true;
+            return;
+        }
+        recordingAppIsForeground = true;
+        ScaleRecordingEvent event = new ScaleRecordingEvent();
+        event.type = RecordingEventType.APP_FOREGROUNDED;
+        event.monotonicSeconds = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
+        currentRecording.events.add(event);
+        status = "Recording resumed; app backgrounding invalidated the official result";
+        notifyChanged();
+    }
+
+    private void stopRecording(double recordingEnd) {
+        if (!recording) return;
         recording = false;
+        reconnectPending = false;
+        mainHandler.removeCallbacks(transportReconnectRunnable);
         currentRecording.endedAtMillis = System.currentTimeMillis();
+        currentRecording.recordingEndMonotonicSeconds = recordingEnd;
         currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
+        lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
         status = "Recording stopped";
         notifyChanged();
     }
+
+    private void scheduleTransportReconnect() {
+        mainHandler.removeCallbacks(transportReconnectRunnable);
+        mainHandler.postDelayed(transportReconnectRunnable, TRANSPORT_RECONNECT_DELAY_MILLIS);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void attemptTransportReconnect() {
+        if (!recording
+                || currentRecording.mode != RecordingMode.TRANSPORT_STRESS
+                || ready
+                || connectedDevice == null
+                || session == null
+                || adapter == null
+                || !adapter.isEnabled()
+                || !hasBluetoothPermissions()) {
+            return;
+        }
+        status = "Reconnecting to " + connectedDevice.name;
+        notifyChanged();
+        session.connectDevice(adapter.getRemoteDevice(connectedDevice.address));
+    }
+
+    private final Runnable transportReconnectRunnable = this::attemptTransportReconnect;
 
     @SuppressLint("MissingPermission")
     void sendAtomicTareAndStart() {
@@ -269,14 +430,16 @@ final class BluetoothScaleManager {
             } else {
                 status = "Rejected WMB+ capabilities";
             }
-            notifyChanged();
+            refreshLiveMetricsIfNeeded(monotonic);
+            notifyRecordingProgressChanged();
             return;
         }
 
         if (ScaleParsers.uuidMatches(uuid, ScaleParsers.BATTERY_LEVEL_UUID)) {
             if (value.length > 0) receiveBattery(value[0] & 0xFF);
             recordRaw(value, uuid, PacketRole.BATTERY, null, arrival, monotonic);
-            notifyChanged();
+            refreshLiveMetricsIfNeeded(monotonic);
+            notifyRecordingProgressChanged();
             return;
         }
 
@@ -293,7 +456,8 @@ final class BluetoothScaleManager {
             for (ParserResult event : acaiaCodec.receive(value, arrival, monotonic)) {
                 handleParserResult(event, value, uuid, arrival, monotonic);
             }
-            notifyChanged();
+            refreshLiveMetricsIfNeeded(monotonic);
+            notifyRecordingProgressChanged();
             return;
         } else if (ScaleParsers.uuidMatches(uuid, ScaleParsers.DECENT_NOTIFY_UUID)
                 && (activeKind == ScaleKind.DECENT || activeKind == ScaleKind.ESPRESSI)) {
@@ -316,27 +480,32 @@ final class BluetoothScaleManager {
             for (ParserResult event : timemoreDotCodec.receive(value, arrival, monotonic)) {
                 handleParserResult(event, value, uuid, arrival, monotonic);
             }
-            notifyChanged();
+            refreshLiveMetricsIfNeeded(monotonic);
+            notifyRecordingProgressChanged();
             return;
         } else {
             recordRaw(value, uuid, PacketRole.UNKNOWN, ParseRejectionReason.UNSUPPORTED_CHARACTERISTIC, arrival, monotonic);
-            notifyChanged();
+            refreshLiveMetricsIfNeeded(monotonic);
+            notifyRecordingProgressChanged();
             return;
         }
 
         handleParserResult(result, value, uuid, arrival, monotonic);
-        notifyChanged();
+        refreshLiveMetricsIfNeeded(monotonic);
+        notifyRecordingProgressChanged();
     }
 
     private void handleParserResult(ParserResult result, byte[] value, String uuid, long arrival, double monotonic) {
         if (result.isSample()) {
-            recordRaw(value, uuid, PacketRole.WEIGHT, null, arrival, monotonic);
+            recordRaw(value, uuid, PacketRole.WEIGHT, null, result.sample, arrival, monotonic);
             receiveSample(result.sample);
         } else if (result.isBattery()) {
             recordRaw(value, uuid, PacketRole.BATTERY, null, arrival, monotonic);
             receiveBattery(result.batteryPercent);
         } else {
-            recordRaw(value, uuid, PacketRole.WEIGHT, result.rejectionReason, arrival, monotonic);
+            PacketRole role = result.rejectionReason == ParseRejectionReason.UNSUPPORTED_FRAME
+                    ? PacketRole.UNKNOWN : PacketRole.WEIGHT;
+            recordRaw(value, uuid, role, result.rejectionReason, null, arrival, monotonic);
         }
     }
 
@@ -348,7 +517,6 @@ final class BluetoothScaleManager {
         }
         if (recording) {
             currentRecording.samples.add(sample);
-            currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
         }
     }
 
@@ -362,21 +530,88 @@ final class BluetoothScaleManager {
             event.scaleKind = activeKind;
             event.percent = percent;
             currentRecording.batteryEvents.add(event);
-            currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
         }
     }
 
+    private void refreshLiveMetricsIfNeeded(double monotonicSeconds) {
+        if (!recording
+                || monotonicSeconds - lastLiveMetricsRefreshSeconds < LIVE_METRICS_REFRESH_INTERVAL_SECONDS) {
+            return;
+        }
+        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
+        lastLiveMetricsRefreshSeconds = monotonicSeconds;
+    }
+
     private void recordRaw(byte[] value, String uuid, PacketRole role, ParseRejectionReason reason, long arrival, double monotonic) {
+        recordRaw(value, uuid, role, reason, null, arrival, monotonic);
+    }
+
+    private void recordRaw(
+            byte[] value,
+            String uuid,
+            PacketRole role,
+            ParseRejectionReason reason,
+            ScaleSample sample,
+            long arrival,
+            double monotonic
+    ) {
         if (!recording) return;
         RawScalePacket packet = new RawScalePacket();
         packet.arrivalTimeMillis = arrival;
         packet.monotonicSeconds = monotonic;
-        packet.scaleKind = activeKind;
+        packet.scaleKind = sample == null ? activeKind : sample.scaleKind;
         packet.characteristicUuid = ScaleParsers.shortUuid(uuid);
         packet.role = role;
         packet.bytesHex = ScaleParsers.hex(value);
         packet.rejectionReason = reason;
+        packet.weightGrams = sample == null ? null : sample.weightGrams;
+        packet.sequence = sample == null ? null : sample.sequence;
+        packet.deviceTimestampMilliseconds = sample == null ? null : sample.deviceTimestampMilliseconds;
+        packet.fields.addAll(ScaleParsers.packetFields(packet.scaleKind, packet.characteristicUuid, value));
         currentRecording.rawPackets.add(packet);
+        if (sample != null) updateScoringCapabilities(sample, uuid);
+    }
+
+    private ProtocolScoringCapabilities baseScoringCapabilities(ScaleKind kind) {
+        ProtocolScoringCapabilities result = new ProtocolScoringCapabilities();
+        result.hasChecksum = kind == ScaleKind.BOOKOO
+                || kind == ScaleKind.BOOKOO_MINI
+                || kind == ScaleKind.BOOKOO_ULTRA
+                || kind == ScaleKind.WEIGH_MY_BRU_PLUS
+                || kind == ScaleKind.ACAIA
+                || kind == ScaleKind.DIFLUID
+                || kind == ScaleKind.DIFLUID_TI
+                || kind == ScaleKind.TIMEMORE_DOT;
+        result.hasSequence = false;
+        result.sequenceModulus = 256L;
+        result.hasDeviceClock = false;
+        result.deviceClockSemantics = kind == ScaleKind.DECENT || kind == ScaleKind.ESPRESSI
+                ? DeviceClockSemantics.SHOT_TIMER : DeviceClockSemantics.NONE;
+        return result;
+    }
+
+    private void updateScoringCapabilities(ScaleSample sample, String uuid) {
+        ProtocolScoringCapabilities scoring = currentRecording.protocolCapabilities != null
+                ? currentRecording.protocolCapabilities : baseScoringCapabilities(sample.scaleKind);
+        if (ScaleParsers.uuidMatches(uuid, ScaleParsers.WMB_WEIGHT20_UUID)) scoring.hasChecksum = true;
+        scoring.hasSequence |= sample.sequence != null;
+        scoring.hasDeviceClock |= sample.deviceTimestampMilliseconds != null;
+        if (sample.deviceTimestampMilliseconds != null) {
+            if (sample.scaleKind == ScaleKind.DECENT || sample.scaleKind == ScaleKind.ESPRESSI) {
+                scoring.deviceClockSemantics = DeviceClockSemantics.SHOT_TIMER;
+            } else {
+                scoring.deviceClockSemantics = DeviceClockSemantics.FREE_RUNNING;
+                if (sample.scaleKind == ScaleKind.BOOKOO
+                        || sample.scaleKind == ScaleKind.BOOKOO_MINI
+                        || sample.scaleKind == ScaleKind.BOOKOO_ULTRA
+                        || sample.scaleKind == ScaleKind.WEIGH_MY_BRU_PLUS) {
+                    scoring.deviceClockModulus = 1L << 24;
+                } else if (sample.scaleKind == ScaleKind.DIFLUID || sample.scaleKind == ScaleKind.DIFLUID_TI) {
+                    scoring.deviceClockModulus = 1L << 32;
+                }
+            }
+        }
+        currentRecording.protocolCapabilities = scoring;
     }
 
     static boolean isWritable(String uuid) {
@@ -441,7 +676,17 @@ final class BluetoothScaleManager {
         return context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    private void notifyRecordingProgressChanged() {
+        if (liveUiRefreshPending) return;
+        liveUiRefreshPending = true;
+        mainHandler.postDelayed(liveUiRefreshRunnable, LIVE_UI_REFRESH_INTERVAL_MILLIS);
+    }
+
     private void notifyChanged() {
+        if (liveUiRefreshPending) {
+            mainHandler.removeCallbacks(liveUiRefreshRunnable);
+            liveUiRefreshPending = false;
+        }
         listener.onStateChanged();
     }
 }

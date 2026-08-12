@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scalebench.app/schemas/analysis-schema.json",
+  "title": "ScaleBench Official Analysis Payload",
+  "description": "Shared analysis contract used by native iOS/macOS and Android result screens, charts, exports, and fixtures.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "appName",
+    "scoringModelVersion",
+    "scoringProfileName",
+    "recordingId",
+    "generatedAtMillis",
+    "platform",
+    "mode",
+    "protocolKind",
+    "deviceName",
+    "metrics",
+    "chartAnalysis"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "appName": { "type": "string" },
+    "scoringModelVersion": { "type": "string" },
+    "scoringProfileName": { "type": "string" },
+    "recordingId": { "type": "string", "format": "uuid" },
+    "generatedAtMillis": { "type": "integer" },
+    "platform": { "type": "string" },
+    "mode": { "$ref": "recording-schema.json#/$defs/recordingMode" },
+    "protocolKind": { "$ref": "recording-schema.json#/$defs/scaleKind" },
+    "deviceName": { "type": "string" },
+    "metrics": { "$ref": "recording-schema.json#/$defs/qualityMetrics" },
+    "chartAnalysis": { "$ref": "chart-analysis-schema.json" }
+  }
+}

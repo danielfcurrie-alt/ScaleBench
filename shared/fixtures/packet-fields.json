@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "scaleKind": "weighMyBruPlus",
+  "characteristicUUID": "6E400002-B5A3-F393-E0A9-E50E24DCCA9E",
+  "bytesHex": "03 0B 00 00 64 01 00 00 00 7B 00 00 19 55 07 C3 61 50 FC 53",
+  "fields": [
+    { "startByte": 0, "endByteExclusive": 2, "label": "Header", "decodedValue": "03 0B", "semantic": "header" },
+    { "startByte": 2, "endByteExclusive": 5, "label": "Timestamp", "decodedValue": "100 ms", "semantic": "timestamp" },
+    { "startByte": 5, "endByteExclusive": 6, "label": "Packet version", "decodedValue": "1", "semantic": "payload" },
+    { "startByte": 6, "endByteExclusive": 10, "label": "Weight", "decodedValue": "1.23 g", "semantic": "weight" },
+    { "startByte": 10, "endByteExclusive": 13, "label": "Flow", "decodedValue": "0.25 g/s", "semantic": "flow" },
+    { "startByte": 13, "endByteExclusive": 14, "label": "Battery", "decodedValue": "85%", "semantic": "battery" },
+    { "startByte": 14, "endByteExclusive": 15, "label": "Sequence", "decodedValue": "7", "semantic": "sequence" },
+    { "startByte": 15, "endByteExclusive": 16, "label": "Status", "decodedValue": "C3", "semantic": "status" },
+    { "startByte": 16, "endByteExclusive": 17, "label": "Quality", "decodedValue": "97%", "semantic": "quality" },
+    { "startByte": 17, "endByteExclusive": 18, "label": "Sample rate", "decodedValue": "80 Hz", "semantic": "sampleRate" },
+    { "startByte": 18, "endByteExclusive": 19, "label": "Diagnostics", "decodedValue": "FC", "semantic": "status" },
+    { "startByte": 19, "endByteExclusive": 20, "label": "Checksum", "decodedValue": "53", "semantic": "checksum" }
+  ]
+}

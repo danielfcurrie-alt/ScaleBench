@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.content.Context;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.SystemClock;
 
@@ -13,12 +14,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 import no.nordicsemi.android.ble.BleManager;
+import no.nordicsemi.android.ble.ConnectionPriorityRequest;
 import no.nordicsemi.android.ble.callback.FailCallback;
 
 final class ScaleBleSession extends BleManager {
+    private static final Handler BLE_HANDLER = createBleHandler();
+
     interface Listener {
-        void onReady();
-        void onDisconnected();
+        void onReady(double monotonicSeconds);
+        void onDisconnected(double monotonicSeconds);
         void onUnsupportedDevice();
         void onValue(String uuid, byte[] value, long arrivalMillis, double monotonicSeconds);
     }
@@ -29,9 +33,10 @@ final class ScaleBleSession extends BleManager {
     private final List<BluetoothGattCharacteristic> indicatingCharacteristics = new ArrayList<>();
     private final List<BluetoothGattCharacteristic> readOnReadyCharacteristics = new ArrayList<>();
     private BluetoothGattCharacteristic writeCharacteristic;
+    private volatile int negotiatedMtu = 23;
 
     ScaleBleSession(Context context, Listener listener) {
-        super(context);
+        super(context, BLE_HANDLER);
         this.listener = listener;
     }
 
@@ -41,12 +46,16 @@ final class ScaleBleSession extends BleManager {
                 .timeout(15_000)
                 .fail((failedDevice, reason) -> post(reason == FailCallback.REASON_DEVICE_NOT_SUPPORTED
                         ? listener::onUnsupportedDevice
-                        : listener::onDisconnected))
+                        : () -> listener.onDisconnected(monotonicNow())))
                 .enqueue();
     }
 
     boolean hasWritableCommand() {
         return writeCharacteristic != null;
+    }
+
+    int negotiatedMtu() {
+        return negotiatedMtu;
     }
 
     void writeCommand(byte[] bytes) {
@@ -89,7 +98,10 @@ final class ScaleBleSession extends BleManager {
 
     @Override
     protected void initialize() {
-        requestMtu(247).enqueue();
+        requestConnectionPriority(ConnectionPriorityRequest.CONNECTION_PRIORITY_HIGH).enqueue();
+        requestMtu(247)
+                .with((device, mtu) -> negotiatedMtu = mtu)
+                .enqueue();
 
         for (BluetoothGattCharacteristic characteristic : readOnReadyCharacteristics) {
             readCharacteristic(characteristic)
@@ -110,26 +122,38 @@ final class ScaleBleSession extends BleManager {
 
     @Override
     protected void onDeviceReady() {
-        post(listener::onReady);
+        double monotonic = monotonicNow();
+        post(() -> listener.onReady(monotonic));
     }
 
     @Override
     protected void onServicesInvalidated() {
+        double monotonic = monotonicNow();
         notifyingCharacteristics.clear();
         indicatingCharacteristics.clear();
         readOnReadyCharacteristics.clear();
         writeCharacteristic = null;
-        post(listener::onDisconnected);
+        post(() -> listener.onDisconnected(monotonic));
     }
 
     private void dispatchValue(BluetoothGattCharacteristic characteristic, byte[] value) {
+        double monotonic = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
         if (value == null) return;
         long arrival = System.currentTimeMillis();
-        double monotonic = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
         post(() -> listener.onValue(characteristic.getUuid().toString(), value, arrival, monotonic));
     }
 
     private void post(Runnable runnable) {
         mainHandler.post(runnable);
+    }
+
+    private static double monotonicNow() {
+        return SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
+    }
+
+    private static Handler createBleHandler() {
+        HandlerThread thread = new HandlerThread("ScaleBench-BLE");
+        thread.start();
+        return new Handler(thread.getLooper());
     }
 }

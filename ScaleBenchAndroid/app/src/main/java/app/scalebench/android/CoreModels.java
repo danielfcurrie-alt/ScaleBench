@@ -33,6 +33,7 @@ enum ScaleKind {
 enum RecordingMode {
     IDLE_STABILITY("Idle Stability"),
     SHOT("Shot / Pour"),
+    STEP_RESPONSE("Step Response"),
     TARE_LATENCY("Tare Latency"),
     TRANSPORT_STRESS("Transport Stress"),
     BATTERY_STABILITY("Battery Logging");
@@ -42,6 +43,35 @@ enum RecordingMode {
     RecordingMode(String displayName) {
         this.displayName = displayName;
     }
+}
+
+enum DeviceClockSemantics {
+    NONE, FREE_RUNNING, SHOT_TIMER
+}
+
+final class ProtocolScoringCapabilities {
+    boolean hasChecksum;
+    boolean hasSequence;
+    Long sequenceModulus;
+    boolean hasDeviceClock;
+    DeviceClockSemantics deviceClockSemantics = DeviceClockSemantics.NONE;
+    Long deviceClockModulus;
+}
+
+final class ScaleLinkMetadata {
+    String requestedConnectionPriority;
+    Integer requestedMtu;
+    Integer negotiatedMtu;
+}
+
+enum RecordingEventType {
+    DISCONNECT, RECONNECT, APP_BACKGROUNDED, APP_FOREGROUNDED
+}
+
+final class ScaleRecordingEvent {
+    final String id = UUID.randomUUID().toString();
+    RecordingEventType type;
+    double monotonicSeconds;
 }
 
 enum PacketRole {
@@ -172,6 +202,45 @@ final class ScaleBatteryEvent {
     int percent;
 }
 
+enum PacketFieldSemantic {
+    HEADER,
+    TIMESTAMP,
+    WEIGHT,
+    FLOW,
+    BATTERY,
+    SEQUENCE,
+    STATUS,
+    QUALITY,
+    SAMPLE_RATE,
+    CHECKSUM,
+    UNIT,
+    PAYLOAD
+}
+
+final class PacketFieldAnnotation {
+    int startByte;
+    int endByteExclusive;
+    String label;
+    String decodedValue;
+    PacketFieldSemantic semantic;
+
+    static PacketFieldAnnotation of(
+            int startByte,
+            int endByteExclusive,
+            String label,
+            String decodedValue,
+            PacketFieldSemantic semantic
+    ) {
+        PacketFieldAnnotation annotation = new PacketFieldAnnotation();
+        annotation.startByte = startByte;
+        annotation.endByteExclusive = endByteExclusive;
+        annotation.label = label;
+        annotation.decodedValue = decodedValue;
+        annotation.semantic = semantic;
+        return annotation;
+    }
+}
+
 final class RawScalePacket {
     final String id = UUID.randomUUID().toString();
     long arrivalTimeMillis;
@@ -181,6 +250,50 @@ final class RawScalePacket {
     PacketRole role;
     String bytesHex;
     ParseRejectionReason rejectionReason;
+    Double weightGrams;
+    Integer sequence;
+    Long deviceTimestampMilliseconds;
+    final List<PacketFieldAnnotation> fields = new ArrayList<>();
+}
+
+final class ScoringValidity {
+    boolean isValid;
+    List<String> reasons = new ArrayList<>();
+}
+
+final class DeliveryQualityMetrics {
+    boolean applicable;
+    Integer deliveryScore;
+    Double coverage;
+    Double purity;
+    Boolean purityIsUpperBound;
+}
+
+final class FrameClassificationMetrics {
+    int usable;
+    int parseFailure;
+    int outOfOrder;
+    int stale;
+    int duplicate;
+    int implausible;
+}
+
+final class ProtocolVerificationMetrics {
+    List<String> verifiableClasses = new ArrayList<>();
+    List<String> unverifiableClasses = new ArrayList<>();
+    int verificationCoveragePercent;
+    boolean purityIsUpperBound;
+}
+
+final class StepResponseMetrics {
+    boolean stepDetected;
+    Double onsetSecondsFromRecordingStart;
+    Double baselineGrams;
+    Double finalGrams;
+    Double amplitudeGrams;
+    Double riseTime10To90Seconds;
+    Double settlingTimeSeconds;
+    Double overshootPercent;
 }
 
 final class ScaleQualityMetrics {
@@ -203,6 +316,31 @@ final class ScaleQualityMetrics {
     Integer batteryMaxPercent;
     Double firmwareQualityAverage;
     int firmwareBumpCount;
+    String scoringModelVersion;
+    String scoringProfileName;
+    ScoringValidity validity;
+    DeliveryQualityMetrics delivery;
+    FrameClassificationMetrics frameClassification;
+    ProtocolVerificationMetrics protocolVerification;
+    Boolean signalUnreconstructable;
+    Integer relevantWeightFrameCount;
+    Integer excludedFrameCount;
+    Integer usableSampleCount;
+    Double recordingSpanSeconds;
+    Boolean recordingBoundaryInferred;
+    Double frameRateHz;
+    Double usableRateHz;
+    Double estimatedResolutionGrams;
+    Integer slotCount;
+    Integer servedSlots;
+    Double longestUnservedRunMilliseconds;
+    Double robustCoefficientOfVariation;
+    Integer disconnectCount;
+    Integer idleNoiseScore;
+    Integer idleDriftScore;
+    Integer idleAnalysedSampleCount;
+    Double idleResolutionGrams;
+    StepResponseMetrics stepResponse;
 
     static ScaleQualityMetrics empty() {
         return new ScaleQualityMetrics();
@@ -231,9 +369,9 @@ final class ScoringProfile {
     static ScoringProfile standard() {
         ScoringProfile p = new ScoringProfile();
         p.name = STANDARD_BENCHMARK_NAME;
-        p.transportWeight = 0.50;
-        p.stabilityWeight = 0.35;
-        p.metadataWeight = 0.15;
+        p.transportWeight = 1.00;
+        p.stabilityWeight = 0.00;
+        p.metadataWeight = 0.00;
         p.minimumLongGapMilliseconds = 300;
         p.longGapMultiplier = 3;
         p.longGapPenalty = 5;
@@ -300,21 +438,31 @@ final class ScoringProfile {
 }
 
 final class ScaleRecording {
-    static final int SCHEMA_VERSION = 4;
+    static final int SCHEMA_VERSION = 6;
+    static final String SCORING_MODEL_VERSION = "standard-1.0.0";
 
-    final String id = UUID.randomUUID().toString();
+    String id = UUID.randomUUID().toString();
     int schemaVersion = SCHEMA_VERSION;
     String appName = "ScaleBench Android";
-    String appVersion = "0.1.0";
+    String appVersion = "unknown";
+    String appBuild = "unknown";
+    String platform = "android";
+    String scoringModelVersion = SCORING_MODEL_VERSION;
+    String title;
     RecordingMode mode;
     ScaleDeviceIdentity device;
     long startedAtMillis;
     Long endedAtMillis;
+    Double recordingStartMonotonicSeconds;
+    Double recordingEndMonotonicSeconds;
     String notes = "";
     final List<RawScalePacket> rawPackets = new ArrayList<>();
     final List<ScaleSample> samples = new ArrayList<>();
     final List<ScaleBatteryEvent> batteryEvents = new ArrayList<>();
+    final List<ScaleRecordingEvent> events = new ArrayList<>();
     WmbPlusCapabilities capabilities;
+    ProtocolScoringCapabilities protocolCapabilities;
+    ScaleLinkMetadata link = new ScaleLinkMetadata();
     ScoringProfile scoringProfile = ScoringProfile.standard();
     ScaleQualityMetrics metrics = ScaleQualityMetrics.empty();
 
@@ -326,6 +474,7 @@ final class ScaleRecording {
     }
 
     String defaultTitle() {
+        if (title != null && !title.trim().isEmpty()) return title.trim();
         String protocol = device != null ? device.kind.displayName
                 : samples.isEmpty() ? "Unknown Scale" : samples.get(samples.size() - 1).scaleKind.displayName;
         return String.format(Locale.US, "%s - %s", protocol, mode.displayName);
@@ -340,7 +489,15 @@ final class SavedRecordingSummary {
     String recordingFileName;
     ScaleKind protocolKind;
     RecordingMode mode;
+    String platform;
     Integer score;
+    Integer verificationCoveragePercent;
+    boolean purityIsUpperBound;
     int sampleCount;
     int rawPacketCount;
+    Double sampleRateHz;
+    Double p95IntervalMilliseconds;
+    Double maxGapMilliseconds;
+    int longGapCount;
+    int rejectedPacketCount;
 }
