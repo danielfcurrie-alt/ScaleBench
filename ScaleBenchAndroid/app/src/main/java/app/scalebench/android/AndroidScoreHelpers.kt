@@ -340,9 +340,6 @@ internal fun deliveryScoreExplanation(
         "Other issues found: ${drivers.joinToString(", ")}."
     }
 
-    if (availableChecks != null && totalChecks != null && totalChecks > 0) {
-        lines += "Packet checks available: ${protocolDetailDisplay(availableChecks, totalChecks)}."
-    }
     return lines
 }
 
@@ -352,6 +349,84 @@ internal fun protocolDetailDisplay(availableChecks: Int?, totalChecks: Int?): St
     } else {
         "--"
     }
+}
+
+internal fun protocolDetailDisplay(metrics: ScaleQualityMetrics): String {
+    val frameCount = metrics.relevantWeightFrameCount ?: metrics.usableSampleCount ?: 0
+    val verification = metrics.protocolVerification
+    return if (frameCount > 0 && verification != null) {
+        protocolDetailDisplay(
+            availableChecks = verification.verifiableClasses.size,
+            totalChecks = verification.verifiableClasses.size + verification.unverifiableClasses.size
+        )
+    } else {
+        "--"
+    }
+}
+
+internal data class PacketCheckStatus(val label: String, val isAvailable: Boolean)
+
+internal fun packetCheckStatuses(verification: ProtocolVerificationMetrics): List<PacketCheckStatus> {
+    val verifiable = verification.verifiableClasses.toSet()
+    val unverifiable = verification.unverifiableClasses.toSet()
+    val known = listOf("parseFailure", "outOfOrder", "stale", "duplicate", "implausible")
+    val extras = (verifiable + unverifiable - known.toSet()).sorted()
+    return (known + extras)
+        .filter { verifiable.contains(it) || unverifiable.contains(it) }
+        .map { PacketCheckStatus(packetCheckDisplayName(it), verifiable.contains(it)) }
+}
+
+internal fun packetCheckDisplayName(check: String): String = when (check) {
+    "parseFailure" -> "Unreadable packets"
+    "outOfOrder" -> "Out of order"
+    "stale" -> "Stale readings"
+    "duplicate" -> "Repeated readings"
+    "implausible" -> "Implausible readings"
+    else -> check
+}
+
+internal data class TelemetryStatus(val label: String, val isAvailable: Boolean)
+
+internal fun telemetryStatuses(recording: ScaleRecording, metrics: ScaleQualityMetrics): List<TelemetryStatus> {
+    val capabilities = recording.protocolCapabilities
+    val hasBattery = metrics.batteryMinPercent != null ||
+        metrics.batteryMaxPercent != null ||
+        recording.batteryEvents.isNotEmpty() ||
+        recording.samples.any { it.batteryPercent != null }
+    val hasFlow = recording.samples.any { it.flowGramsPerSecond != null }
+    val hasClock = capabilities?.hasDeviceClock == true ||
+        recording.samples.any { it.deviceTimestampMilliseconds != null } ||
+        recording.rawPackets.any { it.deviceTimestampMilliseconds != null }
+    val hasSequence = capabilities?.hasSequence == true ||
+        recording.samples.any { it.sequence != null } ||
+        recording.rawPackets.any { it.sequence != null }
+    val hasChecksum = capabilities?.hasChecksum == true
+    val hasFirmwareQuality = metrics.firmwareQualityAverage != null ||
+        recording.samples.any { it.firmwareQualityScore != null }
+
+    return listOf(
+        TelemetryStatus("Battery", hasBattery),
+        TelemetryStatus("Flow", hasFlow),
+        TelemetryStatus("Device clock", hasClock),
+        TelemetryStatus("Sequence number", hasSequence),
+        TelemetryStatus("Checksum / CRC", hasChecksum),
+        TelemetryStatus("Firmware quality", hasFirmwareQuality)
+    )
+}
+
+internal fun resolutionDisplay(metrics: ScaleQualityMetrics): String {
+    val resolution = metrics.estimatedResolutionGrams ?: metrics.idleResolutionGrams
+    return resolution?.let { String.format(Locale.US, "%.3f g", it) } ?: "--"
+}
+
+internal fun badPacketCount(metrics: ScaleQualityMetrics): Int {
+    val frames = metrics.frameClassification
+    return metrics.rejectedPacketCount +
+        (frames?.parseFailure ?: 0) +
+        (frames?.outOfOrder ?: 0) +
+        (frames?.stale ?: 0) +
+        (frames?.duplicate ?: 0) +
+        (frames?.implausible ?: 0)
 }
 
 internal fun idleScoreExplanation(

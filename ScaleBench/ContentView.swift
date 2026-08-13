@@ -160,12 +160,14 @@ struct ContentView: View {
                 }
 
                 Section("Live") {
+                    let metrics = bluetooth.currentMetrics
                     MetricRow(title: "Weight", value: bluetooth.latestSample.map { String(format: "%.2f g", $0.weightGrams) } ?? "—")
                     MetricRow(title: "Flow", value: bluetooth.latestSample?.flowGramsPerSecond.map { String(format: "%.2f g/s", $0) } ?? "—")
                     MetricRow(title: "Battery", value: bluetooth.latestSample?.batteryPercent.map { "\($0)%" } ?? bluetooth.latestBatteryPercent.map { "\($0)%" } ?? "—")
                     MetricRow(title: "Protocol", value: bluetooth.activeProtocol.displayName)
                     MetricRow(title: "Packets", value: "\(bluetooth.currentRecording.rawPackets.count)")
                     MetricRow(title: "Samples", value: "\(bluetooth.currentRecording.samples.count)")
+                    LiveDiagnosticsRows(recording: bluetooth.currentRecording, metrics: metrics)
                 }
 
                 Section("Scorecard") {
@@ -1864,11 +1866,13 @@ private struct RecordingTimerView: View {
             }
 
             Section("Live capture") {
+                let metrics = bluetooth.currentMetrics
                 MetricRow(title: "Samples", value: "\(bluetooth.currentRecording.samples.count)")
                 MetricRow(title: "Packets", value: "\(bluetooth.currentRecording.rawPackets.count)")
                 MetricRow(title: "Weight", value: bluetooth.latestSample.map { String(format: "%.2f g", $0.weightGrams) } ?? "—")
                 MetricRow(title: "Flow", value: bluetooth.latestSample?.flowGramsPerSecond.map { String(format: "%.2f g/s", $0) } ?? "—")
                 MetricRow(title: "Battery", value: bluetooth.latestSample?.batteryPercent.map { "\($0)%" } ?? bluetooth.latestBatteryPercent.map { "\($0)%" } ?? "—")
+                LiveDiagnosticsRows(recording: bluetooth.currentRecording, metrics: metrics)
             }
 
             if includesStopAction {
@@ -2090,12 +2094,6 @@ private struct ScoreHero: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text("Standard v1")
                     .font(.caption.weight(.semibold))
-                if mode == .shot || mode == .transportStress,
-                   let protocolDetail = protocolDetailDisplay(metrics) {
-                    Text(protocolDetail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -2146,10 +2144,6 @@ private struct BenchmarkScoreRows: View {
         if mode == .shot || mode == .transportStress {
             MetricRow(title: "Delivered", value: deliveredUpdatesDisplay(metrics))
             MetricRow(title: "Usable readings", value: usableReadingsDisplay(metrics))
-            MetricRow(
-                title: "Packet checks",
-                value: protocolDetailDisplay(metrics) ?? "—"
-            )
         } else if mode == .idleStability {
             MetricRow(title: "Noise component", value: metrics.idleNoiseScore.map { "\($0)/100" } ?? "—")
             MetricRow(title: "Drift component", value: metrics.idleDriftScore.map { "\($0)/100" } ?? "—")
@@ -2181,10 +2175,17 @@ private struct ScoreBreakdownView: View {
         case .shot, .transportStress:
             ScoreExplanationLines(lines: deliveryScoreExplanation(recording: recording, metrics: metrics))
             ScoreInfoButtons()
-            Text("Delivery score uses delivered updates and usable readings. The formula is shown above so the score is auditable without opening the JSON.")
+            Text("Delivery score uses delivered packets and usable readings. The formula is shown above so the score is auditable without opening the JSON.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
+            PacketCheckStatusRows(metrics: metrics)
+            Text("Telemetry available")
+                .font(.headline)
+            Text("Telemetry is extra protocol data ScaleBench records when the scale exposes it. It is useful for diagnosis, but it is not a separate score term.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TelemetryAvailabilityRows(recording: recording, metrics: metrics)
             FrameClassificationRows(metrics: metrics)
 
         case .idleStability:
@@ -2303,6 +2304,11 @@ private struct FrameClassificationRows: View {
             MetricRow(title: "Out of order", value: "\(frames.outOfOrder)")
             MetricRow(title: "Stale readings", value: "\(frames.stale)")
             MetricRow(title: "Implausible readings", value: "\(frames.implausible)")
+            if frames.implausible > 0 {
+                Text("Implausible readings are weight samples that failed a Shot / Pour physics check, such as an isolated spike compared with neighboring samples. They appear in Packet inspector -> Bad only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             MetricRow(title: "Repeated readings", value: "\(frames.duplicate)")
         }
     }
@@ -2345,9 +2351,24 @@ private struct RecordingVisualizerView: View {
         }
     }
 
+    private func drillIntoEvidence(_ target: PacketEvidenceTarget) {
+        packetInspectorFilter = target == .all ? .all : .badOnly
+        if let match = timeline.entries.first(where: { $0.matchesEvidenceTarget(target) }) {
+            selectedPacketID = match.id
+        } else if target == .longestOutage,
+                  let match = timeline.entries.first(where: \.isBadForInspector) {
+            selectedPacketID = match.id
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            PacketEvidenceSummary(metrics: metrics, timeline: timeline, mode: recording.mode)
+            PacketEvidenceSummary(
+                metrics: metrics,
+                timeline: timeline,
+                mode: recording.mode,
+                onDrillDown: drillIntoEvidence
+            )
 
             if !analysis.signalDiagnostics.isEmpty {
                 SignalDiagnosticsSection(diagnostics: analysis.signalDiagnostics)
@@ -2397,17 +2418,16 @@ private struct RecordingVisualizerView: View {
 
             if !timeline.entries.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Label("Packet inspector", systemImage: "scope")
-                            .font(.headline)
-                        Spacer()
-                        Picker("Packet filter", selection: $packetInspectorFilter) {
-                            ForEach(PacketInspectorFilter.allCases) { filter in
-                                Text(filter.label).tag(filter)
+                    Label("Packet inspector", systemImage: "scope")
+                        .font(.headline)
+                    HStack(spacing: 8) {
+                        ForEach(PacketInspectorFilter.allCases) { filter in
+                            Button(filter.label) {
+                                packetInspectorFilter = filter
                             }
+                            .buttonStyle(.bordered)
+                            .tint(packetInspectorFilter == filter ? .accentColor : .secondary)
                         }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 220)
                     }
                     if inspectorEntries.isEmpty {
                         Text("No bad raw packets in this recording. Delivered packets, usable readings, and packet checks are explained in the Score section.")
@@ -2527,9 +2547,38 @@ private enum PacketInspectorFilter: String, CaseIterable, Identifiable {
     }
 }
 
+private enum PacketEvidenceTarget {
+    case all
+    case parseFailure
+    case outOfOrder
+    case stale
+    case implausible
+    case duplicate
+    case longestOutage
+}
+
 private extension PacketTimelineEntry {
     var isBadForInspector: Bool {
         severity == .warning || severity == .penalty
+    }
+
+    func matchesEvidenceTarget(_ target: PacketEvidenceTarget) -> Bool {
+        switch target {
+        case .all:
+            true
+        case .parseFailure:
+            evidence.contains { $0.localizedCaseInsensitiveContains("unreadable") }
+        case .outOfOrder:
+            evidence.contains { $0.localizedCaseInsensitiveContains("out of order") }
+        case .stale:
+            evidence.contains { $0.localizedCaseInsensitiveContains("stale") }
+        case .implausible:
+            evidence.contains { $0.localizedCaseInsensitiveContains("implausible") }
+        case .duplicate:
+            evidence.contains { $0.localizedCaseInsensitiveContains("repeated") }
+        case .longestOutage:
+            hasLongGapBefore
+        }
     }
 }
 
@@ -2537,6 +2586,7 @@ private struct PacketEvidenceSummary: View {
     let metrics: ScaleQualityMetrics
     let timeline: PacketTimeline
     let mode: RecordingMode
+    let onDrillDown: (PacketEvidenceTarget) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2548,12 +2598,17 @@ private struct PacketEvidenceSummary: View {
                 .foregroundStyle(.secondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], alignment: .leading, spacing: 10) {
-                EvidencePill(title: "Parse failed", value: "\(metrics.frameClassification?.parseFailure ?? 0)", severity: classificationSeverity(metrics.frameClassification?.parseFailure))
-                EvidencePill(title: "Out of order", value: "\(metrics.frameClassification?.outOfOrder ?? 0)", severity: classificationSeverity(metrics.frameClassification?.outOfOrder))
-                EvidencePill(title: "Stale", value: "\(metrics.frameClassification?.stale ?? 0)", severity: classificationSeverity(metrics.frameClassification?.stale))
-                EvidencePill(title: "Implausible", value: "\(metrics.frameClassification?.implausible ?? 0)", severity: classificationSeverity(metrics.frameClassification?.implausible))
-                EvidencePill(title: "Duplicates", value: "\(metrics.frameClassification?.duplicate ?? 0)", severity: classificationSeverity(metrics.frameClassification?.duplicate))
-                EvidencePill(title: "Longest outage", value: formatMilliseconds(metrics.longestUnservedRunMilliseconds), severity: (metrics.longestUnservedRunMilliseconds ?? 0) > 0 ? .warning : .normal)
+                EvidencePill(title: "Parse failed", value: "\(metrics.frameClassification?.parseFailure ?? 0)", severity: classificationSeverity(metrics.frameClassification?.parseFailure), action: drillAction(.parseFailure, count: metrics.frameClassification?.parseFailure))
+                EvidencePill(title: "Out of order", value: "\(metrics.frameClassification?.outOfOrder ?? 0)", severity: classificationSeverity(metrics.frameClassification?.outOfOrder), action: drillAction(.outOfOrder, count: metrics.frameClassification?.outOfOrder))
+                EvidencePill(title: "Stale", value: "\(metrics.frameClassification?.stale ?? 0)", severity: classificationSeverity(metrics.frameClassification?.stale), action: drillAction(.stale, count: metrics.frameClassification?.stale))
+                EvidencePill(title: "Implausible", value: "\(metrics.frameClassification?.implausible ?? 0)", severity: classificationSeverity(metrics.frameClassification?.implausible), action: drillAction(.implausible, count: metrics.frameClassification?.implausible))
+                EvidencePill(title: "Duplicates", value: "\(metrics.frameClassification?.duplicate ?? 0)", severity: classificationSeverity(metrics.frameClassification?.duplicate), action: drillAction(.duplicate, count: metrics.frameClassification?.duplicate))
+                EvidencePill(
+                    title: "Longest outage",
+                    value: formatMilliseconds(metrics.longestUnservedRunMilliseconds),
+                    severity: timeline.scoringGaps.isEmpty ? .normal : .warning,
+                    action: timeline.scoringGaps.isEmpty ? nil : { onDrillDown(.longestOutage) }
+                )
             }
         }
         .padding(12)
@@ -2565,9 +2620,10 @@ private struct PacketEvidenceSummary: View {
             return "This recording is not valid for an official score. Diagnostics and frame classifications remain available."
         }
         if mode == .shot || mode == .transportStress,
-           let coverage = metrics.delivery?.coverage,
-           let purity = metrics.delivery?.purity {
-            return "Delivery multiplies \(formatPercent(coverage)) coverage by \(formatPercent(purity)) purity. Each unusable frame receives exactly one class."
+           metrics.delivery != nil {
+            let delivered = deliveredUpdatesDisplay(metrics)
+            let usable = usableReadingsDisplay(metrics)
+            return "Delivery multiplies delivered packets (\(delivered)) by usable readings (\(usable)). Tap a chip to inspect the packets behind it."
         }
         if mode == .idleStability {
             return "Idle Stability uses detrended residual noise and drift; packet classifications remain diagnostic evidence."
@@ -2577,6 +2633,11 @@ private struct PacketEvidenceSummary: View {
 
     private func classificationSeverity(_ count: Int?) -> PacketSeverity {
         (count ?? 0) > 0 ? .penalty : .normal
+    }
+
+    private func drillAction(_ target: PacketEvidenceTarget, count: Int?) -> (() -> Void)? {
+        guard (count ?? 0) > 0 else { return nil }
+        return { onDrillDown(target) }
     }
 }
 
@@ -2648,23 +2709,33 @@ private struct EvidencePill: View {
     let title: String
     let value: String
     let severity: PacketSeverity
+    let action: (() -> Void)?
 
     var body: some View {
-        HStack {
-            Circle()
-                .fill(severity.color)
-                .frame(width: 9, height: 9)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.headline.monospacedDigit())
+        Button {
+            action?()
+        } label: {
+            HStack {
+                Circle()
+                    .fill(severity.color)
+                    .frame(width: 9, height: 9)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(value)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(.primary)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(8)
+            .background(severity.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .padding(8)
-        .background(severity.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .buttonStyle(.plain)
+        .disabled(action == nil)
+        .accessibilityLabel("\(title), \(value). Show matching packets.")
     }
 }
 
@@ -3250,14 +3321,11 @@ private struct ScoreExplanationView: View {
                     ScoreBreakdownView(recording: recording, metrics: metrics)
                 }
 
-                if protocolDetailDisplay(metrics) != nil,
-                   let verification = metrics.protocolVerification,
+                if let verification = metrics.protocolVerification,
                    recording.mode == .shot || recording.mode == .transportStress {
                     Section("Packet checks") {
-                        MetricRow(title: "Available checks", value: protocolDetailDisplay(metrics) ?? "—")
-                        MetricRow(title: "Checked", value: verification.verifiableClasses.joined(separator: ", "))
-                        MetricRow(title: "Not checked", value: verification.unverifiableClasses.joined(separator: ", "))
-                        Text("Packet checks describe what this scale exposes for diagnosis. More checks make problems easier to prove, but the main score comes from delivered packets and usable readings.")
+                        PacketCheckStatusRows(verification: verification)
+                        Text(packetChecksExplanation(verification))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -3301,6 +3369,63 @@ private struct MetricRow: View {
     }
 }
 
+private struct LiveDiagnosticsRows: View {
+    let recording: ScaleRecording
+    let metrics: ScaleQualityMetrics
+
+    var body: some View {
+        MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+        MetricRow(title: "Resolution", value: resolutionDisplay(metrics))
+        MetricRow(title: "Bad packets", value: "\(badPacketCount(metrics))")
+        MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
+    }
+}
+
+private struct TelemetryAvailabilityRows: View {
+    let recording: ScaleRecording
+    let metrics: ScaleQualityMetrics
+
+    var body: some View {
+        ForEach(telemetryStatuses(recording: recording, metrics: metrics), id: \.name) { status in
+            LabeledContent {
+                Label(status.isAvailable ? "Available" : "Not seen",
+                      systemImage: status.isAvailable ? "checkmark.circle.fill" : "xmark.circle")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(status.isAvailable ? .green : .secondary)
+            } label: {
+                Text(status.name)
+            }
+        }
+    }
+}
+
+private struct PacketCheckStatusRows: View {
+    let verification: ProtocolVerificationMetrics?
+
+    init(metrics: ScaleQualityMetrics) {
+        verification = metrics.protocolVerification
+    }
+
+    init(verification: ProtocolVerificationMetrics) {
+        self.verification = verification
+    }
+
+    var body: some View {
+        if let verification {
+            ForEach(packetCheckStatuses(verification), id: \.name) { status in
+                LabeledContent {
+                    Label(status.isAvailable ? "Available" : "Not available",
+                          systemImage: status.isAvailable ? "checkmark.circle.fill" : "xmark.circle")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(status.isAvailable ? .green : .secondary)
+                } label: {
+                    Text(status.name)
+                }
+            }
+        }
+    }
+}
+
 private struct ComparisonRow: View {
     let row: ProtocolComparisonRow
 
@@ -3313,7 +3438,7 @@ private struct ComparisonRow: View {
                 Text(row.score.map { "\($0)/100" } ?? "—")
                     .monospacedDigit()
             }
-            Text("\(row.protocolKind.displayName) · \(row.mode.displayName) · \(platformDisplayName(row.platform)) · checks \(protocolDetailDisplay(verifiableCount: row.verificationCoveragePercent.map { Int(round(Double($0) * 5.0 / 100.0)) }, totalCount: 5) ?? "—")")
+            Text("\(row.protocolKind.displayName) · \(row.mode.displayName) · \(platformDisplayName(row.platform))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text("\(row.sampleCount) samples · \(formatRate(row.sampleRateHz)) · p95 \(formatMilliseconds(row.p95IntervalMilliseconds)) · max \(formatMilliseconds(row.maxGapMilliseconds))")
@@ -3336,7 +3461,7 @@ private struct SavedRecordingRow: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Text("\(saved.protocolKind.displayName) · \(platformDisplayName(saved.recording.platform)) · \(recordingDurationDisplay(recording: saved.recording, metrics: saved.scoreSnapshot)) · protocol detail \(protocolDetailDisplay(saved.scoreSnapshot) ?? "—")")
+            Text("\(saved.protocolKind.displayName) · \(platformDisplayName(saved.recording.platform)) · \(recordingDurationDisplay(recording: saved.recording, metrics: saved.scoreSnapshot))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -3648,8 +3773,8 @@ private func deliveryScoreExplanation(recording: ScaleRecording, metrics: ScaleQ
         lines.append("Other issues found: \(drivers.joined(separator: ", ")).")
     }
 
-    if let detail = protocolDetailDisplay(metrics) {
-        lines.append("Packet checks available: \(detail).")
+    if let verification = metrics.protocolVerification, !verification.unverifiableClasses.isEmpty {
+        lines.append(packetChecksExplanation(verification))
     }
     return lines
 }
@@ -3662,22 +3787,82 @@ private func formatMultiplier(_ value: Double) -> String {
     String(format: "%.3f", value)
 }
 
-private func protocolDetailDisplay(_ metrics: ScaleQualityMetrics) -> String? {
-    let frameCount = metrics.relevantWeightFrameCount ?? metrics.usableSampleCount ?? 0
-    guard frameCount > 0, let verification = metrics.protocolVerification else {
-        return nil
-    }
-    return protocolDetailDisplay(
-        verifiableCount: verification.verifiableClasses.count,
-        totalCount: verification.verifiableClasses.count + verification.unverifiableClasses.count
-    )
+private func packetCheckListDisplay(_ checks: [String]) -> String {
+    let labels = checks.map(packetCheckDisplayName).sorted()
+    return labels.isEmpty ? "None" : labels.joined(separator: ", ")
 }
 
-private func protocolDetailDisplay(verifiableCount: Int?, totalCount: Int) -> String? {
-    guard let verifiableCount, totalCount > 0 else {
-        return nil
+private func packetCheckStatuses(_ verification: ProtocolVerificationMetrics) -> [(name: String, isAvailable: Bool)] {
+    let verifiable = Set(verification.verifiableClasses)
+    let unverifiable = Set(verification.unverifiableClasses)
+    let orderedKnown = ["parseFailure", "outOfOrder", "stale", "duplicate", "implausible"]
+    let extras = (verifiable.union(unverifiable).subtracting(orderedKnown)).sorted()
+
+    return (orderedKnown + extras)
+        .filter { verifiable.contains($0) || unverifiable.contains($0) }
+        .map { (packetCheckDisplayName($0), verifiable.contains($0)) }
+}
+
+private func telemetryStatuses(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> [(name: String, isAvailable: Bool)] {
+    let capabilities = recording.protocolCapabilities
+    let hasBattery = metrics.batteryMinPercent != nil
+        || metrics.batteryMaxPercent != nil
+        || !recording.batteryEvents.isEmpty
+        || recording.samples.contains { $0.batteryPercent != nil }
+    let hasFlow = recording.samples.contains { $0.flowGramsPerSecond != nil }
+    let hasClock = capabilities?.hasDeviceClock == true
+        || recording.samples.contains { $0.deviceTimestampMilliseconds != nil }
+        || recording.rawPackets.contains { $0.deviceTimestampMilliseconds != nil }
+    let hasSequence = capabilities?.hasSequence == true
+        || recording.samples.contains { $0.sequence != nil }
+        || recording.rawPackets.contains { $0.sequence != nil }
+    let hasChecksum = capabilities?.hasChecksum == true
+    let hasFirmwareQuality = metrics.firmwareQualityAverage != nil
+        || recording.samples.contains { $0.firmwareQualityScore != nil }
+
+    return [
+        ("Battery", hasBattery),
+        ("Flow", hasFlow),
+        ("Device clock", hasClock),
+        ("Sequence number", hasSequence),
+        ("Checksum / CRC", hasChecksum),
+        ("Firmware quality", hasFirmwareQuality)
+    ]
+}
+
+private func packetChecksExplanation(_ verification: ProtocolVerificationMetrics) -> String {
+    if verification.unverifiableClasses.isEmpty {
+        return "This scale exposes all packet checks ScaleBench uses for this mode."
     }
-    return "\(verifiableCount) of \(totalCount) available"
+    return "ScaleBench can prove \(packetCheckListDisplay(verification.verifiableClasses).lowercased()), but cannot prove \(packetCheckListDisplay(verification.unverifiableClasses).lowercased()) from this protocol."
+}
+
+private func packetCheckDisplayName(_ check: String) -> String {
+    switch check {
+    case "parseFailure": "unreadable packets"
+    case "outOfOrder": "out-of-order packets"
+    case "stale": "stale readings"
+    case "duplicate": "repeated readings"
+    case "implausible": "implausible readings"
+    default: check
+    }
+}
+
+private func resolutionDisplay(_ metrics: ScaleQualityMetrics) -> String {
+    if let resolution = metrics.estimatedResolutionGrams ?? metrics.idleResolutionGrams {
+        return String(format: "%.3f g", resolution)
+    }
+    return "—"
+}
+
+private func badPacketCount(_ metrics: ScaleQualityMetrics) -> Int {
+    let frames = metrics.frameClassification
+    return metrics.rejectedPacketCount
+        + (frames?.parseFailure ?? 0)
+        + (frames?.outOfOrder ?? 0)
+        + (frames?.stale ?? 0)
+        + (frames?.duplicate ?? 0)
+        + (frames?.implausible ?? 0)
 }
 
 private func validityReasonLabel(_ reason: String) -> String {
@@ -3755,14 +3940,6 @@ private func resultNarrative(for recording: ScaleRecording) -> String {
         } else {
             parts.append("The largest deduction was usable readings: \(usableReadingsDisplay(metrics)).")
         }
-    }
-
-    if let verification = metrics.protocolVerification {
-        let detail = protocolDetailDisplay(
-            verifiableCount: verification.verifiableClasses.count,
-            totalCount: verification.verifiableClasses.count + verification.unverifiableClasses.count
-        ) ?? "limited packet checks"
-        parts.append("Packet checks available: \(detail).")
     }
 
     if let rate = metrics.effectiveSampleRateHz {

@@ -23,6 +23,7 @@ enum ScaleQualityAnalyzer {
     }
 
     private struct ScoringFrame {
+        var packetID: UUID?
         var monotonicSeconds: Double
         var isWeight: Bool
         var parseFailed: Bool
@@ -35,6 +36,7 @@ enum ScaleQualityAnalyzer {
         var frames: [ScoringFrame]
         var classes: [FrameClass]
         var resolutionGrams: Double
+        var evidenceByPacketID: [UUID: [String]]
     }
 
     private struct CoverageResult {
@@ -201,6 +203,25 @@ enum ScaleQualityAnalyzer {
         return metrics
     }
 
+    static func packetEvidence(recording: ScaleRecording) -> [UUID: [String]] {
+        let allFrames = scoringFrames(recording)
+        let explicitStart = recording.recordingStartMonotonicSeconds
+        let explicitEnd = recording.recordingEndMonotonicSeconds
+        let frameTimes = allFrames.map(\.monotonicSeconds)
+        let recordingStart = explicitStart ?? frameTimes.min() ?? 0
+        let recordingEnd = explicitEnd ?? frameTimes.max() ?? recordingStart
+        let boundedFrames = allFrames.filter {
+            $0.monotonicSeconds >= recordingStart && $0.monotonicSeconds < recordingEnd
+        }
+        let protocolCapabilities = recording.protocolCapabilities
+            ?? inferredProtocolCapabilities(recording: recording, frames: boundedFrames)
+        return classifyFrames(
+            boundedFrames,
+            mode: recording.mode,
+            capabilities: protocolCapabilities
+        ).evidenceByPacketID
+    }
+
     static func sampleIntervalsMilliseconds(_ samples: [ScaleSample]) -> [Double] {
         samples.adjacentPairs().map { max(0, $0.1.monotonicSeconds - $0.0.monotonicSeconds) * 1000 }
     }
@@ -219,6 +240,7 @@ enum ScaleQualityAnalyzer {
             return recording.rawPackets.map { packet in
                 let sample = samplesByTimestamp[packet.monotonicSeconds]?.first
                 return ScoringFrame(
+                    packetID: packet.id,
                     monotonicSeconds: packet.monotonicSeconds,
                     isWeight: packet.role == .weight,
                     parseFailed: packet.role == .weight && packet.rejectionReason != nil,
@@ -230,6 +252,7 @@ enum ScaleQualityAnalyzer {
         }
         return recording.samples.map {
             ScoringFrame(
+                packetID: nil,
                 monotonicSeconds: $0.monotonicSeconds,
                 isWeight: true,
                 parseFailed: false,
@@ -292,6 +315,7 @@ enum ScaleQualityAnalyzer {
         }
         let resolution = estimateResolution(parsedWeights)
         var classes = Array<FrameClass?>(repeating: nil, count: frames.count)
+        var evidenceByPacketID: [UUID: [String]] = [:]
         var lastUsableIndex: Int?
         var usableIndices: [Int] = []
         var sequenceHighWater: UInt64?
@@ -321,11 +345,13 @@ enum ScaleQualityAnalyzer {
             let frame = frames[index]
             guard !frame.parseFailed, let weight = frame.weightGrams, weight.isFinite else {
                 classes[index] = .parseFailure
+                addEvidence("Unreadable packet: parser rejected this weight frame.", frame: frame, into: &evidenceByPacketID)
                 continue
             }
             if let sequence = frame.sequence, let sequenceHighWater,
                forwardDelta(previous: sequenceHighWater, current: sequence, modulus: sequenceModulus) == nil {
                 classes[index] = .outOfOrder
+                addEvidence("Out of order: sequence moved backward or repeated.", frame: frame, into: &evidenceByPacketID)
                 continue
             }
             if verifiesFreshness,
@@ -337,6 +363,7 @@ enum ScaleQualityAnalyzer {
                    modulus: capabilities.deviceClockModulus
                ) == nil {
                 classes[index] = .stale
+                addEvidence("Stale reading: device clock did not advance.", frame: frame, into: &evidenceByPacketID)
                 continue
             }
 
@@ -347,16 +374,28 @@ enum ScaleQualityAnalyzer {
             if checksImpulse, index > 0, index < frames.count - 1,
                let previousWeight = parseableWeight(frames[index - 1]),
                let nextWeight = parseableWeight(frames[index + 1]) {
-                if abs(weight - median3(previousWeight, weight, nextWeight)) > impulseDeviationGrams {
+                let deviation = abs(weight - median3(previousWeight, weight, nextWeight))
+                if deviation > impulseDeviationGrams {
                     implausible = true
+                    addEvidence(
+                        String(format: "Implausible reading: isolated %.2f g spike; limit is %.2f g.", deviation, impulseDeviationGrams),
+                        frame: frame,
+                        into: &evidenceByPacketID
+                    )
                 }
             }
             if checksPhysicalRate, let lastUsableIndex {
                 let previous = frames[lastUsableIndex]
                 let deltaSeconds = frame.monotonicSeconds - previous.monotonicSeconds
                 if deltaSeconds > 0, let previousWeight = previous.weightGrams {
-                    if abs(weight - previousWeight) / deltaSeconds > maxPhysicalFlowGramsPerSecond {
+                    let flowRate = abs(weight - previousWeight) / deltaSeconds
+                    if flowRate > maxPhysicalFlowGramsPerSecond {
                         implausible = true
+                        addEvidence(
+                            String(format: "Implausible reading: %.1f g/s jump; limit is %.1f g/s.", flowRate, maxPhysicalFlowGramsPerSecond),
+                            frame: frame,
+                            into: &evidenceByPacketID
+                        )
                     }
                 }
             }
@@ -377,6 +416,7 @@ enum ScaleQualityAnalyzer {
                         let flow = abs(weight - baseWeight) / span
                         if flow * deltaSeconds >= resolution {
                             classes[index] = .duplicate
+                            addEvidence("Repeated reading: same weight repeated while nearby samples showed motion.", frame: frame, into: &evidenceByPacketID)
                             continue
                         }
                     }
@@ -391,8 +431,18 @@ enum ScaleQualityAnalyzer {
         return ClassifiedFrames(
             frames: frames,
             classes: classes.map { $0 ?? .parseFailure },
-            resolutionGrams: resolution
+            resolutionGrams: resolution,
+            evidenceByPacketID: evidenceByPacketID
         )
+    }
+
+    private static func addEvidence(
+        _ message: String,
+        frame: ScoringFrame,
+        into evidenceByPacketID: inout [UUID: [String]]
+    ) {
+        guard let packetID = frame.packetID else { return }
+        evidenceByPacketID[packetID, default: []].append(message)
     }
 
     private static func parseableWeight(_ frame: ScoringFrame) -> Double? {

@@ -32,7 +32,7 @@ For recording procedures, scoring explanations, diagnostics, and troubleshooting
 
 Published builds are attached to [GitHub Releases](https://github.com/danielfcurrie-alt/ScaleBench/releases):
 
-- **macOS**: download `ScaleBench-1.0.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is ad hoc signed but not yet Apple-notarized; right-click the app and choose **Open**, or approve it under **System Settings > Privacy & Security** if Gatekeeper asks.
+- **macOS**: download `ScaleBench-1.0.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is Developer ID signed and Apple-notarized.
 - **Android**: download the release-signed APK and allow installation from your browser or file manager when Android asks.
 - **iOS/iPadOS**: download `ScaleBench-1.0.0-iOS-unsigned.ipa` for self-signing, or build the `v1.0.0` source tag in Xcode with your own signing team. The IPA is not directly installable: sign it with your own Apple ID using a third-party tool such as [Sideloadly](https://sideloadly.io/) or [AltStore Classic](https://faq.altstore.io/), then install it with Developer Mode enabled. With a free Personal Team, Apple limits the provisioning profile to seven days, after which the app must be refreshed or reinstalled. See [Apple's Personal Team documentation](https://developer.apple.com/help/account/basics/about-your-developer-account). TestFlight will be the normal public installation route when available.
 
@@ -222,7 +222,7 @@ python3 scoring/reference/generate_vectors.py
 
 Public release assets use one matching version number and are built from the tagged commit:
 
-- an ad hoc-signed macOS Catalyst app packaged as a ZIP, clearly identified as not yet notarized
+- a Developer ID signed and Apple-notarized macOS Catalyst app packaged as a ZIP
 - a release-signed Android APK
 - an unsigned iOS IPA for users who will self-sign it with their own Apple ID
 - a `SHA256SUMS.txt` file covering all uploaded binaries

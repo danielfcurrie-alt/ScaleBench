@@ -839,6 +839,7 @@ internal fun RecordingSection(
 ) {
     val hasRecordingData = bluetooth.currentRecording().samples.isNotEmpty()
             || bluetooth.currentRecording().rawPackets.isNotEmpty()
+    val metrics = bluetooth.currentMetrics()
     SectionCard("Recording") {
         var menuExpanded by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(
@@ -882,6 +883,22 @@ internal fun RecordingSection(
             ) {
                 Text(recordingStatusLabel(bluetooth, canRecord, hasRecordingData), fontWeight = FontWeight.SemiBold)
                 Text(modeHelp(selectedMode), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        if (hasRecordingData) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("Live diagnostics", fontWeight = FontWeight.SemiBold)
+                    RecordingDiagnosticsRows(metrics)
+                }
             }
         }
 
@@ -929,6 +946,7 @@ internal fun RecordingTimerDialog(
     timerTick.hashCode()
 
     val recording = bluetooth.currentRecording()
+    val metrics = bluetooth.currentMetrics()
     val sample = bluetooth.latestSample()
     val elapsedMillis = (System.currentTimeMillis() - recording.startedAtMillis).coerceAtLeast(0)
     AlertDialog(
@@ -948,6 +966,7 @@ internal fun RecordingTimerDialog(
                 SwiftMetricRow("Weight", sample?.weightGrams?.let { String.format(Locale.US, "%.2f g", it) } ?: "--")
                 SwiftMetricRow("Flow", sample?.flowGramsPerSecond?.let { String.format(Locale.US, "%.2f g/s", it) } ?: "--")
                 SwiftMetricRow("Battery", sample?.batteryPercent?.let { "$it%" } ?: bluetooth.latestBatteryPercent()?.let { "$it%" } ?: "--")
+                RecordingDiagnosticsRows(metrics)
             }
         },
         confirmButton = {
@@ -1077,5 +1096,14 @@ internal fun LiveSection(bluetooth: BluetoothScaleManager) {
         SwiftMetricRow("Protocol", sample?.scaleKind?.displayName ?: bluetooth.connectedDevice()?.kind?.displayName ?: "Unknown")
         SwiftMetricRow("Packets", bluetooth.currentRecording().rawPackets.size.toString())
         SwiftMetricRow("Samples", bluetooth.currentRecording().samples.size.toString())
+        RecordingDiagnosticsRows(bluetooth.currentMetrics())
     }
+}
+
+@Composable
+internal fun RecordingDiagnosticsRows(metrics: ScaleQualityMetrics) {
+    SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+    SwiftMetricRow("Resolution", resolutionDisplay(metrics))
+    SwiftMetricRow("Bad packets", badPacketCount(metrics).toString())
+    SwiftMetricRow("Long gaps", metrics.longGapCount.toString())
 }

@@ -163,20 +163,7 @@ internal fun StandardScoreRows(mode: RecordingMode, metrics: ScaleQualityMetrics
     if (mode == RecordingMode.SHOT || mode == RecordingMode.TRANSPORT_STRESS) {
         SwiftMetricRow("Delivered", deliveredUpdatesDisplay(metrics))
         SwiftMetricRow("Usable readings", usableReadingsDisplay(metrics))
-        val protocolFrameCount = metrics.relevantWeightFrameCount ?: metrics.usableSampleCount ?: 0
-        SwiftMetricRow(
-            "Packet checks",
-            if (protocolFrameCount > 0) {
-                metrics.protocolVerification?.let {
-                    protocolDetailDisplay(
-                        availableChecks = it.verifiableClasses.size,
-                        totalChecks = it.verifiableClasses.size + it.unverifiableClasses.size
-                    )
-                } ?: "--"
-            } else {
-                "--"
-            }
-        )
+        PacketCheckStatusRows(metrics)
     } else if (mode == RecordingMode.IDLE_STABILITY) {
         SwiftMetricRow("Noise component", metrics.idleNoiseScore?.let { "$it/100" } ?: "--")
         SwiftMetricRow("Drift component", metrics.idleDriftScore?.let { "$it/100" } ?: "--")
@@ -186,6 +173,34 @@ internal fun StandardScoreRows(mode: RecordingMode, metrics: ScaleQualityMetrics
         SwiftMetricRow("10-90% rise", step?.riseTime10To90Seconds?.let(::formatSecondsValue) ?: "--")
         SwiftMetricRow("Settling time", step?.settlingTimeSeconds?.let(::formatSecondsValue) ?: "--")
         SwiftMetricRow("Overshoot", step?.overshootPercent?.let { String.format(Locale.US, "%.1f%%", it) } ?: "--")
+    }
+}
+
+@Composable
+internal fun PacketCheckStatusRows(metrics: ScaleQualityMetrics) {
+    metrics.protocolVerification?.let { verification ->
+        packetCheckStatuses(verification).forEach { status ->
+            PacketCheckStatusRow(status)
+        }
+    }
+}
+
+@Composable
+private fun PacketCheckStatusRow(status: PacketCheckStatus) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(status.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(16.dp))
+        Text(
+            if (status.isAvailable) "Available" else "Not available",
+            fontWeight = FontWeight.SemiBold,
+            color = if (status.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -211,6 +226,13 @@ internal fun ScoreBreakdownRows(recording: ScaleRecording, metrics: ScaleQuality
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text("Telemetry available", fontWeight = FontWeight.SemiBold)
+            TelemetryAvailabilityRows(recording, metrics)
+            Text(
+                "Telemetry is extra protocol data ScaleBench records when the scale exposes it. It is useful for diagnosis, but it is not a separate score term.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             metrics.frameClassification?.let { frames ->
                 SwiftMetricRow("Usable readings", frames.usable.toString())
                 SwiftMetricRow("Unreadable packets", frames.parseFailure.toString())
@@ -232,6 +254,27 @@ internal fun ScoreBreakdownRows(recording: ScaleRecording, metrics: ScaleQuality
         )
         RecordingMode.TARE_LATENCY -> Text("Tare Latency is metrics-only in Standard v1.", style = MaterialTheme.typography.bodySmall)
         RecordingMode.BATTERY_STABILITY -> Text("Battery Logging is telemetry-only in Standard v1.", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+internal fun TelemetryAvailabilityRows(recording: ScaleRecording, metrics: ScaleQualityMetrics) {
+    telemetryStatuses(recording, metrics).forEach { status ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(status.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(16.dp))
+            Text(
+                if (status.isAvailable) "Available" else "Not seen",
+                fontWeight = FontWeight.SemiBold,
+                color = if (status.isAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

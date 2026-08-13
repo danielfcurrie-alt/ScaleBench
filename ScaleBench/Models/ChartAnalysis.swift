@@ -147,20 +147,24 @@ struct PacketTimeline: Equatable {
 
         var entries: [PacketTimelineEntry] = []
         var previousPacket: RawScalePacket?
+        let scorerEvidence = ScaleQualityAnalyzer.packetEvidence(recording: recording)
         for (index, packet) in packets.enumerated() {
             let interval = previousPacket.map { max(0, packet.monotonicSeconds - $0.monotonicSeconds) * 1_000 }
             let relative = packet.monotonicSeconds - referenceTime
             let previousRelative = previousPacket.map { $0.monotonicSeconds - referenceTime }
-            let severity = packetSeverity(
+            let timelineSeverity = packetSeverity(
                 packet: packet,
                 intervalMilliseconds: interval,
                 longGapThresholdMilliseconds: threshold
             )
-            let evidence = packetEvidence(
+            let timelineEvidence = packetEvidence(
                 packet: packet,
                 intervalMilliseconds: interval,
                 longGapThresholdMilliseconds: threshold
             )
+            let packetScorerEvidence = scorerEvidence[packet.id] ?? []
+            let evidence = timelineEvidence + packetScorerEvidence
+            let severity = packetScorerEvidence.isEmpty ? timelineSeverity : .penalty
 
             entries.append(
                 PacketTimelineEntry(
@@ -380,7 +384,7 @@ private func deductions(metrics: ScaleQualityMetrics) -> [ChartDeduction] {
             ChartDeduction(
                 category: .gap,
                 title: "Delivery",
-                detail: "Coverage and purity account for \(max(0, 100 - score)) lost points.",
+                detail: "Delivered packets and usable readings account for \(max(0, 100 - score)) lost points.",
                 pointsLost: max(0, 100 - score),
                 severity: score < 100 ? .penalty : .normal
             )
