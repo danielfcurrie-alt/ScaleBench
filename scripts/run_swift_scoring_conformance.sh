@@ -12,6 +12,9 @@ mkdir -p "$OUT"
 xcrun swiftc \
   -module-cache-path "$OUT/module-cache" \
   "$ROOT/ScaleBench/Models/ScaleProtocolModels.swift" \
+  "$ROOT/ScaleBench/Protocols/WeighMyBruParser.swift" \
+  "$ROOT/ScaleBench/Protocols/BookooParser.swift" \
+  "$ROOT/ScaleBench/Protocols/PacketFieldDecoder.swift" \
   "$ROOT/ScaleBench/Analysis/ScaleQualityAnalyzer.swift" \
   "$ROOT/ScaleBench/Models/ChartAnalysis.swift" \
   "$ROOT/scripts/swift-scoring-conformance/main.swift" \

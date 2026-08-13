@@ -26,6 +26,7 @@ import java.util.UUID;
 final class SavedRecordingStore {
     private static final String PREFS_NAME = "scalebench-recordings";
     private static final String EXAMPLES_SEEDED_KEY = "sharedExamplesSeeded.v1";
+    private static final int SUMMARY_SCHEMA_VERSION = 2;
 
     private final File directory;
     private final SharedPreferences preferences;
@@ -39,23 +40,36 @@ final class SavedRecordingStore {
         ensureSharedExamplesSeeded();
     }
 
-    List<SavedRecordingSummary> recordings() {
+    synchronized List<SavedRecordingSummary> recordings() {
         return new ArrayList<>(recordings);
     }
 
-    String lastErrorMessage() {
+    synchronized String lastErrorMessage() {
         return lastErrorMessage;
     }
 
-    SavedRecordingSummary save(ScaleRecording recording, String notes, String title) throws Exception {
+    synchronized SavedRecordingSummary save(ScaleRecording recording, String notes, String title) throws Exception {
+        return save(recording, notes, title, true);
+    }
+
+    synchronized SavedRecordingSummary save(
+            ScaleRecording recording,
+            String notes,
+            String title,
+            boolean recalculateMetrics
+    ) throws Exception {
         if (!directory.exists() && !directory.mkdirs()) {
             throw new IllegalStateException("Could not create the recordings directory");
         }
         recording.endedAtMillis = recording.endedAtMillis == null ? System.currentTimeMillis() : recording.endedAtMillis;
         recording.notes = notes == null ? "" : notes;
-        recording.metrics = ScaleQualityAnalyzer.analyze(recording);
+        if (recalculateMetrics) {
+            recording.metrics = ScaleQualityAnalyzer.analyze(recording);
+        }
 
         SavedRecordingSummary summary = new SavedRecordingSummary();
+        summary.summarySchemaVersion = SUMMARY_SCHEMA_VERSION;
+        summary.scoringModelVersion = ScaleRecording.SCORING_MODEL_VERSION;
         summary.id = recording.id;
         summary.savedAtMillis = System.currentTimeMillis();
         summary.title = title == null || title.trim().isEmpty() ? recording.defaultTitle() : title.trim();
@@ -82,14 +96,13 @@ final class SavedRecordingStore {
         backupExistingFileIfNeeded(recordingFile);
         JsonExporter.writeRecording(recording, recordingFile);
         writeSummary(summary);
-        recordings.removeIf(saved -> saved.id.equals(summary.id));
-        recordings.add(summary);
+        replaceSummary(summary);
         sort();
         lastErrorMessage = null;
         return summary;
     }
 
-    int loadExampleRecordings() throws Exception {
+    synchronized int loadExampleRecordings() throws Exception {
         int loaded = 0;
         for (SampleRecordingFactory.Example example : SampleRecordingFactory.examples()) {
             if (hasRecordingTitle(example.title)) continue;
@@ -99,7 +112,7 @@ final class SavedRecordingStore {
         return loaded;
     }
 
-    void delete(SavedRecordingSummary summary) throws Exception {
+    synchronized void delete(SavedRecordingSummary summary) throws Exception {
         deleteBackupFiles(directory, summary.id);
         deleteQuietly(new File(directory, summary.id + ".summary.json"));
         deleteQuietly(new File(directory, summary.recordingFileName));
@@ -107,22 +120,25 @@ final class SavedRecordingStore {
         lastErrorMessage = null;
     }
 
-    JSONObject recordingObject(SavedRecordingSummary summary) throws Exception {
-        ScaleRecording recording = recalculatedRecording(summary);
+    synchronized JSONObject recordingObject(SavedRecordingSummary summary) throws Exception {
+        return recordingObject(recalculatedRecording(summary));
+    }
+
+    JSONObject recordingObject(ScaleRecording recording) throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         JsonExporter.writeRecording(recording, output);
         return new JSONObject(output.toString(StandardCharsets.UTF_8.name()));
     }
 
-    void writeRecording(SavedRecordingSummary summary, OutputStream output) throws Exception {
+    synchronized void writeRecording(SavedRecordingSummary summary, OutputStream output) throws Exception {
         JsonExporter.writeRecording(recalculatedRecording(summary), output);
     }
 
-    ScaleRecording recordingForAnalysis(SavedRecordingSummary summary) throws Exception {
+    synchronized ScaleRecording recordingForAnalysis(SavedRecordingSummary summary) throws Exception {
         return recalculatedRecording(summary);
     }
 
-    SavedRecordingSummary importRecording(String json, String fallbackTitle) throws Exception {
+    synchronized SavedRecordingSummary importRecording(String json, String fallbackTitle) throws Exception {
         ScaleRecording recording = decodeSharedRecording(json);
         String title = recording.title == null || recording.title.trim().isEmpty()
                 ? "Imported " + (fallbackTitle == null || fallbackTitle.trim().isEmpty()
@@ -136,7 +152,7 @@ final class SavedRecordingStore {
         return readRecording(new JSONObject(json));
     }
 
-    void load() {
+    synchronized void load() {
         recordings.clear();
         if (!directory.exists()) {
             lastErrorMessage = null;
@@ -144,48 +160,113 @@ final class SavedRecordingStore {
         }
         cleanupPendingWrites();
         File[] files = directory.listFiles((dir, name) ->
-                name.endsWith(".json") && !name.endsWith(".summary.json")
+                name.endsWith(".summary.json")
         );
         if (files == null) {
             lastErrorMessage = null;
             return;
         }
         int failedFileCount = 0;
-        int recoveredFileCount = 0;
         for (File file : files) {
             try {
+                SavedRecordingSummary summary = readSummary(file);
+                File recordingFile = new File(directory, summary.recordingFileName);
+                if (recordingFile.exists()) {
+                    replaceSummary(summary);
+                } else {
+                    failedFileCount++;
+                }
+            } catch (Exception unreadable) {
+                failedFileCount++;
+            }
+        }
+        sort();
+        List<String> notices = new ArrayList<>();
+        if (failedFileCount > 0) {
+            notices.add(failedFileCount + " saved recording summary"
+                    + (failedFileCount == 1 ? "" : "s")
+                    + " could not be read. Full recordings will be checked in the background.");
+        }
+        lastErrorMessage = notices.isEmpty() ? null : String.join(" ", notices);
+    }
+
+    int recoverMissingSummaries() {
+        if (!directory.exists()) return 0;
+        cleanupPendingWrites();
+        File[] files = directory.listFiles((dir, name) ->
+                name.endsWith(".json") && !name.endsWith(".summary.json")
+        );
+        if (files == null) return 0;
+
+        Set<String> currentRecordingFiles = new HashSet<>();
+        synchronized (this) {
+            for (SavedRecordingSummary summary : recordings) {
+                if (!summaryNeedsRefresh(summary)) {
+                    currentRecordingFiles.add(summary.recordingFileName);
+                }
+            }
+        }
+
+        int recoveredFileCount = 0;
+        int refreshedFileCount = 0;
+        int failedFileCount = 0;
+        for (File file : files) {
+            if (currentRecordingFiles.contains(file.getName())) continue;
+            try {
                 ScaleRecording recording = readRecording(file);
-                recordings.add(summaryForRecording(recording, file));
+                SavedRecordingSummary summary = summaryForRecording(recording, file);
+                writeSummary(summary);
+                if (addRecoveredSummary(summary)) {
+                    recoveredFileCount++;
+                } else {
+                    refreshedFileCount++;
+                }
             } catch (Exception unreadable) {
                 try {
                     ScaleRecording recovered = recoverRecordingFromBackup(file);
                     if (recovered == null) {
                         failedFileCount++;
                     } else {
-                        recoveredFileCount++;
-                        recordings.add(summaryForRecording(recovered, file));
+                        SavedRecordingSummary summary = summaryForRecording(recovered, file);
+                        writeSummary(summary);
+                        if (addRecoveredSummary(summary)) {
+                            recoveredFileCount++;
+                        } else {
+                            refreshedFileCount++;
+                        }
                     }
                 } catch (Exception recoveryFailed) {
                     failedFileCount++;
                 }
             }
         }
-        sort();
+
         List<String> notices = new ArrayList<>();
         if (recoveredFileCount > 0) {
-            notices.add("Recovered " + recoveredFileCount + " saved recording file"
-                    + (recoveredFileCount == 1 ? "" : "s") + " from backup.");
+            notices.add("Recovered " + recoveredFileCount + " saved recording "
+                    + (recoveredFileCount == 1 ? "summary" : "summaries") + " in the background.");
+        }
+        if (refreshedFileCount > 0) {
+            notices.add("Refreshed " + refreshedFileCount + " saved recording "
+                    + (refreshedFileCount == 1 ? "summary" : "summaries") + " in the background.");
         }
         if (failedFileCount > 0) {
             notices.add(failedFileCount + " saved recording file"
                     + (failedFileCount == 1 ? "" : "s")
                     + " could not be read. Files were left in place.");
         }
-        lastErrorMessage = notices.isEmpty() ? null : String.join(" ", notices);
+        if (!notices.isEmpty()) {
+            synchronized (this) {
+                lastErrorMessage = String.join(" ", notices);
+            }
+        }
+        return recoveredFileCount + refreshedFileCount;
     }
 
     private void writeSummary(SavedRecordingSummary summary) throws Exception {
         JSONObject object = new JSONObject();
+        object.put("summarySchemaVersion", SUMMARY_SCHEMA_VERSION);
+        object.put("scoringModelVersion", ScaleRecording.SCORING_MODEL_VERSION);
         object.put("id", summary.id);
         object.put("savedAtMillis", summary.savedAtMillis);
         object.put("title", summary.title);
@@ -215,6 +296,8 @@ final class SavedRecordingStore {
     private SavedRecordingSummary readSummary(File file) throws Exception {
         JSONObject object = new JSONObject(readText(file));
         SavedRecordingSummary summary = new SavedRecordingSummary();
+        summary.summarySchemaVersion = object.optInt("summarySchemaVersion", 0);
+        summary.scoringModelVersion = object.optString("scoringModelVersion", "");
         summary.id = object.getString("id");
         summary.savedAtMillis = object.getLong("savedAtMillis");
         summary.title = object.optString("title", "Untitled Recording");
@@ -237,6 +320,11 @@ final class SavedRecordingStore {
         return summary;
     }
 
+    private static boolean summaryNeedsRefresh(SavedRecordingSummary summary) {
+        return summary.summarySchemaVersion != SUMMARY_SCHEMA_VERSION
+                || !ScaleRecording.SCORING_MODEL_VERSION.equals(summary.scoringModelVersion);
+    }
+
     private ScaleRecording recalculatedRecording(SavedRecordingSummary summary) throws Exception {
         ScaleRecording recording = readRecording(new File(directory, summary.recordingFileName));
         recording.schemaVersion = ScaleRecording.SCHEMA_VERSION;
@@ -251,6 +339,8 @@ final class SavedRecordingStore {
         recording.metrics = ScaleQualityAnalyzer.analyze(recording);
 
         SavedRecordingSummary summary = new SavedRecordingSummary();
+        summary.summarySchemaVersion = SUMMARY_SCHEMA_VERSION;
+        summary.scoringModelVersion = ScaleRecording.SCORING_MODEL_VERSION;
         summary.id = recording.id;
         long modified = file.lastModified();
         summary.savedAtMillis = modified > 0 ? modified : recording.startedAtMillis;
@@ -312,6 +402,9 @@ final class SavedRecordingStore {
         recording.appBuild = object.getString("appBuild");
         recording.platform = object.getString("platform");
         recording.scoringModelVersion = object.getString("scoringModelVersion");
+        recording.source = parseRecordingSource(nullableString(object, "source"));
+        recording.protocolName = nullableString(object, "protocol");
+        recording.serialBaud = nullableInt(object, "serialBaud");
         recording.title = nullableString(object, "title");
         recording.startedAtMillis = object.getLong("startedAtMillis");
         recording.endedAtMillis = object.isNull("endedAtMillis") ? null : object.optLong("endedAtMillis");
@@ -335,7 +428,7 @@ final class SavedRecordingStore {
                 "link", "metrics", "samples", "batteryEvents", "events", "rawPackets");
         allowOnlyKeys(object, "recording",
                 "id", "schemaVersion", "appName", "appVersion", "appBuild", "platform",
-                "scoringModelVersion", "title", "mode", "startedAtMillis", "endedAtMillis",
+                "scoringModelVersion", "source", "protocol", "serialBaud", "title", "mode", "startedAtMillis", "endedAtMillis",
                 "recordingStartMonotonicSeconds", "recordingEndMonotonicSeconds", "notes",
                 "scoringProfile", "device", "protocolCapabilities", "link", "metrics", "samples",
                 "batteryEvents", "events", "rawPackets");
@@ -354,6 +447,19 @@ final class SavedRecordingStore {
         object.getString("platform");
         object.getLong("startedAtMillis");
         object.getString("notes");
+        RecordingSource source = parseRecordingSource(nullableString(object, "source"));
+        String protocolName = nullableString(object, "protocol");
+        Integer serialBaud = nullableInt(object, "serialBaud");
+        if (source == RecordingSource.USB_SERIAL) {
+            if (protocolName == null || protocolName.trim().isEmpty()) {
+                throw new IllegalArgumentException("USB recording protocol is required");
+            }
+            if (serialBaud == null || serialBaud != 115200) {
+                throw new IllegalArgumentException("WMB+ USB Serial recordings must use 115200 baud");
+            }
+        } else if (protocolName != null || serialBaud != null) {
+            throw new IllegalArgumentException("Serial metadata requires source usbSerial");
+        }
 
         JSONObject profile = object.getJSONObject("scoringProfile");
         requireKeys(profile, "scoringProfile", "name");
@@ -415,13 +521,16 @@ final class SavedRecordingStore {
             requireKeys(sample, "sample", "arrivalTimeMillis", "monotonicSeconds", "scaleKind", "weightGrams");
             allowOnlyKeys(sample, "sample", "arrivalTimeMillis", "monotonicSeconds", "scaleKind", "weightGrams",
                     "deviceTimestampMilliseconds", "sequence", "batteryPercent", "flowGramsPerSecond",
-                    "firmwareQualityScore", "detectedSampleRateHz", "statusFlags", "diagnosticFlags");
+                    "firmwareQualityScore", "detectedSampleRateHz", "statusFlags", "diagnosticFlags",
+                    "firmwareMillis", "sequenceNumber", "usbStatusRaw", "usbStatusLabels",
+                    "firmwareQuality", "hx711Hz", "usbDroppedCumulative", "usbDroppedDelta", "hostReceivedAt");
             sample.getLong("arrivalTimeMillis");
             sample.getDouble("monotonicSeconds");
             parseScaleKind(sample.getString("scaleKind"));
             sample.getDouble("weightGrams");
             requireRange(nullableInt(sample, "sequence"), 0, 255, "sample sequence");
             requireRange(nullableInt(sample, "batteryPercent"), 0, 100, "sample battery percent");
+            validateUSBSerialMetadata(sample, "sample");
             if (sample.has("statusFlags") && !sample.isNull("statusFlags")) validateStatusFlags(sample.getJSONObject("statusFlags"));
             if (sample.has("diagnosticFlags") && !sample.isNull("diagnosticFlags")) validateDiagnosticFlags(sample.getJSONObject("diagnosticFlags"));
         }
@@ -472,7 +581,9 @@ final class SavedRecordingStore {
                     "characteristicUUID", "role", "bytesHex");
             allowOnlyKeys(packet, "rawPacket", "arrivalTimeMillis", "monotonicSeconds", "scaleKind",
                     "characteristicUUID", "role", "bytesHex", "rejectionReason", "weightGrams", "sequence",
-                    "deviceTimestampMilliseconds", "fields");
+                    "deviceTimestampMilliseconds", "fields", "firmwareMillis", "sequenceNumber",
+                    "usbStatusRaw", "usbStatusLabels", "firmwareQuality", "hx711Hz",
+                    "usbDroppedCumulative", "usbDroppedDelta", "hostReceivedAt");
             packet.getLong("arrivalTimeMillis");
             packet.getDouble("monotonicSeconds");
             parseScaleKind(packet.getString("scaleKind"));
@@ -484,8 +595,34 @@ final class SavedRecordingStore {
             }
             parseRejectionReason(nullableString(packet, "rejectionReason"));
             requireRange(nullableInt(packet, "sequence"), 0, 255, "packet sequence");
+            validateUSBSerialMetadata(packet, "raw packet");
             if (packet.has("fields") && !packet.isNull("fields")) validatePacketFields(packet.getJSONArray("fields"));
         }
+    }
+
+    private static void validateUSBSerialMetadata(JSONObject object, String label) throws Exception {
+        String[] keys = {
+                "firmwareMillis", "sequenceNumber", "usbStatusRaw", "usbStatusLabels",
+                "firmwareQuality", "hx711Hz", "usbDroppedCumulative", "usbDroppedDelta", "hostReceivedAt"
+        };
+        boolean anyPresent = false;
+        for (String key : keys) anyPresent |= object.has(key) && !object.isNull(key);
+        if (!anyPresent) return;
+
+        requireKeys(object, label + " USB metadata", keys);
+        requireRangeLong(object.getLong("firmwareMillis"), 0, 0xFFFF_FFFFL, label + " firmware millis");
+        requireRangeLong(object.getLong("sequenceNumber"), 0, 0xFFFF_FFFFL, label + " sequence number");
+        requireRangeLong(object.getLong("usbStatusRaw"), 0, 0xFFFFL, label + " USB status");
+        JSONArray labels = object.getJSONArray("usbStatusLabels");
+        for (int index = 0; index < labels.length(); index++) labels.getString(index);
+        requireRange(object.getInt("firmwareQuality"), 0, 100, label + " firmware quality");
+        double hx711Hz = object.getDouble("hx711Hz");
+        if (!Double.isFinite(hx711Hz) || hx711Hz < 0) {
+            throw new IllegalArgumentException(label + " HX711 cadence must be finite and nonnegative");
+        }
+        requireRangeLong(object.getLong("usbDroppedCumulative"), 0, 0xFFFF_FFFFL, label + " USB dropped count");
+        requireRangeLong(object.getLong("usbDroppedDelta"), 0, 0xFFFF_FFFFL, label + " USB dropped delta");
+        object.getLong("hostReceivedAt");
     }
 
     private static void validatePacketFields(JSONArray array) throws Exception {
@@ -525,6 +662,12 @@ final class SavedRecordingStore {
         }
     }
 
+    private static void requireRangeLong(long value, long minimum, long maximum, String label) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(label + " must be between " + minimum + " and " + maximum);
+        }
+    }
+
     private static ScaleDeviceIdentity readDevice(JSONObject object) {
         if (object == null) return null;
         ScaleDeviceIdentity device = new ScaleDeviceIdentity();
@@ -554,6 +697,21 @@ final class SavedRecordingStore {
         link.negotiatedMtu = nullableInt(object, "negotiatedMtu");
     }
 
+    private static USBSerialSampleMetadata readUSBSerialMetadata(JSONObject object) {
+        if (!object.has("firmwareMillis") || object.isNull("firmwareMillis")) return null;
+        USBSerialSampleMetadata metadata = new USBSerialSampleMetadata();
+        metadata.firmwareMillis = object.optLong("firmwareMillis");
+        metadata.sequenceNumber = object.optLong("sequenceNumber");
+        metadata.usbStatusRaw = object.optInt("usbStatusRaw");
+        metadata.usbStatusLabels.addAll(jsonStrings(object.optJSONArray("usbStatusLabels")));
+        metadata.firmwareQuality = object.optInt("firmwareQuality");
+        metadata.hx711Hz = object.optDouble("hx711Hz");
+        metadata.usbDroppedCumulative = object.optLong("usbDroppedCumulative");
+        metadata.usbDroppedDelta = object.optLong("usbDroppedDelta");
+        metadata.hostReceivedAtMillis = object.optLong("hostReceivedAt");
+        return metadata;
+    }
+
     private static void readSamples(JSONArray array, List<ScaleSample> samples) {
         if (array == null) return;
         for (int index = 0; index < array.length(); index++) {
@@ -572,6 +730,7 @@ final class SavedRecordingStore {
             sample.detectedSampleRateHz = nullableInt(object, "detectedSampleRateHz");
             sample.statusFlags = readStatusFlags(object.optJSONObject("statusFlags"));
             sample.diagnosticFlags = readDiagnosticFlags(object.optJSONObject("diagnosticFlags"));
+            sample.usbSerial = readUSBSerialMetadata(object);
             samples.add(sample);
         }
     }
@@ -655,6 +814,7 @@ final class SavedRecordingStore {
             packet.weightGrams = nullableDouble(object, "weightGrams");
             packet.sequence = nullableInt(object, "sequence");
             packet.deviceTimestampMilliseconds = nullableLong(object, "deviceTimestampMilliseconds");
+            packet.usbSerial = readUSBSerialMetadata(object);
             readPacketFields(object.optJSONArray("fields"), packet.fields);
             if (packet.fields.isEmpty()) packet.fields.addAll(ScaleParsers.packetFields(packet));
             rawPackets.add(packet);
@@ -702,6 +862,24 @@ final class SavedRecordingStore {
         return false;
     }
 
+    private void replaceSummary(SavedRecordingSummary summary) {
+        recordings.removeIf(saved -> saved.id.equals(summary.id));
+        recordings.add(summary);
+    }
+
+    private synchronized boolean addRecoveredSummary(SavedRecordingSummary summary) {
+        boolean alreadyListed = false;
+        for (SavedRecordingSummary existing : recordings) {
+            if (existing.recordingFileName.equals(summary.recordingFileName)) {
+                alreadyListed = true;
+                break;
+            }
+        }
+        replaceSummary(summary);
+        sort();
+        return !alreadyListed;
+    }
+
     private void ensureSharedExamplesSeeded() {
         if (preferences.getBoolean(EXAMPLES_SEEDED_KEY, false)) return;
         if (hasAnyRecordingFiles()) return;
@@ -731,6 +909,12 @@ final class SavedRecordingStore {
         if ("transportStress".equals(value)) return RecordingMode.TRANSPORT_STRESS;
         if ("batteryStability".equals(value)) return RecordingMode.BATTERY_STABILITY;
         throw new IllegalArgumentException("Unknown recording mode " + value);
+    }
+
+    private static RecordingSource parseRecordingSource(String value) {
+        if (value == null || "bluetooth".equals(value)) return RecordingSource.BLUETOOTH;
+        if ("usbSerial".equals(value)) return RecordingSource.USB_SERIAL;
+        throw new IllegalArgumentException("Unknown recording source " + value);
     }
 
     private static ScaleKind parseScaleKind(String value) {

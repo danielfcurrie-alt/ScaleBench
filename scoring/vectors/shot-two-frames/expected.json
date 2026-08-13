@@ -20,7 +20,7 @@
     "servedSlots": 1,
     "slotCount": 1,
     "spanSeconds": 0.05,
-    "usableRateHz": 20.0,
+    "usableRateHz": null,
     "usableSampleCount": 1
   },
   "frameClassification": {

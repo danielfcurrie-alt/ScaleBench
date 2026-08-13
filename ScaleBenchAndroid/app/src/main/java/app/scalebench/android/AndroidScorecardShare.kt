@@ -87,14 +87,14 @@ internal object AndroidScorecardShare {
         val cardGap = 18f
         val cardWidth = (1104f - cardGap * 2f) / 3f
         metricCard(canvas, paint, 48f, cardsTop, cardWidth, 148f, "Delivered", deliveredCompact(metrics), 54f)
-        metricCard(canvas, paint, 48f + cardWidth + cardGap, cardsTop, cardWidth, 148f, "Usable", usableCompact(metrics), 54f)
-        metricCard(canvas, paint, 48f + (cardWidth + cardGap) * 2f, cardsTop, cardWidth, 148f, "Checks", checksCompact(metrics), 54f)
+        metricCard(canvas, paint, 48f + cardWidth + cardGap, cardsTop, cardWidth, 148f, scorecardRateLabel(recording), scorecardRateCompact(recording, metrics), 54f)
+        metricCard(canvas, paint, 48f + (cardWidth + cardGap) * 2f, cardsTop, cardWidth, 148f, "Usable", usableCompact(metrics), 54f)
 
         val wideWidth = (1104f - cardGap) / 2f
-        metricCard(canvas, paint, 48f, 666f, wideWidth, 120f, "Max gap", metrics.packetIntervalMaxMilliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--", 38f)
-        metricCard(canvas, paint, 48f + wideWidth + cardGap, 666f, wideWidth, 120f, "Long gaps", metrics.longGapCount.toString(), 38f)
+        metricCard(canvas, paint, 48f, 666f, wideWidth, 120f, scorecardFirstWideLabel(recording), scorecardFirstWideValue(recording, metrics), 38f)
+        metricCard(canvas, paint, 48f + wideWidth + cardGap, 666f, wideWidth, 120f, "Max gap", metrics.packetIntervalMaxMilliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--", 38f)
         metricCard(canvas, paint, 48f, 816f, wideWidth, 120f, "p95 interval", metrics.packetIntervalP95Milliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--", 38f)
-        metricCard(canvas, paint, 48f + wideWidth + cardGap, 816f, wideWidth, 120f, "Rejected", metrics.rejectedPacketCount.toString(), 38f)
+        metricCard(canvas, paint, 48f + wideWidth + cardGap, 816f, wideWidth, 120f, "Long gaps", metrics.longGapCount.toString(), 38f)
 
         val formula = scoreFormulaLine(recording.mode, metrics)
         roundRect(canvas, paint, RectF(48f, 964f, 1152f, 1034f), 8f, Color.WHITE)
@@ -195,6 +195,20 @@ internal object AndroidScorecardShare {
         val total = metrics.relevantWeightFrameCount
         return if (usable != null && total != null && total > 0) "$usable/$total" else "--"
     }
+
+    private fun scorecardRateLabel(recording: ScaleRecording): String =
+        if (recording.source == RecordingSource.USB_SERIAL) "Received" else "Rate"
+
+    private fun scorecardRateCompact(recording: ScaleRecording, metrics: ScaleQualityMetrics): String {
+        if (recording.source == RecordingSource.USB_SERIAL) return usbHostReceiveRate(recording)
+        return metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--"
+    }
+
+    private fun scorecardFirstWideLabel(recording: ScaleRecording): String =
+        if (recording.source == RecordingSource.USB_SERIAL) "Device cadence" else "Checks"
+
+    private fun scorecardFirstWideValue(recording: ScaleRecording, metrics: ScaleQualityMetrics): String =
+        if (recording.source == RecordingSource.USB_SERIAL) usbDeviceCadence(recording) else checksCompact(metrics)
 
     private fun checksCompact(metrics: ScaleQualityMetrics): String {
         val verification = metrics.protocolVerification ?: return "--"

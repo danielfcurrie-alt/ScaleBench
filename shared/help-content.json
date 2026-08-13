@@ -25,6 +25,14 @@
       ]
     },
     {
+      "title": "Wired WMB+ on Mac and Android",
+      "items": [
+        { "type": "text", "text": "Connect a WMB+ with a USB data cable, choose the USB serial source under Wired USB, then use Start USB Recording. ScaleBench configures 115200 baud, disables battery benchmark output, and starts the continuous weight stream." },
+        { "type": "text", "text": "USB recordings use firmware time and sequence for cadence while preserving host receive time for transport diagnostics. Results show both device cadence and received sample rate. Firmware-reported dropped rows count as USB backpressure loss; bump and glitch flags are shown without automatically discarding the sample." },
+        { "type": "text", "text": "USB serial recording is currently available on Mac and Android. iPhone/iPad support requires external accessory/USB host support. Bluetooth recording remains available on every supported platform." }
+      ]
+    },
+    {
       "title": "Delivery score",
       "items": [
         { "type": "text", "text": "Shot / Pour and Transport Stress show the score math directly: delivered packets, usable readings, then score." },
@@ -71,7 +79,7 @@
       "title": "Saved recordings",
       "items": [
         { "type": "text", "text": "Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported, using the current ScaleBench Standard v1 analyzer." },
-        { "type": "text", "text": "Compare only recordings made with the same mode and platform. Keep the scoring model version, platform, and available protocol checks with any published result." }
+        { "type": "text", "text": "Compare only recordings made with the same mode, platform, and transport. USB and Bluetooth scores are different test conditions: USB uses the scale's firmware time and sequence, while Bluetooth uses when packets arrive at the app. Keep the scoring model version, platform, transport, and available packet checks with any published result." }
       ]
     },
     {
@@ -104,7 +112,7 @@
     {
       "title": "Troubleshooting",
       "items": [
-        { "type": "text", "text": "If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and Protocol detail." },
+        { "type": "text", "text": "If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and packet checks." },
         { "type": "text", "text": "Backgrounding the app invalidates an official result. Low-power mode, distance, interference, and unstable Bluetooth conditions can affect the captured data." },
         { "type": "text", "text": "If battery or flow is missing, the connected protocol probably did not expose it. ScaleBench records only what the scale sends." },
         { "type": "text", "text": "Saved recordings are local to the device until exported as JSON." }

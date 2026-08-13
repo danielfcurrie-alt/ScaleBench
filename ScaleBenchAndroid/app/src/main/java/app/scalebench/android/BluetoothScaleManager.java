@@ -18,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import no.nordicsemi.android.support.v18.scanner.BluetoothLeScannerCompat;
 import no.nordicsemi.android.support.v18.scanner.ScanCallback;
@@ -26,8 +28,8 @@ import no.nordicsemi.android.support.v18.scanner.ScanSettings;
 
 final class BluetoothScaleManager {
     private static final long TRANSPORT_RECONNECT_DELAY_MILLIS = 750;
-    private static final long LIVE_UI_REFRESH_INTERVAL_MILLIS = 100;
-    private static final double LIVE_METRICS_REFRESH_INTERVAL_SECONDS = 1.0;
+    private static final long LIVE_UI_REFRESH_INTERVAL_MILLIS = 200;
+    private static final double LIVE_METRICS_REFRESH_INTERVAL_SECONDS = 2.0;
 
     interface Listener {
         void onStateChanged();
@@ -36,6 +38,11 @@ final class BluetoothScaleManager {
     private final Context context;
     private final Listener listener;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService liveMetricsExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "ScaleBench-LiveMetrics");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final Runnable liveUiRefreshRunnable;
     private final Map<String, DiscoveredScale> discovered = new LinkedHashMap<>();
     private BluetoothAdapter adapter;
@@ -51,13 +58,18 @@ final class BluetoothScaleManager {
     private boolean scanning;
     private boolean ready;
     private boolean recording;
+    private boolean finalizingRecording;
     private boolean recordingAppIsForeground = true;
     private boolean didSendInitialConfiguration;
     private boolean reconnectPending;
     private boolean liveUiRefreshPending;
+    private boolean liveMetricsAnalysisInFlight;
+    private boolean hasSeenWmbPlusWeightTransport;
+    private long recordingGeneration;
     private double lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
     private String status = "Idle";
     private ScaleRecording currentRecording = ScaleRecording.empty(RecordingMode.SHOT);
+    private ScaleRecording completedRecording;
 
     BluetoothScaleManager(Context context, Listener listener) {
         this.context = context.getApplicationContext();
@@ -93,6 +105,8 @@ final class BluetoothScaleManager {
         capabilities = null;
         latestSample = null;
         latestBatteryPercent = null;
+        finalizingRecording = false;
+        completedRecording = null;
         status = "Disconnected";
         notifyChanged();
     }
@@ -113,12 +127,26 @@ final class BluetoothScaleManager {
         return currentRecording;
     }
 
+    String completedRecordingId() {
+        return completedRecording == null ? null : completedRecording.id;
+    }
+
+    ScaleRecording takeCompletedRecording() {
+        ScaleRecording completed = completedRecording;
+        completedRecording = null;
+        return completed;
+    }
+
     boolean isScanning() {
         return scanning;
     }
 
     boolean isRecording() {
         return recording;
+    }
+
+    boolean isFinalizing() {
+        return finalizingRecording;
     }
 
     boolean isConnected() {
@@ -134,7 +162,10 @@ final class BluetoothScaleManager {
         if (scanner != null && hasBluetoothPermissions()) scanner.stopScan(scanCallback);
         scanning = false;
         reconnectPending = false;
+        recordingGeneration++;
+        finalizingRecording = false;
         mainHandler.removeCallbacksAndMessages(null);
+        liveMetricsExecutor.shutdownNow();
         if (session != null) {
             session.close();
             session = null;
@@ -183,10 +214,12 @@ final class BluetoothScaleManager {
         }
         mainHandler.removeCallbacks(transportReconnectRunnable);
         reconnectPending = false;
+        finalizingRecording = false;
         connectedDevice = scale;
         ready = false;
         activeKind = scale.kind;
         capabilities = null;
+        hasSeenWmbPlusWeightTransport = false;
         acaiaCodec = new AcaiaCodec();
         timemoreDotCodec = new TimemoreDotCodec();
         didSendInitialConfiguration = false;
@@ -265,8 +298,11 @@ final class BluetoothScaleManager {
             return;
         }
         double recordingStart = SystemClock.elapsedRealtimeNanos() / 1_000_000_000.0;
+        recordingGeneration++;
         recordingAppIsForeground = true;
         recording = true;
+        finalizingRecording = false;
+        completedRecording = null;
         currentRecording = ScaleRecording.empty(mode);
         currentRecording.appVersion = BuildConfig.VERSION_NAME;
         currentRecording.appBuild = String.valueOf(BuildConfig.VERSION_CODE);
@@ -289,6 +325,7 @@ final class BluetoothScaleManager {
             receiveBattery(latestBatteryPercent);
         }
         lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
+        liveMetricsAnalysisInFlight = false;
         status = "Recording " + mode.displayName;
         notifyChanged();
     }
@@ -324,14 +361,44 @@ final class BluetoothScaleManager {
 
     private void stopRecording(double recordingEnd) {
         if (!recording) return;
+        recordingGeneration++;
         recording = false;
+        finalizingRecording = true;
         reconnectPending = false;
         mainHandler.removeCallbacks(transportReconnectRunnable);
         currentRecording.endedAtMillis = System.currentTimeMillis();
         currentRecording.recordingEndMonotonicSeconds = recordingEnd;
-        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
+        liveMetricsAnalysisInFlight = false;
         lastLiveMetricsRefreshSeconds = Double.NEGATIVE_INFINITY;
-        status = "Recording stopped";
+        ScaleRecording snapshot = liveAnalysisSnapshot(currentRecording);
+        long generation = recordingGeneration;
+        status = "Analyzing recording";
+        liveMetricsExecutor.execute(() -> {
+            ScaleQualityMetrics metrics = null;
+            String errorMessage = null;
+            try {
+                metrics = ScaleQualityAnalyzer.analyze(snapshot);
+            } catch (Exception error) {
+                errorMessage = error.getMessage() == null ? "unknown error" : error.getMessage();
+            }
+            ScaleQualityMetrics completedMetrics = metrics;
+            String completedErrorMessage = errorMessage;
+            mainHandler.post(() -> {
+                if (recordingGeneration != generation || !currentRecording.id.equals(snapshot.id)) {
+                    return;
+                }
+                finalizingRecording = false;
+                if (completedMetrics != null) {
+                    currentRecording = snapshot;
+                    currentRecording.metrics = completedMetrics;
+                    completedRecording = currentRecording;
+                    status = "Recording stopped";
+                } else {
+                    status = "Analysis failed: " + completedErrorMessage;
+                }
+                notifyChanged();
+            });
+        });
         notifyChanged();
     }
 
@@ -497,6 +564,13 @@ final class BluetoothScaleManager {
 
     private void handleParserResult(ParserResult result, byte[] value, String uuid, long arrival, double monotonic) {
         if (result.isSample()) {
+            if (ScaleParsers.uuidMatches(uuid, ScaleParsers.WMB_WEIGHT20_UUID)) {
+                hasSeenWmbPlusWeightTransport = true;
+            }
+            if (isCompatibilityTransport(result.sample, uuid)) {
+                recordRaw(value, uuid, PacketRole.UNKNOWN, null, arrival, monotonic);
+                return;
+            }
             recordRaw(value, uuid, PacketRole.WEIGHT, null, result.sample, arrival, monotonic);
             receiveSample(result.sample);
         } else if (result.isBattery()) {
@@ -507,6 +581,19 @@ final class BluetoothScaleManager {
                     ? PacketRole.UNKNOWN : PacketRole.WEIGHT;
             recordRaw(value, uuid, role, result.rejectionReason, null, arrival, monotonic);
         }
+    }
+
+    private boolean isCompatibilityTransport(ScaleSample sample, String uuid) {
+        if (sample == null
+                || sample.scaleKind != ScaleKind.WEIGH_MY_BRU
+                || !ScaleParsers.uuidMatches(uuid, ScaleParsers.WMB_FLOAT32_UUID)) {
+            return false;
+        }
+        if (activeKind == ScaleKind.WEIGH_MY_BRU_PLUS
+                || (capabilities != null && capabilities.supportsExtendedPacket())) {
+            return true;
+        }
+        return hasSeenWmbPlusWeightTransport;
     }
 
     private void receiveSample(ScaleSample sample) {
@@ -535,11 +622,71 @@ final class BluetoothScaleManager {
 
     private void refreshLiveMetricsIfNeeded(double monotonicSeconds) {
         if (!recording
+                || liveMetricsAnalysisInFlight
                 || monotonicSeconds - lastLiveMetricsRefreshSeconds < LIVE_METRICS_REFRESH_INTERVAL_SECONDS) {
             return;
         }
-        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording);
         lastLiveMetricsRefreshSeconds = monotonicSeconds;
+        liveMetricsAnalysisInFlight = true;
+        ScaleRecording snapshot = liveAnalysisSnapshot(currentRecording);
+        long generation = recordingGeneration;
+        liveMetricsExecutor.execute(() -> {
+            ScaleQualityMetrics metrics = null;
+            String errorMessage = null;
+            try {
+                metrics = ScaleQualityAnalyzer.analyze(snapshot);
+            } catch (Exception error) {
+                errorMessage = error.getMessage();
+            }
+            ScaleQualityMetrics completedMetrics = metrics;
+            String completedErrorMessage = errorMessage;
+            mainHandler.post(() -> {
+                liveMetricsAnalysisInFlight = false;
+                if (!recording
+                        || recordingGeneration != generation
+                        || !currentRecording.id.equals(snapshot.id)) {
+                    return;
+                }
+                if (completedMetrics != null) {
+                    currentRecording.metrics = completedMetrics;
+                    notifyRecordingProgressChanged();
+                } else {
+                    status = "Live diagnostics skipped: " + (completedErrorMessage == null ? "unknown error" : completedErrorMessage);
+                    notifyChanged();
+                }
+            });
+        });
+    }
+
+    private static ScaleRecording liveAnalysisSnapshot(ScaleRecording source) {
+        ScaleRecording snapshot = ScaleRecording.empty(source.mode);
+        snapshot.id = source.id;
+        snapshot.device = source.device;
+        snapshot.startedAtMillis = source.startedAtMillis;
+        snapshot.endedAtMillis = source.endedAtMillis;
+        snapshot.recordingStartMonotonicSeconds = source.recordingStartMonotonicSeconds;
+        snapshot.recordingEndMonotonicSeconds = source.recordingEndMonotonicSeconds;
+        snapshot.rawPackets.addAll(source.rawPackets);
+        snapshot.samples.addAll(source.samples);
+        snapshot.batteryEvents.addAll(source.batteryEvents);
+        snapshot.events.addAll(source.events);
+        snapshot.capabilities = source.capabilities;
+        snapshot.protocolCapabilities = copyProtocolCapabilities(source.protocolCapabilities);
+        snapshot.link = source.link;
+        snapshot.scoringProfile = source.scoringProfile;
+        return snapshot;
+    }
+
+    private static ProtocolScoringCapabilities copyProtocolCapabilities(ProtocolScoringCapabilities source) {
+        if (source == null) return null;
+        ProtocolScoringCapabilities copy = new ProtocolScoringCapabilities();
+        copy.hasChecksum = source.hasChecksum;
+        copy.hasSequence = source.hasSequence;
+        copy.sequenceModulus = source.sequenceModulus;
+        copy.hasDeviceClock = source.hasDeviceClock;
+        copy.deviceClockSemantics = source.deviceClockSemantics;
+        copy.deviceClockModulus = source.deviceClockModulus;
+        return copy;
     }
 
     private void recordRaw(byte[] value, String uuid, PacketRole role, ParseRejectionReason reason, long arrival, double monotonic) {

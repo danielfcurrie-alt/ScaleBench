@@ -353,7 +353,7 @@ final class ScaleParsers {
             result.add(field(15, 16, "Status", rangeHex(bytes, 15, 16), PacketFieldSemantic.STATUS));
             result.add(field(16, 17, "Quality", u(bytes[16]) + "%", PacketFieldSemantic.QUALITY));
             result.add(field(17, 18, "Sample rate", u(bytes[17]) + " Hz", PacketFieldSemantic.SAMPLE_RATE));
-            result.add(field(18, 19, "Diagnostics", rangeHex(bytes, 18, 19), PacketFieldSemantic.STATUS));
+            result.add(field(18, 19, "Diagnostics", diagnosticFlagsDescription(u(bytes[18])), PacketFieldSemantic.STATUS));
         } else {
             result.add(field(10, 19, "Protocol data", rangeHex(bytes, 10, 19), PacketFieldSemantic.PAYLOAD));
         }
@@ -559,6 +559,20 @@ final class ScaleParsers {
 
     private static String rate(double value) {
         return String.format(Locale.US, "%.2f g/s", value);
+    }
+
+    private static String diagnosticFlagsDescription(int value) {
+        List<String> labels = new ArrayList<>();
+        if ((value & 0x01) != 0) labels.add("recent bump");
+        if ((value & 0x02) != 0) labels.add("long gap seen");
+        if ((value & 0x04) != 0) labels.add("cadence valid");
+        if ((value & 0x08) != 0) labels.add("80 SPS");
+        if ((value & 0x10) != 0) labels.add("10 SPS");
+        if ((value & 0x20) != 0) labels.add("quality valid");
+        if ((value & 0x40) != 0) labels.add("flow present");
+        if ((value & 0x80) != 0) labels.add("extension present");
+        String prefix = String.format(Locale.US, "0x%02X", value);
+        return labels.isEmpty() ? prefix : prefix + " · " + String.join(", ", labels);
     }
 
     static String shortUuid(String uuid) {

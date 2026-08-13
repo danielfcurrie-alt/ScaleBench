@@ -38,6 +38,14 @@ struct SharedHelpContent: Codable, Equatable {
                 ]
             ),
             SharedHelpSection(
+                title: "Wired WMB+ on Mac",
+                items: [
+                    SharedHelpItem(type: .text, text: "Connect WMB+ by USB, select its serial port in Wired USB, then start a USB recording. ScaleBench uses 115200 baud and manages continuous weight streaming automatically."),
+                    SharedHelpItem(type: .text, text: "USB recordings keep device timing, sequence, firmware quality, HX711 cadence, status flags, and serial backpressure drops. Recent bump and glitch flags are diagnostic and do not discard a sample."),
+                    SharedHelpItem(type: .text, text: "USB serial capture is currently available on Mac. Bluetooth recording remains available on Mac, iPhone, and iPad.")
+                ]
+            ),
+            SharedHelpSection(
                 title: "Source & legal",
                 items: [
                     SharedHelpItem(type: .text, text: "ScaleBench is open source. The repository includes the app code, shared schemas, test fixtures, scoring documentation, privacy policy, and MIT license."),

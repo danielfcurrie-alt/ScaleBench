@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DERIVED_DATA="$HOME/Library/Developer/Xcode/DerivedData/ScaleBench-Codex"
+DERIVED_DATA="$HOME/Library/Developer/Xcode/DerivedData/ScaleBench-LocalBuild"
 LOCAL_CONFIG="$HOME/.config/scalebench/apple-build.env"
 [ -f "$LOCAL_CONFIG" ] && source "$LOCAL_CONFIG"
 

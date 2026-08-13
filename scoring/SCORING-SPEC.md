@@ -10,16 +10,18 @@ This document is normative. Where an implementation and this document disagree, 
 
 ## 1. Design axioms
 
-1. **Host-observable only.** Every scored quantity derives from when a weight frame arrived at the phone and what it contained. Device clocks, sequence numbers, checksums, battery, firmware flags and MTU are recorded and reported, and may be used to *classify* a frame, but never form a scored term of their own.
+1. **Captured evidence only.** Every scored quantity derives from a captured weight frame, its transport metadata, and the explicit recording boundaries. BLE cadence uses host callback arrival time. WMB+ USB Serial cadence uses its 32-bit firmware clock and sequence because a serial driver may batch several complete rows into one host read; explicit firmware-reported USB drops are counted as transport loss. Battery, firmware quality, status flags, HX711 cadence, and link setup remain diagnostics rather than independent score terms.
 2. **No composite across domains.** Delivery, Idle Stability and Step Response are three separate results. They are never combined.
 3. **No component can be bought back.** Delivery is the *product* of coverage and purity, not a weighted sum. Half the slots served with half the frames good is a quarter of the value, not three-quarters.
 4. **Every frame receives one integrity class.** Classification order is fixed and a frame is never reclassified. An unusable frame may also leave its delivery slot empty; purity and coverage therefore compound by design.
 5. **Below the validity gate there is no score.** Metrics are still shown; the score is `null` (§8).
 6. **Where a property could not be verified, say so.** A protocol that cannot expose a defect must not appear to be free of it (§7).
 
-### 1.1 What axiom 1 costs
+### 1.1 What axiom 1 costs on BLE
 
-ScaleBench cannot distinguish "the scale never sent the frame" from "the link dropped it." Sequence numbers would tell you, for the one protocol that has them. Using that in the score would mean penalising a scale for *reporting* its own losses while a silent scale looks perfect — measuring candour, not quality.
+For BLE, ScaleBench cannot distinguish "the scale never sent the frame" from "the link dropped it." Sequence numbers can classify order and freshness but do not add a separate missing-frame penalty: doing so would penalise a scale for *reporting* its own losses while a silent scale looks perfect.
+
+WMB+ USB Serial is a narrower case. Its `dropped` counter specifically reports rows skipped by serial backpressure after the app selected that transport. Those rows are direct evidence of loss on the measured path, so each positive `usbDroppedDelta` adds lost frames to the USB purity denominator as defined in §4.4.
 
 *Delivery* is the accurate name for what remains: what reached the phone, fit to use, and on time. Deliberately not why.
 
@@ -34,7 +36,8 @@ A recording presented for scoring contains:
 | `mode` | enum | `shot`, `transportStress`, `idleStability`, `stepResponse`, `tareLatency`, `batteryStability` |
 | `recordingStartMonotonicSeconds` | double | Captured when the user starts the recording. Required for an official result. |
 | `recordingEndMonotonicSeconds` | double | Captured when recording stops, including a stop caused by disconnect. Required for an official result. |
-| `frames[]` | array | BLE frames in callback-arrival order. |
+| `source` | enum | `bluetooth` when absent; `usbSerial` for WMB+ USB Serial. |
+| `frames[]` | array | Transport frames in callback/read completion order. |
 | `events[]` | array | Connection and app-state events with `type` (`disconnect`, `reconnect`, `appBackgrounded`, or `appForegrounded`) and `monotonicSeconds`. |
 
 Frames outside `[recordingStartMonotonicSeconds, recordingEndMonotonicSeconds)` are excluded. If either boundary is absent, first/last frame times may be used for diagnostics only; validity includes `recordingBoundariesMissing` and no official score is produced.
@@ -51,6 +54,9 @@ Scoring operates on **frames**, not parsed samples. The distinction matters: a f
 | `parseFailed` | bool | Frame failed validation — length, header, checksum, CRC. |
 | `sequence` | int? | Protocol sequence byte, when exposed. |
 | `deviceTimestampMs` | int? | Device clock, when exposed. |
+| `firmwareMillis` | uint32? | WMB+ USB firmware clock. Required on parsed USB weight rows. |
+| `sequenceNumber` | uint32? | WMB+ USB sample sequence. Required on parsed USB weight rows. |
+| `usbDroppedDelta` | uint32? | Newly skipped serial rows reported by this USB row. |
 
 **Only `kind: "weight"` frames enter either the numerator or the denominator.** Status, battery, capability and unhandled frames are excluded entirely — they are not defects and must not dilute purity. This is also the fix for the old behaviour where an unhandled notification counted as a rejected packet, penalising Acaia for emitting status frames and penalising any scale that exposes a DFU or vendor service.
 
@@ -79,6 +85,18 @@ Drives §4 and §7. `deviceClockSemantics` is `freeRunning`, `shotTimer`, or `no
 Wall-clock time (`Date()`, `System.currentTimeMillis()`) MUST NOT be used for any interval or slot computation. It is NTP-adjustable and can step mid-recording.
 
 A recording whose timestamps were taken on the UI thread measures the app's own rendering jitter and is not conformant.
+
+### 2.4 WMB+ USB Serial timing
+
+For `source: "usbSerial"`, every parsed `WMBP_WEIGHT_V1` row preserves both host receive time and the device's unsigned 32-bit `firmwareMillis` and `sequenceNumber`. USB scoring normalises each accepted device timestamp onto the host monotonic axis:
+
+```
+usbTime[i] = firstHostReceiveTime + unwrap32(firmwareMillis[i] - firmwareMillis[0]) / 1000
+```
+
+`unwrap32` accepts forward movement of at most half the `2^32` modulus and handles wrap. Repeated or backward values remain available for stale/out-of-order classification and never move the accepted high-water mark. Explicit start and stop boundaries remain host monotonic times, so silence before the first row and after the last row remains visible.
+
+The transformed USB time is authoritative for cadence, intervals, slots, and effective rate. Host receive time is retained for serial batching and backpressure diagnostics. `sequenceNumber` uses the same `2^32` forward-delta rule. A positive `usbDroppedDelta` is transport-loss evidence. Recent-bump and recent-glitch status bits are diagnostic evidence only and do not reject an otherwise usable sample.
 
 ---
 
@@ -192,13 +210,16 @@ Note the honest limit: from the host, "a 1 g-resolution scale" and "a 0.01 g sca
 ### 4.4 Coverage and purity
 
 ```
-coverage = slots containing at least one USABLE frame / total slots in span
-purity   = usable frames / relevant weight frames
+coverage      = slots containing at least one USABLE frame / total slots in span
+BLE purity    = usable frames / relevant weight frames
+USB purity    = usable frames / (relevant weight frames + sum(usbDroppedDelta))
 ```
 
 Slots are 50 ms, laid from `recordingStartMonotonicSeconds`. `slotCount = floor((recordingEnd − recordingStart) × 1000 / 50 + ε)`. Only complete slots are scored. Recording boundaries, rather than first/last frame times, ensure startup silence, trailing silence, and disconnect outages remain visible.
 
 Coverage answers *how much of the recording had fresh, usable data*; purity answers *how much of what arrived was fit to use*. They are independent: a scale can be punctual and corrupt, or clean and slow.
+
+For USB, firmware-declared dropped rows are denominator-only virtual losses. They do not become synthetic packets, do not alter observed frame-rate counts, and do not receive a frame class. Sequence-gap diagnostics report the greater of inferred sequence loss and summed `usbDroppedDelta`, avoiding double-counting the same loss in that diagnostic. BLE has no equivalent declared-loss term.
 
 **Coverage is linear in rate below the reference.** Clean 20 Hz → 1.0. Clean 10 Hz → 0.5. Clean 5 Hz → 0.25. It saturates by construction — a slot cannot be more than served, so 80 Hz and 20 Hz both reach 1.0 and no scale is rewarded for exceeding the reference rate.
 
@@ -361,7 +382,9 @@ Reason codes: `recordingBoundariesMissing`, `durationBelowMinimum`, `usableFrame
 
 `relevantWeightFrames`, `excludedFrames`, `usableSampleCount`, `spanSeconds`, `frameRateHz`, `usableRateHz`, `estimatedResolutionGrams`, `slotCount`, `servedSlots`, `longestUnservedRunMs`, `intervalP50Ms`, `robustCoefficientOfVariation`, `intervalMaxMs`, `disconnectCount`, `signalUnreconstructable`, full `frameClassification` counts.
 
-Plus, from the protocol layer: sequence-derived loss, device-vs-host clock skew in ppm, coalescing factor, battery, firmware flags and self-reported quality, negotiated MTU, requested connection priority.
+`frameRateHz` is relevant weight frames divided by the explicit recording boundary span. `usableRateHz` is usable frames divided by the first-to-last usable-frame span, so setup/stop dead time does not make a clean stream look slower in diagnostics.
+
+Plus, from the protocol layer: sequence-derived loss, device-vs-host clock skew in ppm, coalescing factor, battery, firmware flags and self-reported quality, negotiated MTU, requested connection priority, USB host receive timing, HX711 cadence, and USB backpressure drops.
 
 ### 9.1 Shared signal-diagnostic contract
 
@@ -411,6 +434,7 @@ Decide empirically: run the corpus both ways and check which separates devices *
 ### 10.2 Other open questions
 
 - Is 20 Hz the right reference? It must be reachable on the target phones under §11.1, or coverage measures the handset. Check the achieved coverage ceiling on the slowest supported Android device.
+- Is 20 Hz the right reference for USB? WMB+ USB Serial can carry an 80 SPS HX711 stream on a device clock that does not expose Bluetooth callback jitter, so USB captures may pile up near 100 and stop separating high-rate devices. Before any public USB leaderboard, run the real USB corpus against transport-specific reference rates and check criterion 1 for ceiling pile-up.
 - Should run length re-enter the score (§4.5), given the variance cost?
 - Is the 0.30 reconstruction threshold right, and should `signalUnreconstructable` invalidate rather than score 0?
 - Are the impulse (0.5 g) and rate (25 g/s) thresholds right for pour-over as well as espresso?
@@ -440,6 +464,8 @@ If implemented, resampling MUST be deterministic and identical across platforms:
 | `protocolCapabilities` | Drives §7 |
 | `metrics.validity` | `{ isValid, reasons[] }` |
 
+WMB+ USB Serial exports additionally include `source: "usbSerial"`, `protocol: "WMB+ USB Serial"`, `serialBaud: 115200`, and per-row `firmwareMillis`, `sequenceNumber`, `usbStatusRaw`, `usbStatusLabels`, `firmwareQuality`, `hx711Hz`, `usbDroppedCumulative`, `usbDroppedDelta`, and `hostReceivedAt`. These fields are optional for older and Bluetooth recordings, preserving container compatibility.
+
 Recommended calibration context, not required by scoring model `standard-1.0.0`: OS version, device model/manufacturer, low-power state, thermal/standby state, and an RSSI series. Adding these fields changes the container schema, not the scoring model, until a future normative formula consumes them.
 
 ### 11.1 Cross-platform comparability
@@ -448,12 +474,15 @@ Android can call `requestConnectionPriority` and `requestMtu`. iOS can do neithe
 
 **iOS and Android Delivery Scores are therefore not directly comparable, independent of everything else in this spec.** Neither platform is wrong; they are different measurement conditions. With a 20 Hz reference this stops being a footnote: at Android's default BALANCED connection interval (~30 ms) a scale cannot reliably serve 50 ms slots, so coverage would measure the handset.
 
+Transport is also part of the measurement condition. BLE Delivery cadence uses host callback arrival time, while WMB+ USB Serial cadence uses firmware time and sequence normalised onto the host axis because USB serial drivers can batch complete rows. **BLE and USB Delivery Scores are therefore not directly comparable.** A USB score can answer "did this cabled stream deliver the firmware samples without declared drops"; a BLE score can answer "did this wireless link deliver usable packets to the app on time."
+
 Requirements:
 
 1. Android MUST fix one standard for official scorecards — `CONNECTION_PRIORITY_HIGH` and `requestMtu(247)` — and record both the request and the negotiated result.
-2. Every scorecard MUST display the platform.
-3. Leaderboards MUST segment by platform or label every entry with it.
-4. Official captures MUST remain in the foreground. Apps MUST keep the screen awake during recording, export app-state transitions, and invalidate a result containing `appBackgrounded`.
+2. Every scorecard MUST display the platform and transport source.
+3. Leaderboards MUST segment by platform and transport, or label every entry with both before sorting.
+4. Protocol-comparison views MUST group by transport before ranking scores. Cross-transport comparison is diagnostic only.
+5. Official captures MUST remain in the foreground. Apps MUST keep the screen awake during recording, export app-state transitions, and invalidate a result containing `appBackgrounded`.
 
 ---
 

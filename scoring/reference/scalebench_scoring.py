@@ -215,6 +215,44 @@ def forward_delta(previous, current, modulus=None):
     return delta if delta > 0 else None
 
 
+def scoring_frames(recording):
+    """Return scoring frames, using the WMB+ device clock for USB cadence."""
+    frames = [dict(frame) for frame in recording.get("frames", [])]
+    if recording.get("source") != "usbSerial":
+        return frames
+
+    for frame in frames:
+        if frame.get("sequenceNumber") is not None:
+            frame["sequence"] = frame["sequenceNumber"]
+        if frame.get("firmwareMillis") is not None:
+            frame["deviceTimestampMs"] = frame["firmwareMillis"]
+
+    first_index = next(
+        (index for index, frame in enumerate(frames)
+         if frame.get("deviceTimestampMs") is not None),
+        None,
+    )
+    if first_index is None:
+        return frames
+
+    modulus = 1 << 32
+    previous = int(frames[first_index]["deviceTimestampMs"])
+    elapsed_ms = 0
+    anchor = frames[first_index]["monotonicSeconds"]
+    for index in range(first_index, len(frames)):
+        frame = frames[index]
+        timestamp = frame.get("deviceTimestampMs")
+        if timestamp is None:
+            continue
+        if index > first_index:
+            delta = forward_delta(previous, timestamp, modulus)
+            if delta is not None:
+                elapsed_ms += delta
+                previous = int(timestamp)
+        frame["monotonicSeconds"] = anchor + elapsed_ms / 1000.0
+    return frames
+
+
 def classify_frames(frames, mode, capabilities=None):
     """Fixed evaluation order. A frame takes the first class that matches.
 
@@ -340,13 +378,14 @@ def classify_frames(frames, mode, capabilities=None):
 # Delivery = coverage * purity
 # ---------------------------------------------------------------------------
 
-def coverage_and_purity(weight_frames, classes, recording_start, recording_end):
+def coverage_and_purity(weight_frames, classes, recording_start, recording_end,
+                        additional_lost_frames=0):
     n = len(weight_frames)
     if n == 0 or recording_start is None or recording_end is None:
         return None, None, None
 
     usable_count = sum(1 for c in classes if c == "usable")
-    purity = usable_count / n
+    purity = usable_count / (n + additional_lost_frames)
 
     span_ms = (recording_end - recording_start) * 1000.0
     if span_ms <= 0:
@@ -567,6 +606,10 @@ def parsed_samples(recording):
         if seconds is None or weight is None or not math.isfinite(seconds) or not math.isfinite(weight):
             continue
         sample = dict(frame)
+        if sample.get("firmwareMillis") is not None:
+            sample["deviceTimestampMs"] = sample["firmwareMillis"]
+        if sample.get("sequenceNumber") is not None:
+            sample["sequence"] = sample["sequenceNumber"]
         sample["monotonicSeconds"] = float(seconds)
         sample["weightGrams"] = float(weight)
         sample["scaleKind"] = frame.get("scaleKind", default_kind)
@@ -772,7 +815,7 @@ def evaluate_validity(mode, recording_start, recording_end, boundaries_present, 
 
 def analyze(recording):
     mode = recording["mode"]
-    frames = recording.get("frames", [])
+    frames = scoring_frames(recording)
     events = recording.get("events", [])
 
     explicit_start = recording.get("recordingStartMonotonicSeconds")
@@ -791,8 +834,11 @@ def analyze(recording):
     capabilities = recording.get("protocolCapabilities")
     weight_frames, classes, resolution = classify_frames(bounded_frames, mode, capabilities)
     verification = protocol_verification(bounded_frames, capabilities, mode)
+    usb_dropped_frames = sum(
+        max(0, int(frame.get("usbDroppedDelta", 0))) for frame in weight_frames
+    ) if recording.get("source") == "usbSerial" else 0
     coverage, purity, slot_info = coverage_and_purity(
-        weight_frames, classes, recording_start, recording_end
+        weight_frames, classes, recording_start, recording_end, usb_dropped_frames
     )
 
     # Usable frames are the sample stream Idle and Step analyse.
@@ -827,6 +873,10 @@ def analyze(recording):
     p75 = percentile(sorted_iv, 0.75) if sorted_iv else None
     frame_rate_hz = len(weight_frames) / (recording_end - recording_start) \
         if recording_end > recording_start else None
+    if len(samples) >= 2:
+        sample_span = max(0.0, samples[-1]["monotonicSeconds"] - samples[0]["monotonicSeconds"])
+    else:
+        sample_span = 0.0
 
     result = {
         "scoringModelVersion": SCORING_MODEL_VERSION,
@@ -850,8 +900,7 @@ def analyze(recording):
             "spanSeconds": r6(max(0.0, recording_end - recording_start)),
             "recordingBoundaryInferred": not boundaries_present,
             "frameRateHz": r6(frame_rate_hz),
-            "usableRateHz": r6(len(samples) / (recording_end - recording_start))
-                            if recording_end > recording_start else None,
+            "usableRateHz": r6(len(samples) / sample_span) if sample_span > 0 else None,
             "estimatedResolutionGrams": r6(resolution),
             "slotCount": (slot_info or {}).get("slotCount"),
             "servedSlots": (slot_info or {}).get("servedSlots"),

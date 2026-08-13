@@ -31,6 +31,9 @@
     "appBuild": { "type": "string" },
     "platform": { "type": "string" },
     "scoringModelVersion": { "type": "string" },
+    "source": { "type": ["string", "null"], "enum": ["bluetooth", "usbSerial", null] },
+    "protocol": { "type": ["string", "null"] },
+    "serialBaud": { "type": ["integer", "null"], "minimum": 1 },
     "title": { "type": ["string", "null"] },
     "mode": { "$ref": "#/$defs/recordingMode" },
     "startedAtMillis": { "type": "integer" },
@@ -150,7 +153,16 @@
         "firmwareQualityScore": { "type": ["integer", "null"] },
         "detectedSampleRateHz": { "type": ["integer", "null"] },
         "statusFlags": { "anyOf": [{ "$ref": "#/$defs/statusFlags" }, { "type": "null" }] },
-        "diagnosticFlags": { "anyOf": [{ "$ref": "#/$defs/diagnosticFlags" }, { "type": "null" }] }
+        "diagnosticFlags": { "anyOf": [{ "$ref": "#/$defs/diagnosticFlags" }, { "type": "null" }] },
+        "firmwareMillis": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "sequenceNumber": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "usbStatusRaw": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+        "usbStatusLabels": { "type": ["array", "null"], "items": { "type": "string" } },
+        "firmwareQuality": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "hx711Hz": { "type": ["number", "null"], "minimum": 0 },
+        "usbDroppedCumulative": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "usbDroppedDelta": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "hostReceivedAt": { "type": ["integer", "null"] }
       }
     },
     "batteryEvent": {
@@ -190,7 +202,16 @@
         "fields": {
           "type": "array",
           "items": { "$ref": "packet-fields-schema.json#/$defs/field" }
-        }
+        },
+        "firmwareMillis": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "sequenceNumber": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "usbStatusRaw": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+        "usbStatusLabels": { "type": ["array", "null"], "items": { "type": "string" } },
+        "firmwareQuality": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "hx711Hz": { "type": ["number", "null"], "minimum": 0 },
+        "usbDroppedCumulative": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "usbDroppedDelta": { "type": ["integer", "null"], "minimum": 0, "maximum": 4294967295 },
+        "hostReceivedAt": { "type": ["integer", "null"] }
       }
     },
     "packetRole": {

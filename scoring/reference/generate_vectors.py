@@ -46,6 +46,32 @@ def build():
               "Metronomic 20 Hz, every frame usable. The reference rate: coverage 1.0, purity 1.0.",
               {"mode": "shot", "frames": stream(20, 30, pour), "events": []}))
 
+    usb_frames = []
+    firmware_start = (1 << 32) - 10000
+    sequence_start = (1 << 32) - 256
+    for i in range(401):
+        usb_frames.append(frame(
+            100.0 + (i // 2) * 0.1,
+            i * 0.02,
+            firmwareMillis=(firmware_start + i * 50) % (1 << 32),
+            sequenceNumber=(sequence_start + i + (10 if i >= 200 else 0)) % (1 << 32),
+            usbDroppedCumulative=10 if i >= 200 else 0,
+            usbDroppedDelta=10 if i == 200 else 0,
+        ))
+    V.append(("shot-usb-device-cadence-dropped",
+              "WMB+ USB rows arrive at the host in two-frame batches but carry a clean 20 Hz "
+              "32-bit firmware clock across wrap. Device time must fill every cadence slot; "
+              "ten firmware-reported USB backpressure drops reduce purity to 401/411.",
+              {"mode": "shot", "source": "usbSerial", "deviceKind": "weighMyBruPlus",
+               "frames": usb_frames, "events": [],
+               "recordingStartMonotonicSeconds": 100.0,
+               "recordingEndMonotonicSeconds": 120.05,
+               "protocolCapabilities": {"hasChecksum": False, "hasSequence": True,
+                                          "sequenceModulus": 1 << 32,
+                                          "hasDeviceClock": True,
+                                          "deviceClockSemantics": "freeRunning",
+                                          "deviceClockModulus": 1 << 32}}))
+
     diagnostics = []
     for i in range(400):
         t = i / 20.0

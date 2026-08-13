@@ -99,7 +99,7 @@ enum PacketFieldDecoder {
                 field(15, 16, "Status", hex(bytes[15..<16]), .status),
                 field(16, 17, "Quality", "\(bytes[16])%", .quality),
                 field(17, 18, "Sample rate", "\(bytes[17]) Hz", .sampleRate),
-                field(18, 19, "Diagnostics", hex(bytes[18..<19]), .status)
+                field(18, 19, "Diagnostics", diagnosticFlagsDescription(bytes[18]), .status)
             ]
         } else {
             fields.append(field(10, 19, "Protocol data", hex(bytes[10..<19]), .payload))
@@ -332,5 +332,19 @@ enum PacketFieldDecoder {
 
     private static func rate(_ value: Double) -> String {
         String(format: "%.2f g/s", value)
+    }
+
+    private static func diagnosticFlagsDescription(_ byte: UInt8) -> String {
+        var labels: [String] = []
+        if byte & 0x01 != 0 { labels.append("recent bump") }
+        if byte & 0x02 != 0 { labels.append("long gap seen") }
+        if byte & 0x04 != 0 { labels.append("cadence valid") }
+        if byte & 0x08 != 0 { labels.append("80 SPS") }
+        if byte & 0x10 != 0 { labels.append("10 SPS") }
+        if byte & 0x20 != 0 { labels.append("quality valid") }
+        if byte & 0x40 != 0 { labels.append("flow present") }
+        if byte & 0x80 != 0 { labels.append("extension present") }
+        let prefix = "0x" + hex([byte])
+        return labels.isEmpty ? prefix : prefix + " · " + labels.joined(separator: ", ")
     }
 }

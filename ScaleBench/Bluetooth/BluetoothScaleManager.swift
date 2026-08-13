@@ -6,16 +6,18 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     @Published private(set) var discoveredScales: [DiscoveredScale] = []
     @Published private(set) var connectedDevice: DiscoveredScale?
     @Published private(set) var activeProtocol: ScaleKind = .unknown
-    @Published private(set) var latestSample: ScaleSample?
-    @Published private(set) var latestBatteryPercent: Int?
-    @Published private(set) var currentRecording: ScaleRecording = .empty()
+    private(set) var latestSample: ScaleSample?
+    private(set) var latestBatteryPercent: Int?
+    private(set) var currentRecording: ScaleRecording = .empty()
     @Published private(set) var currentMetrics: ScaleQualityMetrics = .empty
     @Published private(set) var completedRecording: ScaleRecording?
     @Published private(set) var isRecording = false
+    @Published private(set) var isFinalizing = false
     @Published private(set) var isScanning = false
     @Published private(set) var isConnectionReady = false
     @Published private(set) var statusMessage = "Idle"
     @Published private(set) var bluetoothStateTitle = "Bluetooth initializing"
+    @Published private(set) var liveDisplayRevision = 0
 
     private var centralManager: CBCentralManager!
     private let bluetoothQueue = DispatchQueue(label: "com.scalebench.bluetooth", qos: .userInitiated)
@@ -29,8 +31,14 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private var reconnectPending = false
     private var notifyingMeasurementCharacteristicUUIDs: Set<String> = []
     private var recordingAppIsForeground = true
-    private let liveMetricsRefreshIntervalSeconds: Double = 1.0
+    private let liveUIRefreshIntervalSeconds: Double = 0.2
+    private let liveMetricsRefreshIntervalSeconds: Double = 2.0
+    private let liveMetricsQueue = DispatchQueue(label: "com.scalebench.live-metrics", qos: .utility)
+    private var liveUIRefreshWorkItem: DispatchWorkItem?
+    private var liveMetricsAnalysisInFlight = false
+    private var recordingGeneration = 0
     private var lastLiveMetricsRefreshSeconds = -Double.infinity
+    private var hasSeenWMBPlusWeightTransport = false
 
     override init() {
         super.init()
@@ -57,6 +65,39 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         statusMessage = "Scan stopped"
     }
 
+    func disconnect() {
+        guard let device = connectedDevice else {
+            statusMessage = "No Bluetooth scale connected"
+            return
+        }
+
+        if isRecording {
+            stopRecording()
+        }
+
+        let peripheral = peripheralsByID[device.id]
+        centralManager.stopScan()
+        isScanning = false
+        isConnectionReady = false
+        notifyingMeasurementCharacteristicUUIDs.removeAll()
+        writeCharacteristic = nil
+        wmbPlusCapabilities = nil
+        didSendInitialConfiguration = false
+        acaiaCodec = AcaiaParser.Codec()
+        timemoreDotCodec = TimemoreDotParser.Codec()
+        latestSample = nil
+        latestBatteryPercent = nil
+        connectedDevice = nil
+        activeProtocol = .unknown
+        reconnectPending = false
+        hasSeenWMBPlusWeightTransport = false
+        statusMessage = "Disconnected from \(device.name)"
+
+        if let peripheral, peripheral.state == .connected || peripheral.state == .connecting {
+            centralManager.cancelPeripheralConnection(peripheral)
+        }
+    }
+
     func connect(to device: DiscoveredScale) {
         guard let peripheral = peripheralsByID[device.id] else {
             statusMessage = "Peripheral no longer available"
@@ -72,6 +113,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         wmbPlusCapabilities = nil
         isConnectionReady = false
         notifyingMeasurementCharacteristicUUIDs.removeAll()
+        hasSeenWMBPlusWeightTransport = false
         reconnectPending = false
         connectedDevice = device
         activeProtocol = device.kind
@@ -86,6 +128,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             return
         }
         let recordingStart = CACurrentMediaTime()
+        recordingGeneration &+= 1
         recordingAppIsForeground = true
         completedRecording = nil
         isRecording = true
@@ -112,21 +155,42 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             ))
         }
         currentMetrics = .empty
+        liveMetricsAnalysisInFlight = false
         lastLiveMetricsRefreshSeconds = -Double.infinity
+        isFinalizing = false
         statusMessage = "Recording \(mode.displayName)"
+        flushLiveUIRefresh()
     }
 
     func stopRecording(atMonotonicSeconds recordingEnd: Double = CACurrentMediaTime()) {
         guard isRecording else { return }
+        recordingGeneration &+= 1
+        let generation = recordingGeneration
         isRecording = false
+        isFinalizing = true
         reconnectPending = false
         currentRecording.endedAt = Date()
         currentRecording.recordingEndMonotonicSeconds = recordingEnd
-        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
-        currentMetrics = currentRecording.metrics
-        completedRecording = currentRecording
+        liveMetricsAnalysisInFlight = false
         lastLiveMetricsRefreshSeconds = -Double.infinity
-        statusMessage = "Recording stopped"
+        let snapshot = currentRecording
+        statusMessage = "Analyzing recording"
+        flushLiveUIRefresh()
+        liveMetricsQueue.async { [weak self] in
+            var finalized = snapshot
+            finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+            DispatchQueue.main.async {
+                guard let self,
+                      self.recordingGeneration == generation,
+                      self.currentRecording.id == snapshot.id else { return }
+                self.currentRecording = finalized
+                self.currentMetrics = finalized.metrics
+                self.completedRecording = finalized
+                self.isFinalizing = false
+                self.statusMessage = "Recording stopped"
+                self.flushLiveUIRefresh()
+            }
+        }
     }
 
     func noteAppEnteredBackground(atMonotonicSeconds timestamp: Double = CACurrentMediaTime()) {
@@ -153,14 +217,18 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func resetRecording() {
+        recordingGeneration &+= 1
         recordingAppIsForeground = true
         completedRecording = nil
         isRecording = false
+        isFinalizing = false
         currentRecording = .empty()
         currentMetrics = .empty
         latestSample = nil
+        liveMetricsAnalysisInFlight = false
         lastLiveMetricsRefreshSeconds = -Double.infinity
         statusMessage = connectedDevice == nil ? "Idle" : "Connected"
+        flushLiveUIRefresh()
     }
 
     func takeCompletedRecording() -> ScaleRecording? {
@@ -281,6 +349,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         if let sample {
             updateScoringCapabilities(for: sample, characteristic: characteristic)
         }
+        scheduleLiveUIRefresh()
     }
 
     private func receiveSample(_ sample: ScaleSample) {
@@ -288,10 +357,12 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         if let batteryPercent = sample.batteryPercent, (0...100).contains(batteryPercent) {
             latestBatteryPercent = batteryPercent
         }
-        if !(activeProtocol == .weighMyBruPlus && sample.scaleKind == .weighMyBru) {
+        if !(activeProtocol == .weighMyBruPlus && sample.scaleKind == .weighMyBru),
+           activeProtocol != sample.scaleKind {
             activeProtocol = sample.scaleKind
         }
 
+        scheduleLiveUIRefresh()
         guard isRecording else { return }
         currentRecording.samples.append(sample)
         refreshCurrentMetricsIfNeeded(monotonicSeconds: sample.monotonicSeconds)
@@ -300,6 +371,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private func receiveBattery(_ percent: Int, arrivalTime: Date = Date(), monotonicSeconds: Double = CACurrentMediaTime()) {
         guard (0...100).contains(percent) else { return }
         latestBatteryPercent = percent
+        scheduleLiveUIRefresh()
         guard isRecording else { return }
         currentRecording.batteryEvents.append(ScaleBatteryEvent(
             arrivalTime: arrivalTime,
@@ -313,9 +385,45 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private func refreshCurrentMetricsIfNeeded(monotonicSeconds: Double) {
         guard isRecording else { return }
         guard monotonicSeconds - lastLiveMetricsRefreshSeconds >= liveMetricsRefreshIntervalSeconds else { return }
-        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
-        currentMetrics = currentRecording.metrics
+        guard !liveMetricsAnalysisInFlight else { return }
+
         lastLiveMetricsRefreshSeconds = monotonicSeconds
+        liveMetricsAnalysisInFlight = true
+        let snapshot = currentRecording
+        let generation = recordingGeneration
+        liveMetricsQueue.async { [weak self] in
+            let metrics = ScaleQualityAnalyzer.analyze(snapshot)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.liveMetricsAnalysisInFlight = false
+                guard self.isRecording,
+                      self.recordingGeneration == generation,
+                      self.currentRecording.id == snapshot.id else { return }
+                self.currentRecording.metrics = metrics
+                self.currentMetrics = metrics
+                self.scheduleLiveUIRefresh()
+            }
+        }
+    }
+
+    private func scheduleLiveUIRefresh() {
+        guard liveUIRefreshWorkItem == nil else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.liveUIRefreshWorkItem = nil
+            self.liveDisplayRevision &+= 1
+        }
+        liveUIRefreshWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + liveUIRefreshIntervalSeconds,
+            execute: workItem
+        )
+    }
+
+    private func flushLiveUIRefresh() {
+        liveUIRefreshWorkItem?.cancel()
+        liveUIRefreshWorkItem = nil
+        liveDisplayRevision &+= 1
     }
 
     private func handleParserEvent(_ event: ScaleParserEvent, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
@@ -333,13 +441,32 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     private func handleResult(_ result: Result<ScaleSample, ParseRejectionReason>, data: Data, characteristic: CBCharacteristic, arrivalTime: Date, monotonicSeconds: Double) {
+        let characteristicUUID = characteristic.uuid.uuidString.uppercased()
         switch result {
         case let .success(sample):
+            if characteristicUUID == WeighMyBruParser.weight20UUID {
+                hasSeenWMBPlusWeightTransport = true
+            }
+            if shouldTreatAsCompatibilityTransport(sample: sample, characteristicUUID: characteristicUUID) {
+                recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: nil, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
+                return
+            }
             recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: nil, sample: sample, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
             receiveSample(sample)
         case let .failure(reason):
             recordRawPacket(data: data, characteristic: characteristic, role: .weight, rejectionReason: reason, arrivalTime: arrivalTime, monotonicSeconds: monotonicSeconds)
         }
+    }
+
+    private func shouldTreatAsCompatibilityTransport(sample: ScaleSample, characteristicUUID: String) -> Bool {
+        guard sample.scaleKind == .weighMyBru,
+              characteristicUUID == WeighMyBruParser.float32UUID else {
+            return false
+        }
+        return activeProtocol == .weighMyBruPlus
+            || wmbPlusCapabilities?.supportsExtendedPacket == true
+            || notifyingMeasurementCharacteristicUUIDs.contains(WeighMyBruParser.weight20UUID)
+            || hasSeenWMBPlusWeightTransport
     }
 
     private func baseScoringCapabilities(for kind: ScaleKind) -> ProtocolScoringCapabilities {

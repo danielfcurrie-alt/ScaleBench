@@ -15,6 +15,10 @@ private struct VectorInput: Decodable {
         let sequence: UInt64?
         let deviceTimestampMs: UInt64?
         let flowGramsPerSecond: Double?
+        let firmwareMillis: UInt32?
+        let sequenceNumber: UInt32?
+        let usbDroppedCumulative: UInt32?
+        let usbDroppedDelta: UInt32?
     }
 
     struct Event: Decodable {
@@ -32,6 +36,7 @@ private struct VectorInput: Decodable {
     }
 
     let mode: String
+    let source: String?
     let deviceKind: String?
     let recordingStartMonotonicSeconds: Double?
     let recordingEndMonotonicSeconds: Double?
@@ -167,6 +172,29 @@ private func recording(from input: VectorInput) throws -> ScaleRecording {
     }
 
     let scaleKind = input.deviceKind.flatMap(ScaleKind.init(rawValue:)) ?? .unknown
+    let source: RecordingSource
+    switch input.source {
+    case nil, "bluetooth": source = .bluetooth
+    case "usbSerial": source = .usbSerial
+    case let value?:
+        throw NSError(domain: "ScaleBenchConformance", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown source \(value)"])
+    }
+    func usbMetadata(_ frame: VectorInput.Frame) -> USBSerialSampleMetadata? {
+        guard source == .usbSerial,
+              let firmwareMillis = frame.firmwareMillis,
+              let sequenceNumber = frame.sequenceNumber else { return nil }
+        return USBSerialSampleMetadata(
+            firmwareMillis: firmwareMillis,
+            sequenceNumber: sequenceNumber,
+            usbStatusRaw: 0x0001,
+            usbStatusLabels: ["HX711 connected"],
+            firmwareQuality: 100,
+            hx711Hz: 20,
+            usbDroppedCumulative: frame.usbDroppedCumulative ?? 0,
+            usbDroppedDelta: frame.usbDroppedDelta ?? 0,
+            hostReceivedAt: Date(timeIntervalSince1970: frame.monotonicSeconds)
+        )
+    }
     let packets = input.frames.map { frame -> RawScalePacket in
         let role: PacketRole = switch frame.kind ?? "weight" {
         case "weight": .weight
@@ -183,8 +211,10 @@ private func recording(from input: VectorInput) throws -> ScaleRecording {
             bytesHex: "",
             rejectionReason: frame.parseFailed == true ? .invalidChecksum : nil,
             weightGrams: frame.weightGrams,
-            sequence: frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
-            deviceTimestampMilliseconds: frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:))
+            sequence: source == .usbSerial ? nil : frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
+            deviceTimestampMilliseconds: frame.firmwareMillis
+                ?? frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
+            usbSerial: usbMetadata(frame)
         )
     }
 
@@ -199,14 +229,16 @@ private func recording(from input: VectorInput) throws -> ScaleRecording {
             monotonicSeconds: frame.monotonicSeconds,
             scaleKind: scaleKind,
             weightGrams: weightGrams,
-            deviceTimestampMilliseconds: frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
-            sequence: frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
+            deviceTimestampMilliseconds: frame.firmwareMillis
+                ?? frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
+            sequence: source == .usbSerial ? nil : frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
             batteryPercent: nil,
             flowGramsPerSecond: frame.flowGramsPerSecond,
             firmwareQualityScore: nil,
             detectedSampleRateHz: nil,
             statusFlags: nil,
-            diagnosticFlags: nil
+            diagnosticFlags: nil,
+            usbSerial: usbMetadata(frame)
         )
     }
 
@@ -216,13 +248,17 @@ private func recording(from input: VectorInput) throws -> ScaleRecording {
     }
 
     let protocolCapabilities = input.protocolCapabilities.map { capabilities in
-        let hasClockInFrames = input.frames.contains { $0.deviceTimestampMs != nil }
+        let hasClockInFrames = input.frames.contains {
+            $0.deviceTimestampMs != nil || $0.firmwareMillis != nil
+        }
         let hasClock = capabilities.hasDeviceClock ?? hasClockInFrames
         let semantics = DeviceClockSemantics(rawValue: capabilities.deviceClockSemantics ?? "")
             ?? (hasClock ? .freeRunning : .none)
         return ProtocolScoringCapabilities(
             hasChecksum: capabilities.hasChecksum ?? false,
-            hasSequence: capabilities.hasSequence ?? input.frames.contains { $0.sequence != nil },
+            hasSequence: capabilities.hasSequence ?? input.frames.contains {
+                $0.sequence != nil || $0.sequenceNumber != nil
+            },
             sequenceModulus: capabilities.sequenceModulus,
             hasDeviceClock: hasClock,
             deviceClockSemantics: semantics,
@@ -231,6 +267,9 @@ private func recording(from input: VectorInput) throws -> ScaleRecording {
     }
 
     return ScaleRecording(
+        source: source,
+        protocolName: source == .usbSerial ? "WMB+ USB Serial" : nil,
+        serialBaud: source == .usbSerial ? 115_200 : nil,
         mode: mode,
         device: input.deviceKind.map { _ in
             ScaleDeviceIdentity(name: "Vector", identifier: "vector", kind: scaleKind, advertisedServices: [])

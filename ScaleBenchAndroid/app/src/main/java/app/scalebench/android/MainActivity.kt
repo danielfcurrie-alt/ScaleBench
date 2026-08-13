@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.delay
@@ -101,6 +102,9 @@ class MainActivity : ComponentActivity() {
     private val appState: ScaleBenchViewModel by viewModels()
     private val bluetooth: BluetoothScaleManager get() = appState.bluetooth
     private val savedRecordingStore: SavedRecordingStore get() = appState.savedRecordingStore
+    private val fileWorkExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "ScaleBench-FileWork").apply { isDaemon = true }
+    }
     private lateinit var createJsonDocument: ActivityResultLauncher<String>
     private lateinit var importJsonDocument: ActivityResultLauncher<Array<String>>
     private lateinit var openFirmwareDocument: ActivityResultLauncher<Array<String>>
@@ -193,7 +197,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ScaleBenchTheme {
                 val renderTick = appState.renderTick
-                val keepScreenAwake = bluetooth.isRecording()
+                val keepScreenAwake = bluetooth.isRecording() || appState.usbSerial.isRecording
                 DisposableEffect(keepScreenAwake) {
                     if (keepScreenAwake) {
                         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -208,6 +212,7 @@ class MainActivity : ComponentActivity() {
                 }
                 ScaleBenchApp(
                     bluetooth = bluetooth,
+                    usbSerial = appState.usbSerial,
                     savedRecordingStore = savedRecordingStore,
                     renderTick = renderTick,
                     onSave = ::saveRecording,
@@ -215,8 +220,10 @@ class MainActivity : ComponentActivity() {
                     onImportRecording = ::chooseRecordingImport,
                     onDeleteSaved = { deleteSavedRecording(it) },
                     onExport = ::exportRecording,
+                    onExportRecording = ::exportRecording,
                     onExportSaved = ::exportSavedRecording,
                     onShareScorecard = ::shareCurrentScorecard,
+                    onShareRecordingScorecard = ::shareScorecard,
                     onShareSavedScorecard = ::shareSavedScorecard,
                     deviceUtilityState = appState.deviceUtilityState,
                     onChooseFirmware = ::chooseFirmwarePackage,
@@ -233,6 +240,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         DfuServiceListenerHelper.unregisterProgressListener(this, dfuProgressListener)
+        fileWorkExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -251,13 +259,17 @@ class MainActivity : ComponentActivity() {
     private fun exportRecording(notes: String) {
         try {
             val recording = finalizeCurrentRecording(notes)
-            val fileName = jsonFileName(recording.defaultTitle(), System.currentTimeMillis())
-            pendingJsonExport = PendingJsonExport.Current(recording, fileName)
-            createJsonDocument.launch(fileName)
-            appState.invalidate()
+            exportRecording(recording)
         } catch (error: Exception) {
             Toast.makeText(this, "Could not prepare JSON: ${error.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun exportRecording(recording: ScaleRecording) {
+        val fileName = jsonFileName(recording.defaultTitle(), System.currentTimeMillis())
+        pendingJsonExport = PendingJsonExport.Current(recording, fileName)
+        createJsonDocument.launch(fileName)
+        appState.invalidate()
     }
 
     private fun exportSavedRecording(summary: SavedRecordingSummary) {
@@ -276,14 +288,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareSavedScorecard(summary: SavedRecordingSummary) {
-        try {
-            shareScorecard(savedRecordingStore.recordingForAnalysis(summary))
-        } catch (error: Exception) {
-            Toast.makeText(this, "Share failed: ${error.message}", Toast.LENGTH_LONG).show()
+        fileWorkExecutor.execute {
+            try {
+                shareScorecardPrepared(savedRecordingStore.recordingForAnalysis(summary))
+            } catch (error: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Share failed: ${error.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
     private fun shareScorecard(recording: ScaleRecording) {
+        fileWorkExecutor.execute {
+            try {
+                shareScorecardPrepared(recording)
+            } catch (error: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Share failed: ${error.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun shareScorecardPrepared(recording: ScaleRecording) {
         val file = AndroidScorecardShare.writeScorecard(this, recording)
         val uri = FileProvider.getUriForFile(this, "${BuildConfig.APPLICATION_ID}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -292,26 +320,33 @@ class MainActivity : ComponentActivity() {
             putExtra(Intent.EXTRA_TEXT, "${recording.defaultTitle()} · ${standardScoreDisplay(recording.mode, recording.metrics)}")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startActivity(Intent.createChooser(intent, "Share ScaleBench scorecard"))
+        runOnUiThread {
+            startActivity(Intent.createChooser(intent, "Share ScaleBench scorecard"))
+        }
     }
 
     private fun writePendingJsonExport(uri: Uri) {
         val export = pendingJsonExport ?: return
-        try {
-            val output = contentResolver.openOutputStream(uri, "w")
-                ?: throw IllegalStateException("The selected location could not be opened")
-            output.use {
-                when (export) {
-                    is PendingJsonExport.Current -> JsonExporter.writeRecording(export.recording, it)
-                    is PendingJsonExport.Saved -> savedRecordingStore.writeRecording(export.summary, it)
-                    is PendingJsonExport.UtilityReport -> it.write(export.json.toByteArray(Charsets.UTF_8))
+        pendingJsonExport = null
+        fileWorkExecutor.execute {
+            try {
+                val output = contentResolver.openOutputStream(uri, "w")
+                    ?: throw IllegalStateException("The selected location could not be opened")
+                output.use {
+                    when (export) {
+                        is PendingJsonExport.Current -> JsonExporter.writeRecording(export.recording, it)
+                        is PendingJsonExport.Saved -> savedRecordingStore.writeRecording(export.summary, it)
+                        is PendingJsonExport.UtilityReport -> it.write(export.json.toByteArray(Charsets.UTF_8))
+                    }
+                }
+                runOnUiThread {
+                    Toast.makeText(this, "Saved ${export.fileName}", Toast.LENGTH_LONG).show()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Save failed: ${error.message}", Toast.LENGTH_LONG).show()
                 }
             }
-            Toast.makeText(this, "Saved ${export.fileName}", Toast.LENGTH_LONG).show()
-        } catch (error: Exception) {
-            Toast.makeText(this, "Save failed: ${error.message}", Toast.LENGTH_LONG).show()
-        } finally {
-            pendingJsonExport = null
         }
     }
 
@@ -325,7 +360,7 @@ class MainActivity : ComponentActivity() {
                     message = "No saved shot was created because no packets were captured."
                 )
             } else {
-                val saved = savedRecordingStore.save(recording, notes, null)
+                val saved = savedRecordingStore.save(recording, notes, null, false)
                 Toast.makeText(this, "Saved ${saved.title}", Toast.LENGTH_SHORT).show()
                 appState.invalidate()
                 RecordingSaveResult(
@@ -365,15 +400,22 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun importRecording(uri: Uri) {
-        try {
-            val input = contentResolver.openInputStream(uri)
-                ?: throw IllegalStateException("The selected file could not be opened")
-            val json = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val saved = savedRecordingStore.importRecording(json, displayName(uri))
-            Toast.makeText(this, "Imported ${saved.title}", Toast.LENGTH_LONG).show()
-            appState.invalidate()
-        } catch (error: Exception) {
-            Toast.makeText(this, "Import failed: ${error.message}", Toast.LENGTH_LONG).show()
+        val fallbackTitle = displayName(uri)
+        fileWorkExecutor.execute {
+            try {
+                val input = contentResolver.openInputStream(uri)
+                    ?: throw IllegalStateException("The selected file could not be opened")
+                val json = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val saved = savedRecordingStore.importRecording(json, fallbackTitle)
+                runOnUiThread {
+                    Toast.makeText(this, "Imported ${saved.title}", Toast.LENGTH_LONG).show()
+                    appState.invalidate()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "Import failed: ${error.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
@@ -394,7 +436,6 @@ class MainActivity : ComponentActivity() {
         val recording = bluetooth.currentRecording()
         recording.endedAtMillis = recording.endedAtMillis ?: System.currentTimeMillis()
         recording.notes = notes
-        recording.metrics = ScaleQualityAnalyzer.analyze(recording)
         return recording
     }
 

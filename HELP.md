@@ -8,6 +8,14 @@
 4. Tap **Start Recording**. Keep ScaleBench in the foreground; it keeps the screen awake while recording.
 5. Tap **Stop and View Results**. ScaleBench saves the recording automatically; export JSON only when you want a file copy.
 
+## Wired WMB+ on Mac and Android
+
+Connect a WMB+ with a USB data cable, choose the USB serial source under **Wired USB**, then use **Start USB Recording**. ScaleBench configures 115200 baud, disables battery benchmark output, and starts the continuous weight stream.
+
+USB recordings use firmware time and sequence for cadence while preserving host receive time for transport diagnostics. Results show both device cadence and received sample rate. Firmware-reported dropped rows count as USB backpressure loss; bump and glitch flags are shown without automatically discarding the sample.
+
+USB serial recording is currently available on Mac and Android. iPhone/iPad support requires external accessory/USB host support. Bluetooth recording remains available on every supported platform.
+
 ## Official test procedures
 
 | Mode | Minimum | Procedure | Result |
@@ -51,7 +59,7 @@ The score multiplies coverage and purity, so missing time and bad frames compoun
 - A disconnect invalidates normal modes; Transport Stress records disconnects without invalidating because provoking link trouble is the point.
 - Leaving ScaleBench during a recording invalidates every official mode because iOS and Android schedule background Bluetooth differently.
 
-Available checks depend on both the scale protocol and the selected mode. Transport Stress deliberately disables weight-physics and duplicate checks, so even a full-detail protocol reports `3 of 5 available`. When every defect class is not checked, Delivery is shown as an upper bound such as `<=100`.
+Available checks depend on both the scale protocol and the selected mode. Transport Stress deliberately disables weight-physics and duplicate checks, so even a full-detail protocol reports `3 of 5 available`. When every defect class is not checked, Delivery is shown as a best-case score such as `<=100`.
 
 ## Other results
 
@@ -65,7 +73,7 @@ Tare Latency and Battery Logging are metrics-only modes.
 
 Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported, using the current ScaleBench Standard v1 analyzer. Open a saved recording to inspect charts, packet cadence, classifications, notes, validity reasons, and raw packet preview.
 
-Compare only recordings made with the same mode and platform. Keep the `scoringModelVersion`, platform, and available protocol checks with any published result.
+Compare only recordings made with the same mode, platform, and transport. USB and Bluetooth scores are different test conditions: USB uses the scale's firmware time and sequence, while Bluetooth uses when packets arrive at the app. Keep the `scoringModelVersion`, platform, transport, and available packet checks with any published result.
 
 ## Device Utility
 
@@ -105,7 +113,7 @@ ScaleBench is open source. The repository includes the app code, shared schemas,
 
 ## Troubleshooting
 
-If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and Protocol detail. Backgrounding the app invalidates an official result; low-power mode, distance, interference, and unstable Bluetooth conditions can affect the captured data.
+If the score is lower than expected, open the recording and check validity reasons, coverage, purity, max gap, p95 interval, frame classifications, and packet checks. Backgrounding the app invalidates an official result; low-power mode, distance, interference, and unstable Bluetooth conditions can affect the captured data.
 
 If battery or flow is missing, the connected protocol probably did not expose it. ScaleBench records only what the scale sends.
 

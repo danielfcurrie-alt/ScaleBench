@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.delay
@@ -481,7 +482,10 @@ internal fun formatPercent(value: Double): String = String.format(Locale.US, "%.
 
 internal fun formatMultiplier(value: Double): String = String.format(Locale.US, "%.3f", value)
 
-internal fun formatSecondsValue(value: Double): String = String.format(Locale.US, "%.2f s", value)
+internal fun formatSecondsValue(value: Double): String {
+    val displayValue = if (abs(value) < 0.005) 0.0 else value
+    return String.format(Locale.US, "%.2f s", displayValue)
+}
 
 internal fun validityReasonLabel(reason: String): String = when (reason) {
     "recordingBoundariesMissing" -> "Recording was not started and stopped cleanly"

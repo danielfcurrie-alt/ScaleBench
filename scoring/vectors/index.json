@@ -14,6 +14,17 @@
     },
     {
       "coverage": 1.0,
+      "deliveryScore": 98,
+      "description": "WMB+ USB rows arrive at the host in two-frame batches but carry a clean 20 Hz 32-bit firmware clock across wrap. Device time must fill every cadence slot; ten firmware-reported USB backpressure drops reduce purity to 401/411.",
+      "frameCount": 401,
+      "idleStabilityScore": null,
+      "isValid": true,
+      "mode": "shot",
+      "purity": 0.975669,
+      "vectorId": "shot-usb-device-cadence-dropped"
+    },
+    {
+      "coverage": 1.0,
       "deliveryScore": 100,
       "description": "Shared numerical oracle for reported-flow validation, free-running device-clock skew, and packet coalescing. The reported flow trails the centered weight derivative by 200 ms and the device clock runs approximately 100 ppm fast.",
       "frameCount": 400,

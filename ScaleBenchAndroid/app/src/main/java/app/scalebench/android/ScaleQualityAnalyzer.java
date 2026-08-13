@@ -32,6 +32,7 @@ final class ScaleQualityAnalyzer {
         Double weightGrams;
         Long sequence;
         Long deviceTimestampMilliseconds;
+        long usbDroppedDelta;
     }
 
     private static final class SamplePoint {
@@ -90,6 +91,10 @@ final class ScaleQualityAnalyzer {
                 ? recording.protocolCapabilities
                 : inferredProtocolCapabilities(recording, boundedFrames);
         ClassifiedFrames classified = classifyFrames(boundedFrames, recording.mode, capabilities);
+        long usbDroppedFrameCount = 0;
+        for (ScoringFrame frame : classified.frames) {
+            usbDroppedFrameCount = saturatingAdd(usbDroppedFrameCount, frame.usbDroppedDelta);
+        }
         List<SamplePoint> usableSamples = new ArrayList<>();
         for (int i = 0; i < classified.frames.size(); i++) {
             ScoringFrame frame = classified.frames.get(i);
@@ -102,7 +107,7 @@ final class ScaleQualityAnalyzer {
                 recording.mode, recordingStart, recordingEnd, boundariesPresent, usableSamples, recording.events
         );
         CoverageResult coverage = coverageAndPurity(
-                classified.frames, classified.classes, recordingStart, recordingEnd
+                classified.frames, classified.classes, recordingStart, recordingEnd, usbDroppedFrameCount
         );
         FrameClassificationMetrics counts = frameClassification(classified.classes);
         int relevantFrameCount = classified.frames.size();
@@ -131,6 +136,7 @@ final class ScaleQualityAnalyzer {
         Double p95 = percentile(sortedIntervals, 0.95);
         Double intervalMax = intervals.isEmpty() ? null : Collections.max(intervals);
         double span = Math.max(0, recordingEnd - recordingStart);
+        double sampleSpan = usableSamplesSampleSpan(usableSamples);
         IdleResult idle = recording.mode == RecordingMode.IDLE_STABILITY
                 ? idleStability(usableSamples, recordingStart)
                 : null;
@@ -162,12 +168,15 @@ final class ScaleQualityAnalyzer {
         metrics.transportScore = deliveryMode ? deliveryScore : null;
         metrics.stabilityScore = recording.mode == RecordingMode.IDLE_STABILITY ? idleScore : null;
         metrics.metadataScore = verification.verificationCoveragePercent;
-        metrics.effectiveSampleRateHz = span > 0 ? usableSamples.size() / span : null;
+        metrics.effectiveSampleRateHz = sampleSpan > 0 ? usableSamples.size() / sampleSpan : null;
         metrics.packetIntervalP50Milliseconds = rounded6(p50);
         metrics.packetIntervalP95Milliseconds = rounded6(p95);
         metrics.packetIntervalMaxMilliseconds = rounded6(intervalMax);
         metrics.longGapCount = longGapCount;
-        metrics.missingSequenceCount = missingSequenceCount(classified.frames);
+        metrics.missingSequenceCount = Math.max(
+                missingSequenceCount(classified.frames, capabilities.sequenceModulus),
+                saturatingInt(usbDroppedFrameCount)
+        );
         metrics.duplicateOrOutOfOrderTimestampCount = counts.stale;
         metrics.rejectedPacketCount = counts.parseFailure;
         metrics.idleNoisePeakToPeakGrams = idle == null ? null : idle.residualPeakToPeakGrams;
@@ -195,7 +204,7 @@ final class ScaleQualityAnalyzer {
         metrics.recordingSpanSeconds = rounded6(span);
         metrics.recordingBoundaryInferred = !boundariesPresent;
         metrics.frameRateHz = span > 0 ? rounded6(relevantFrameCount / span) : null;
-        metrics.usableRateHz = span > 0 ? rounded6(usableSamples.size() / span) : null;
+        metrics.usableRateHz = sampleSpan > 0 ? rounded6(usableSamples.size() / sampleSpan) : null;
         metrics.estimatedResolutionGrams = rounded6(classified.resolutionGrams);
         metrics.slotCount = coverage == null ? null : coverage.slotCount;
         metrics.servedSlots = coverage == null ? null : coverage.servedSlots;
@@ -239,35 +248,168 @@ final class ScaleQualityAnalyzer {
             for (ScaleSample sample : recording.samples) {
                 samplesByTimestamp.putIfAbsent(sample.monotonicSeconds, sample);
             }
+            boolean hasWmbPlus20WeightStream = hasWmbCompatibilityPair(recording);
             for (RawScalePacket packet : recording.rawPackets) {
                 ScaleSample sample = samplesByTimestamp.get(packet.monotonicSeconds);
+                boolean compatibilityFloat32 = hasWmbPlus20WeightStream
+                        && packet.characteristicUuid != null
+                        && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_FLOAT32_UUID);
                 ScoringFrame frame = new ScoringFrame();
                 frame.monotonicSeconds = packet.monotonicSeconds;
-                frame.weight = packet.role == PacketRole.WEIGHT;
-                frame.parseFailed = frame.weight && packet.rejectionReason != null;
+                frame.weight = packet.role == PacketRole.WEIGHT && !compatibilityFloat32;
+                frame.parseFailed = frame.weight && !compatibilityFloat32 && packet.rejectionReason != null;
                 frame.weightGrams = packet.weightGrams != null
                         ? packet.weightGrams : sample == null ? null : sample.weightGrams;
-                Integer sequence = packet.sequence != null
-                        ? packet.sequence : sample == null ? null : sample.sequence;
-                frame.sequence = sequence == null ? null : sequence.longValue();
-                frame.deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds != null
-                        ? packet.deviceTimestampMilliseconds
-                        : sample == null ? null : sample.deviceTimestampMilliseconds;
+                USBSerialSampleMetadata usb = packet.usbSerial != null
+                        ? packet.usbSerial : sample == null ? null : sample.usbSerial;
+                Integer sequence = packet.sequence != null ? packet.sequence : sample == null ? null : sample.sequence;
+                if (usb != null) {
+                    frame.sequence = usb.sequenceNumber;
+                    frame.deviceTimestampMilliseconds = usb.firmwareMillis;
+                } else {
+                    frame.sequence = sequence == null ? null : sequence.longValue();
+                    frame.deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds != null
+                            ? packet.deviceTimestampMilliseconds
+                            : sample == null ? null : sample.deviceTimestampMilliseconds;
+                }
+                frame.usbDroppedDelta = usb == null ? 0 : usb.usbDroppedDelta;
                 result.add(frame);
             }
-            return result;
+            return recording.source == RecordingSource.USB_SERIAL ? deviceTimedUSBFrames(result) : result;
         }
-        for (ScaleSample sample : recording.samples) {
+        for (ScaleSample sample : canonicalWeightSamples(recording)) {
             ScoringFrame frame = new ScoringFrame();
             frame.monotonicSeconds = sample.monotonicSeconds;
             frame.weight = true;
             frame.parseFailed = false;
             frame.weightGrams = sample.weightGrams;
-            frame.sequence = sample.sequence == null ? null : sample.sequence.longValue();
-            frame.deviceTimestampMilliseconds = sample.deviceTimestampMilliseconds;
+            if (sample.usbSerial != null) {
+                frame.sequence = sample.usbSerial.sequenceNumber;
+                frame.deviceTimestampMilliseconds = sample.usbSerial.firmwareMillis;
+            } else {
+                frame.sequence = sample.sequence == null ? null : sample.sequence.longValue();
+                frame.deviceTimestampMilliseconds = sample.deviceTimestampMilliseconds;
+            }
+            frame.usbDroppedDelta = sample.usbSerial == null ? 0 : sample.usbSerial.usbDroppedDelta;
             result.add(frame);
         }
+        return recording.source == RecordingSource.USB_SERIAL ? deviceTimedUSBFrames(result) : result;
+    }
+
+    private static List<ScoringFrame> deviceTimedUSBFrames(List<ScoringFrame> frames) {
+        int firstIndex = -1;
+        for (int index = 0; index < frames.size(); index++) {
+            if (frames.get(index).deviceTimestampMilliseconds != null) {
+                firstIndex = index;
+                break;
+            }
+        }
+        if (firstIndex < 0) return frames;
+
+        final long modulus = 1L << 32;
+        long previousTimestamp = frames.get(firstIndex).deviceTimestampMilliseconds;
+        long elapsedMilliseconds = 0;
+        double anchor = frames.get(firstIndex).monotonicSeconds;
+        for (int index = firstIndex; index < frames.size(); index++) {
+            ScoringFrame frame = frames.get(index);
+            if (frame.deviceTimestampMilliseconds == null) continue;
+            if (index > firstIndex) {
+                Long delta = forwardDelta(previousTimestamp, frame.deviceTimestampMilliseconds, modulus);
+                if (delta != null) {
+                    elapsedMilliseconds = saturatingAdd(elapsedMilliseconds, delta);
+                    previousTimestamp = frame.deviceTimestampMilliseconds;
+                }
+            }
+            frame.monotonicSeconds = anchor + elapsedMilliseconds / 1000.0;
+        }
+        return frames;
+    }
+
+    static List<ScaleSample> canonicalWeightSamples(ScaleRecording recording) {
+        if (hasWmbCompatibilityPair(recording)) {
+            Map<Double, ScaleSample> samplesByTimestamp = new HashMap<>();
+            for (ScaleSample sample : recording.samples) {
+                samplesByTimestamp.putIfAbsent(sample.monotonicSeconds, sample);
+            }
+            List<ScaleSample> repaired = new ArrayList<>();
+            for (RawScalePacket packet : recording.rawPackets) {
+                if (packet.role != PacketRole.WEIGHT || !isWmb20BytePacket(packet)) continue;
+                ScaleSample existing = samplesByTimestamp.get(packet.monotonicSeconds);
+                Double weight = packet.weightGrams != null
+                        ? packet.weightGrams
+                        : existing == null ? null : existing.weightGrams;
+                if (weight == null) continue;
+                ScaleSample sample = new ScaleSample();
+                sample.arrivalTimeMillis = packet.arrivalTimeMillis;
+                sample.monotonicSeconds = packet.monotonicSeconds;
+                sample.scaleKind = existing == null ? packet.scaleKind : existing.scaleKind;
+                sample.weightGrams = weight;
+                sample.deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds != null
+                        ? packet.deviceTimestampMilliseconds
+                        : existing == null ? null : existing.deviceTimestampMilliseconds;
+                sample.sequence = packet.sequence != null
+                        ? packet.sequence
+                        : existing == null ? null : existing.sequence;
+                sample.batteryPercent = existing == null ? null : existing.batteryPercent;
+                sample.flowGramsPerSecond = existing == null ? null : existing.flowGramsPerSecond;
+                sample.firmwareQualityScore = existing == null ? null : existing.firmwareQualityScore;
+                sample.detectedSampleRateHz = existing == null ? null : existing.detectedSampleRateHz;
+                sample.statusFlags = existing == null ? null : existing.statusFlags;
+                sample.diagnosticFlags = existing == null ? null : existing.diagnosticFlags;
+                sample.usbSerial = existing == null ? packet.usbSerial
+                        : existing.usbSerial != null ? existing.usbSerial : packet.usbSerial;
+                repaired.add(sample);
+            }
+            if (!repaired.isEmpty()) return repaired;
+        }
+        boolean hasWmbPlusStream = false;
+        for (ScaleSample sample : recording.samples) {
+            if (sample.scaleKind == ScaleKind.WEIGH_MY_BRU_PLUS) {
+                hasWmbPlusStream = true;
+                break;
+            }
+        }
+        if (!hasWmbPlusStream) {
+            for (RawScalePacket packet : recording.rawPackets) {
+                if (packet.role == PacketRole.WEIGHT
+                        && packet.scaleKind == ScaleKind.WEIGH_MY_BRU_PLUS
+                        && isWmb20BytePacket(packet)) {
+                    hasWmbPlusStream = true;
+                    break;
+                }
+            }
+        }
+        if (!hasWmbPlusStream) return recording.samples;
+        List<ScaleSample> result = new ArrayList<>();
+        for (ScaleSample sample : recording.samples) {
+            if (sample.scaleKind != ScaleKind.WEIGH_MY_BRU) result.add(sample);
+        }
         return result;
+    }
+
+    private static boolean hasWmbCompatibilityPair(ScaleRecording recording) {
+        boolean has20ByteWeight = false;
+        boolean hasFloat32Weight = false;
+        for (RawScalePacket packet : recording.rawPackets) {
+            if (packet.role != PacketRole.WEIGHT) continue;
+            if (isWmb20BytePacket(packet)) {
+                has20ByteWeight = true;
+            } else if (isWmbFloat32Packet(packet)) {
+                hasFloat32Weight = true;
+            }
+            if (has20ByteWeight && hasFloat32Weight) return true;
+        }
+        return false;
+    }
+
+    private static boolean isWmb20BytePacket(RawScalePacket packet) {
+        return packet.characteristicUuid != null
+                && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_WEIGHT20_UUID);
+    }
+
+    private static boolean isWmbFloat32Packet(RawScalePacket packet) {
+        return packet.characteristicUuid != null
+                && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_FLOAT32_UUID);
     }
 
     private static ProtocolScoringCapabilities inferredProtocolCapabilities(
@@ -300,12 +442,16 @@ final class ScaleQualityAnalyzer {
             }
         }
         capabilities.hasSequence = hasSequence;
-        capabilities.sequenceModulus = hasSequence ? 256L : null;
+        capabilities.sequenceModulus = hasSequence
+                ? recording.source == RecordingSource.USB_SERIAL ? 1L << 32 : 256L
+                : null;
         capabilities.hasDeviceClock = hasClock;
         capabilities.deviceClockSemantics = kind == ScaleKind.DECENT || kind == ScaleKind.ESPRESSI
                 ? DeviceClockSemantics.SHOT_TIMER
                 : hasClock ? DeviceClockSemantics.FREE_RUNNING : DeviceClockSemantics.NONE;
-        if (kind == ScaleKind.BOOKOO || kind == ScaleKind.BOOKOO_MINI
+        if (recording.source == RecordingSource.USB_SERIAL) {
+            capabilities.deviceClockModulus = 1L << 32;
+        } else if (kind == ScaleKind.BOOKOO || kind == ScaleKind.BOOKOO_MINI
                 || kind == ScaleKind.BOOKOO_ULTRA || kind == ScaleKind.WEIGH_MY_BRU_PLUS) {
             capabilities.deviceClockModulus = 1L << 24;
         } else if (kind == ScaleKind.DIFLUID || kind == ScaleKind.DIFLUID_TI) {
@@ -451,7 +597,8 @@ final class ScaleQualityAnalyzer {
             List<ScoringFrame> frames,
             List<FrameClass> classes,
             double recordingStart,
-            double recordingEnd
+            double recordingEnd,
+            long additionalLostFrameCount
     ) {
         if (frames.isEmpty()) return null;
         double spanMilliseconds = (recordingEnd - recordingStart) * 1000;
@@ -483,7 +630,7 @@ final class ScaleQualityAnalyzer {
         }
         CoverageResult result = new CoverageResult();
         result.coverage = (double) servedCount / slotCount;
-        result.purity = (double) usableCount / frames.size();
+        result.purity = (double) usableCount / ((double) frames.size() + additionalLostFrameCount);
         result.slotCount = slotCount;
         result.servedSlots = servedCount;
         result.longestUnservedRunMilliseconds = longestRun * SLOT_MILLISECONDS;
@@ -719,20 +866,29 @@ final class ScaleQualityAnalyzer {
         return null;
     }
 
-    private static int missingSequenceCount(List<ScoringFrame> frames) {
-        int count = 0;
+    private static int missingSequenceCount(List<ScoringFrame> frames, Long modulus) {
+        long count = 0;
         Long acceptedHighWater = null;
         for (ScoringFrame frame : frames) {
             Long current = frame.sequence;
             if (current == null) continue;
             if (acceptedHighWater != null) {
-                Long delta = forwardDelta(acceptedHighWater, current, 256L);
+                Long delta = forwardDelta(acceptedHighWater, current, modulus == null ? 256L : modulus);
                 if (delta == null) continue;
-                if (delta > 1) count += (int) (delta - 1);
+                if (delta > 1) count = saturatingAdd(count, delta - 1);
             }
             acceptedHighWater = current;
         }
-        return count;
+        return saturatingInt(count);
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        if (right > 0 && left > Long.MAX_VALUE - right) return Long.MAX_VALUE;
+        return left + right;
+    }
+
+    private static int saturatingInt(long value) {
+        return value >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(0, value);
     }
 
     private static int firmwareBumpEventCount(List<ScaleSample> samples) {
@@ -744,6 +900,11 @@ final class ScaleQualityAnalyzer {
             active = hasBump;
         }
         return count;
+    }
+
+    private static double usableSamplesSampleSpan(List<SamplePoint> samples) {
+        if (samples.size() < 2) return 0;
+        return Math.max(0, samples.get(samples.size() - 1).monotonicSeconds - samples.get(0).monotonicSeconds);
     }
 
     private static Double percentile(List<Double> sortedValues, double probability) {

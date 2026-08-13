@@ -86,6 +86,11 @@ final class JsonExporter {
             writer.name("appBuild").value(recording.appBuild);
             writer.name("platform").value(recording.platform);
             writer.name("scoringModelVersion").value(recording.scoringModelVersion);
+            if (recording.source == RecordingSource.USB_SERIAL) {
+                writer.name("source").value(recording.source.wireValue);
+                nullable(writer, "protocol", recording.protocolName);
+                nullable(writer, "serialBaud", recording.serialBaud);
+            }
             nullable(writer, "title", recording.title);
             writer.name("mode").value(modeName(recording.mode));
             writer.name("startedAtMillis").value(recording.startedAtMillis);
@@ -198,6 +203,8 @@ final class JsonExporter {
             nullable(writer, "purity", payload.purity);
             writer.name("verificationCoveragePercent").value(payload.verificationCoveragePercent);
             nullable(writer, "sampleRateHz", payload.sampleRateHz);
+            nullable(writer, "deviceCadenceHz", payload.deviceCadenceHz);
+            nullable(writer, "receivedSampleRateHz", payload.receivedSampleRateHz);
             nullable(writer, "p95IntervalMilliseconds", payload.p95IntervalMilliseconds);
             nullable(writer, "maxGapMilliseconds", payload.maxGapMilliseconds);
             writer.name("longGapCount").value(payload.longGapCount);
@@ -439,6 +446,7 @@ final class JsonExporter {
         nullable(writer, "detectedSampleRateHz", sample.detectedSampleRateHz);
         if (sample.statusFlags != null) writeStatusFlags(writer, sample.statusFlags);
         if (sample.diagnosticFlags != null) writeDiagnosticFlags(writer, sample.diagnosticFlags);
+        writeUSBSerialMetadata(writer, sample.usbSerial);
         writer.endObject();
     }
 
@@ -481,7 +489,26 @@ final class JsonExporter {
         nullable(writer, "sequence", packet.sequence);
         nullable(writer, "deviceTimestampMilliseconds", packet.deviceTimestampMilliseconds);
         writePacketFields(writer, ScaleParsers.packetFields(packet));
+        writeUSBSerialMetadata(writer, packet.usbSerial);
         writer.endObject();
+    }
+
+    private static void writeUSBSerialMetadata(
+            JsonWriter writer,
+            USBSerialSampleMetadata metadata
+    ) throws IOException {
+        if (metadata == null) return;
+        writer.name("firmwareMillis").value(metadata.firmwareMillis);
+        writer.name("sequenceNumber").value(metadata.sequenceNumber);
+        writer.name("usbStatusRaw").value(metadata.usbStatusRaw);
+        writer.name("usbStatusLabels").beginArray();
+        for (String label : metadata.usbStatusLabels) writer.value(label);
+        writer.endArray();
+        writer.name("firmwareQuality").value(metadata.firmwareQuality);
+        writer.name("hx711Hz").value(metadata.hx711Hz);
+        writer.name("usbDroppedCumulative").value(metadata.usbDroppedCumulative);
+        writer.name("usbDroppedDelta").value(metadata.usbDroppedDelta);
+        writer.name("hostReceivedAt").value(metadata.hostReceivedAtMillis);
     }
 
     private static void writePacketFields(JsonWriter writer, java.util.List<PacketFieldAnnotation> fields) throws IOException {

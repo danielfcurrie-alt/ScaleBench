@@ -10,8 +10,9 @@ import java.util.Map;
 final class ChartAnalysis {
     static AndroidChartAnalysis create(ScaleRecording recording, ScaleQualityMetrics metrics) {
         double referenceTime = chartReferenceTime(recording);
-        List<ChartPoint> weightPoints = sampleChartPoints(recording, referenceTime);
-        List<ChartPoint> flowPoints = flowChartPoints(recording, referenceTime);
+        List<ScaleSample> samples = ScaleQualityAnalyzer.canonicalWeightSamples(recording);
+        List<ChartPoint> weightPoints = sampleChartPoints(samples, referenceTime);
+        List<ChartPoint> flowPoints = flowChartPoints(samples, referenceTime);
         AndroidPacketTimeline timeline = packetTimeline(recording, referenceTime);
         return new AndroidChartAnalysis(
                 weightPoints,
@@ -19,7 +20,7 @@ final class ChartAnalysis {
                 timeline,
                 problemWindows(weightPoints, timeline),
                 chartDeductions(metrics),
-                signalDiagnostics(recording, metrics)
+                signalDiagnostics(recording, samples, metrics)
         );
     }
 
@@ -30,9 +31,9 @@ final class ChartAnalysis {
     private static AndroidPacketTimeline packetTimeline(ScaleRecording recording, double referenceTime) {
         List<RawScalePacket> packets = new ArrayList<>(recording.rawPackets);
         packets.sort(Comparator.comparingDouble(packet -> packet.monotonicSeconds));
-        List<ScaleSample> samples = new ArrayList<>(recording.samples);
+        List<ScaleSample> samples = new ArrayList<>(ScaleQualityAnalyzer.canonicalWeightSamples(recording));
         samples.sort(Comparator.comparingDouble(sample -> sample.monotonicSeconds));
-        double threshold = ScaleQualityAnalyzer.longGapThresholdMilliseconds(recording.samples, recording.scoringProfile);
+        double threshold = ScaleQualityAnalyzer.longGapThresholdMilliseconds(samples, recording.scoringProfile);
         List<AndroidSampleInterval> intervals = sampleIntervalEntries(
                 samples,
                 referenceTime,
@@ -50,7 +51,11 @@ final class ChartAnalysis {
             RawScalePacket packet = packets.get(index);
             Double intervalMs = previous == null ? null : Math.max(0, (packet.monotonicSeconds - previous.monotonicSeconds) * 1000.0);
             PacketRole role = packet.role == null ? PacketRole.UNKNOWN : packet.role;
-            String roleLabel = packetRoleLabel(role);
+            boolean compatibilityFloat32 = role == PacketRole.UNKNOWN
+                    && packet.rejectionReason == null
+                    && packet.characteristicUuid != null
+                    && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_FLOAT32_UUID);
+            String roleLabel = compatibilityFloat32 ? "compatibility" : packetRoleLabel(role);
             String rejection = packet.rejectionReason == null ? null : packet.rejectionReason.name();
             AndroidPacketSeverity severity = packetSeverity(roleLabel, rejection, intervalMs, threshold);
             entries.add(new AndroidPacketTimelineEntry(
@@ -176,6 +181,7 @@ final class ChartAnalysis {
             case "battery":
             case "capabilities":
             case "commandack":
+            case "compatibility":
                 return AndroidPacketSeverity.INFO;
             case "unknown":
                 return AndroidPacketSeverity.WARNING;
@@ -189,6 +195,7 @@ final class ChartAnalysis {
         switch (role.toLowerCase(Locale.ROOT)) {
             case "weight": return AndroidPacketLane.WEIGHT;
             case "battery": return AndroidPacketLane.METADATA;
+            case "compatibility": return AndroidPacketLane.METADATA;
             case "capabilities":
             case "commandack":
                 return AndroidPacketLane.CONTROL;
@@ -210,16 +217,16 @@ final class ChartAnalysis {
         return first == null ? 0.0 : first;
     }
 
-    private static List<ChartPoint> sampleChartPoints(ScaleRecording recording, double referenceTime) {
-        List<ScaleSample> samples = new ArrayList<>(recording.samples);
+    private static List<ChartPoint> sampleChartPoints(List<ScaleSample> inputSamples, double referenceTime) {
+        List<ScaleSample> samples = new ArrayList<>(inputSamples);
         samples.sort(Comparator.comparingDouble(sample -> sample.monotonicSeconds));
         List<ChartPoint> points = new ArrayList<>();
         for (ScaleSample sample : samples) points.add(new ChartPoint(sample.monotonicSeconds - referenceTime, sample.weightGrams));
         return points;
     }
 
-    private static List<ChartPoint> flowChartPoints(ScaleRecording recording, double referenceTime) {
-        List<ScaleSample> samples = new ArrayList<>(recording.samples);
+    private static List<ChartPoint> flowChartPoints(List<ScaleSample> inputSamples, double referenceTime) {
+        List<ScaleSample> samples = new ArrayList<>(inputSamples);
         samples.sort(Comparator.comparingDouble(sample -> sample.monotonicSeconds));
         List<ChartPoint> points = new ArrayList<>();
         for (ScaleSample sample : samples) {
@@ -313,6 +320,9 @@ final class ChartAnalysis {
             evidence.add("Near-threshold raw packet interval before this packet: " + String.format(Locale.US, "%.0f ms", intervalMs) + ". Warning only.");
         }
         switch (role.toLowerCase(Locale.ROOT)) {
+            case "compatibility":
+                evidence.add("Compatibility weight packet. Preserved for diagnostics, but excluded from the official benchmark stream because WMB+ 20-byte packets are also present.");
+                break;
             case "unknown":
                 evidence.add("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.");
                 break;
@@ -371,12 +381,12 @@ final class ChartAnalysis {
         return result;
     }
 
-    private static AndroidSignalDiagnostics signalDiagnostics(ScaleRecording recording, ScaleQualityMetrics metrics) {
+    private static AndroidSignalDiagnostics signalDiagnostics(ScaleRecording recording, List<ScaleSample> samples, ScaleQualityMetrics metrics) {
         if (recording.recordingEndMonotonicSeconds == null) {
             return new AndroidSignalDiagnostics(null, null, null);
         }
         return new AndroidSignalDiagnostics(
-                flowValidation(recording.samples),
+                flowValidation(samples),
                 clockSkew(recording),
                 packetCoalescing(metrics)
         );

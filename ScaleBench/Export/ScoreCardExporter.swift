@@ -142,16 +142,20 @@ private struct ShareableScoreCard: View {
                     valuePill(title: "Analysed", value: metrics.idleAnalysedSampleCount.map { "\($0) frames" } ?? "—")
                 } else {
                     valuePill(title: "Delivered", value: deliveredPacketsText)
+                    valuePill(title: recording.source == .usbSerial ? "Received" : "Rate", value: formatRate(scorecardDisplayedRate(recording: recording, metrics: metrics)))
                     valuePill(title: "Usable", value: usableReadingsText)
-                    valuePill(title: "Checks", value: packetChecksText)
                 }
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+                if recording.source == .usbSerial {
+                    metricTile(title: "Device cadence", value: formatRate(usbDeviceCadenceHz(recording)))
+                } else {
+                    metricTile(title: recording.mode == .idleStability ? "Effective rate" : "Checks", value: recording.mode == .idleStability ? formatRate(metrics.effectiveSampleRateHz) : packetChecksText)
+                }
                 metricTile(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
-                metricTile(title: "Long gaps", value: "\(metrics.longGapCount)")
                 metricTile(title: "p95 interval", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
-                metricTile(title: "Rejected", value: "\(metrics.rejectedPacketCount)")
+                metricTile(title: "Long gaps", value: "\(metrics.longGapCount)")
             }
 
             if !recording.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -350,4 +354,23 @@ private func formatPercent(_ value: Double?) -> String {
 
 private func formatMultiplier(_ value: Double) -> String {
     String(format: "%.3f", value)
+}
+
+private func scorecardDisplayedRate(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> Double? {
+    recording.source == .usbSerial ? usbReceivedSampleRateHz(recording) : metrics.effectiveSampleRateHz
+}
+
+private func usbDeviceCadenceHz(_ recording: ScaleRecording) -> Double? {
+    guard recording.source == .usbSerial else { return nil }
+    let values = recording.samples.compactMap { $0.usbSerial?.hx711Hz }.filter { $0.isFinite && $0 > 0 }
+    guard !values.isEmpty else { return nil }
+    return values.reduce(0, +) / Double(values.count)
+}
+
+private func usbReceivedSampleRateHz(_ recording: ScaleRecording) -> Double? {
+    guard recording.source == .usbSerial,
+          let first = recording.samples.first?.monotonicSeconds,
+          let last = recording.samples.last?.monotonicSeconds,
+          last > first else { return nil }
+    return Double(recording.samples.count) / (last - first)
 }

@@ -74,6 +74,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,7 +94,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import no.nordicsemi.android.dfu.DfuProgressListenerAdapter
 import no.nordicsemi.android.dfu.DfuServiceInitiator
@@ -166,6 +170,7 @@ internal fun ScaleBenchTheme(content: @Composable () -> Unit) {
 @Composable
 internal fun ScaleBenchApp(
     bluetooth: BluetoothScaleManager,
+    usbSerial: AndroidUSBSerialManager,
     savedRecordingStore: SavedRecordingStore,
     renderTick: Int,
     onSave: (String) -> RecordingSaveResult,
@@ -173,8 +178,10 @@ internal fun ScaleBenchApp(
     onImportRecording: () -> Unit,
     onDeleteSaved: (SavedRecordingSummary) -> Unit,
     onExport: (String) -> Unit,
+    onExportRecording: (ScaleRecording) -> Unit,
     onExportSaved: (SavedRecordingSummary) -> Unit,
     onShareScorecard: (String) -> Unit,
+    onShareRecordingScorecard: (ScaleRecording) -> Unit,
     onShareSavedScorecard: (SavedRecordingSummary) -> Unit,
     deviceUtilityState: DeviceUtilityState,
     onChooseFirmware: () -> Unit,
@@ -198,25 +205,80 @@ internal fun ScaleBenchApp(
     var recordingSaveSucceeded by rememberSaveable { mutableStateOf(false) }
     var recordingSaveRetryable by rememberSaveable { mutableStateOf(false) }
     var showHelp by rememberSaveable { mutableStateOf(false) }
+    var completedResultRecording by remember { mutableStateOf<ScaleRecording?>(null) }
+    var selectedSavedSummary by remember { mutableStateOf<SavedRecordingSummary?>(null) }
     var selectedSavedDetails by remember { mutableStateOf<SavedRecordingDetails?>(null) }
+    val saveScope = rememberCoroutineScope()
     val isConnected = bluetooth.isConnected
     val connectedScaleAddress = bluetooth.connectedDevice()?.address?.takeIf { isConnected }
-    val completionKey = if (!bluetooth.isRecording) {
-        bluetooth.currentRecording().recordingEndMonotonicSeconds?.let {
-            "${bluetooth.currentRecording().id}:$it"
-        }
-    } else {
-        null
-    }
+    val usbCompletionKey = usbSerial.completedRecording?.id
+    val bluetoothCompletionKey = bluetooth.completedRecordingId()
 
-    LaunchedEffect(completionKey) {
-        if (completionKey != null && completionKey != handledCompletionKey) {
-            handledCompletionKey = completionKey
-            val result = onSave(recordingNotes)
+    suspend fun saveCompletedRecording(recording: ScaleRecording): RecordingSaveResult =
+        withContext(Dispatchers.IO) {
+            try {
+                if (recording.samples.isEmpty() && recording.rawPackets.isEmpty()) {
+                    RecordingSaveResult(
+                        saved = false,
+                        retryable = false,
+                        message = "No saved shot was created because no packets were captured."
+                    )
+                } else {
+                    savedRecordingStore.save(recording, recordingNotes, null, false)
+                    RecordingSaveResult(
+                        saved = true,
+                        retryable = false,
+                        message = "Saved automatically. Detailed charts and packet analysis are ready in Saved shots."
+                    )
+                }
+            } catch (error: Exception) {
+                RecordingSaveResult(
+                    saved = false,
+                    retryable = true,
+                    message = "Automatic save failed: ${error.message ?: "The recording file could not be written."}"
+                )
+            }
+        }
+
+    LaunchedEffect(bluetoothCompletionKey) {
+        if (bluetoothCompletionKey != null && bluetoothCompletionKey != handledCompletionKey) {
+            handledCompletionKey = bluetoothCompletionKey
+            val completed = bluetooth.takeCompletedRecording() ?: return@LaunchedEffect
+            completedResultRecording = completed
+            recordingSaveMessage = "Saving automatically. Detailed charts and packet analysis will be ready in Saved shots."
+            recordingSaveSucceeded = true
+            recordingSaveRetryable = false
+            showRecordingResults = true
+            val result = saveCompletedRecording(completed)
             recordingSaveMessage = result.message
             recordingSaveSucceeded = result.saved
             recordingSaveRetryable = result.retryable
+        }
+    }
+    LaunchedEffect(usbCompletionKey) {
+        val completed = usbSerial.takeCompletedRecording()
+        if (completed != null) {
+            completedResultRecording = completed
+            recordingSaveMessage = "Saving automatically. Detailed charts and packet analysis will be ready in Saved shots."
+            recordingSaveSucceeded = true
+            recordingSaveRetryable = false
             showRecordingResults = true
+            val result = saveCompletedRecording(completed)
+            recordingSaveMessage = result.message
+            recordingSaveSucceeded = result.saved
+            recordingSaveRetryable = result.retryable
+        }
+    }
+    LaunchedEffect(selectedSavedSummary?.id) {
+        val summary = selectedSavedSummary
+        selectedSavedDetails = null
+        if (summary != null) {
+            val details = withContext(Dispatchers.Default) {
+                readSavedRecordingDetails(savedRecordingStore, summary)
+            }
+            if (selectedSavedSummary?.id == summary.id) {
+                selectedSavedDetails = details
+            }
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -289,9 +351,17 @@ internal fun ScaleBenchApp(
             }
 
             item {
+                WiredUSBSection(
+                    usbSerial = usbSerial,
+                    selectedMode = selectedMode,
+                    recordingNotes = recordingNotes
+                )
+            }
+
+            item {
                 RecordingSection(
                     bluetooth = bluetooth,
-                    canRecord = isConnected,
+                    canRecord = isConnected && !bluetooth.isFinalizing && !usbSerial.isRecording,
                     selectedMode = selectedMode,
                     onModeChanged = { selectedModeName = it.name },
                     recordingNotes = recordingNotes,
@@ -317,6 +387,8 @@ internal fun ScaleBenchApp(
             }
 
             if (!bluetooth.isRecording &&
+                !showRecordingResults &&
+                selectedSavedSummary == null &&
                 (bluetooth.currentRecording().samples.size >= 2 || bluetooth.currentRecording().rawPackets.size >= 2)
             ) {
                 item {
@@ -338,7 +410,7 @@ internal fun ScaleBenchApp(
                     onImportRecording = onImportRecording,
                     onDeleteSaved = onDeleteSaved,
                     onOpenSaved = { saved ->
-                        selectedSavedDetails = readSavedRecordingDetails(savedRecordingStore, saved)
+                        selectedSavedSummary = saved
                     }
                 )
             }
@@ -358,7 +430,7 @@ internal fun ScaleBenchApp(
             }
         }
 
-        if (bluetooth.isRecording) {
+        if (bluetooth.isRecording || bluetooth.isFinalizing) {
             RecordingTimerDialog(
                 bluetooth = bluetooth,
                 onStop = {
@@ -367,36 +439,90 @@ internal fun ScaleBenchApp(
             )
         }
 
-        if (showRecordingResults && !bluetooth.isRecording) {
-            RecordingResultsDialog(
-                recording = bluetooth.currentRecording(),
-                metrics = bluetooth.currentMetrics(),
-                saveMessage = recordingSaveMessage,
-                saveSucceeded = recordingSaveSucceeded,
-                canRetrySave = recordingSaveRetryable,
-                onDismiss = { showRecordingResults = false },
-                onRetrySave = {
-                    val result = onSave(recordingNotes)
-                    recordingSaveMessage = result.message
-                    recordingSaveSucceeded = result.saved
-                    recordingSaveRetryable = result.retryable
-                },
-                onExport = { onExport(recordingNotes) },
-                onShareScorecard = { onShareScorecard(recordingNotes) }
+        if (usbSerial.isRecording || usbSerial.isFinalizing) {
+            USBRecordingTimerDialog(
+                usbSerial = usbSerial,
+                onStop = {
+                    usbSerial.stopRecording()
+                }
             )
         }
 
-        if (selectedSavedDetails != null) {
+        if (showRecordingResults && !bluetooth.isRecording && !bluetooth.isFinalizing && !usbSerial.isRecording && !usbSerial.isFinalizing) {
+            val resultRecording = completedResultRecording ?: bluetooth.currentRecording()
+            RecordingResultsDialog(
+                recording = resultRecording,
+                metrics = resultRecording.metrics,
+                saveMessage = recordingSaveMessage,
+                saveSucceeded = recordingSaveSucceeded,
+                canRetrySave = recordingSaveRetryable,
+                onDismiss = {
+                    showRecordingResults = false
+                    completedResultRecording = null
+                },
+                onRetrySave = {
+                    recordingSaveMessage = "Saving automatically. Detailed charts and packet analysis will be ready in Saved shots."
+                    recordingSaveSucceeded = true
+                    recordingSaveRetryable = false
+                    saveScope.launch {
+                        val result = saveCompletedRecording(resultRecording)
+                        recordingSaveMessage = result.message
+                        recordingSaveSucceeded = result.saved
+                        recordingSaveRetryable = result.retryable
+                    }
+                },
+                onExport = {
+                    if (resultRecording.source == RecordingSource.USB_SERIAL) {
+                        onExportRecording(resultRecording)
+                    } else {
+                        onExport(recordingNotes)
+                    }
+                },
+                onShareScorecard = {
+                    if (resultRecording.source == RecordingSource.USB_SERIAL) {
+                        onShareRecordingScorecard(resultRecording)
+                    } else {
+                        onShareScorecard(recordingNotes)
+                    }
+                }
+            )
+        }
+
+        val savedDetails = selectedSavedDetails
+        if (savedDetails != null) {
             SavedRecordingDetailsDialog(
-                details = selectedSavedDetails!!,
-                onExport = { onExportSaved(selectedSavedDetails!!.summary) },
-                onShareScorecard = { onShareSavedScorecard(selectedSavedDetails!!.summary) },
+                details = savedDetails,
+                onExport = { onExportSaved(savedDetails.summary) },
+                onShareScorecard = { onShareSavedScorecard(savedDetails.summary) },
                 onDelete = {
-                    val summary = selectedSavedDetails!!.summary
+                    val summary = savedDetails.summary
+                    selectedSavedSummary = null
                     selectedSavedDetails = null
                     onDeleteSaved(summary)
                 },
-                onDismiss = { selectedSavedDetails = null }
+                onDismiss = {
+                    selectedSavedSummary = null
+                    selectedSavedDetails = null
+                }
+            )
+        } else if (selectedSavedSummary != null) {
+            AlertDialog(
+                onDismissRequest = { selectedSavedSummary = null },
+                title = { Text(selectedSavedSummary?.title ?: "Recording") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text(
+                            "Preparing charts and packet inspector...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { selectedSavedSummary = null }) {
+                        Text("Cancel")
+                    }
+                }
             )
         }
 
@@ -654,6 +780,106 @@ internal fun BluetoothSection(
             ) {
                 Text(if (bluetooth.isScanning) "Stop" else "Scan")
             }
+        }
+    }
+}
+
+@Composable
+internal fun WiredUSBSection(
+    usbSerial: AndroidUSBSerialManager,
+    selectedMode: RecordingMode,
+    recordingNotes: String
+) {
+    SectionCard("Wired") {
+        val selected = usbSerial.devices.firstOrNull { it.deviceName == usbSerial.selectedDeviceName }
+        val statusIsShownAsSubtitle = selected == null
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("USB scales", fontWeight = FontWeight.SemiBold)
+                Text(
+                    selected?.let { "${it.label} · ${it.details}" } ?: usbSerial.status,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            OutlinedButton(
+                onClick = usbSerial::refreshDevices,
+                enabled = !usbSerial.isRecording
+            ) {
+                Text("Refresh")
+            }
+        }
+
+        if (usbSerial.devices.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                usbSerial.devices.forEach { device ->
+                    val selectedDevice = device.deviceName == usbSerial.selectedDeviceName
+                    val access = if (device.hasPermission) "access granted" else "needs access"
+                    val serial = if (device.hasSerialEndpoints) "serial" else "unknown"
+                    val label = "${device.label} · $serial · $access"
+                    if (selectedDevice) {
+                        Button(onClick = { usbSerial.selectDevice(device.deviceName) }) {
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    } else {
+                        OutlinedButton(onClick = { usbSerial.selectDevice(device.deviceName) }) {
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!statusIsShownAsSubtitle) {
+            Text(
+                usbSerial.status,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = usbSerial::requestPermission,
+                enabled = !usbSerial.isRecording && usbSerial.selectedDeviceName.isNotBlank()
+            ) {
+                Text("Grant USB")
+            }
+            Button(
+                onClick = {
+                    if (usbSerial.isRecording) {
+                        usbSerial.stopRecording()
+                    } else {
+                        usbSerial.startRecording(selectedMode, recordingNotes)
+                    }
+                },
+                enabled = usbSerial.selectedDeviceName.isNotBlank()
+            ) {
+                Text(if (usbSerial.isRecording) "Stop USB" else "Start USB")
+            }
+        }
+
+        if (usbSerial.isRecording || usbSerial.latestSample != null) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            SwiftMetricRow("Live weight", usbSerial.latestSample?.let { String.format(Locale.US, "%.3f g", it.weightGrams) } ?: "--")
+            SwiftMetricRow("Device cadence", usbSerial.latestSample?.usbSerial?.let { String.format(Locale.US, "%.2f Hz", it.hx711Hz) } ?: "--")
+            SwiftMetricRow("Received rate", usbSerial.hostReceiveRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+            SwiftMetricRow("Samples", usbSerial.currentRecording.samples.size.toString())
+            SwiftMetricRow("USB dropped", usbSerial.droppedCount.toString())
+            SwiftMetricRow("Battery", usbSerial.latestSample?.batteryPercent?.let { "$it%" } ?: "Unavailable")
         }
     }
 }
@@ -937,8 +1163,8 @@ internal fun RecordingTimerDialog(
     onStop: () -> Unit
 ) {
     var timerTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(bluetooth.isRecording) {
-        while (bluetooth.isRecording) {
+    LaunchedEffect(bluetooth.isRecording, bluetooth.isFinalizing) {
+        while (bluetooth.isRecording && !bluetooth.isFinalizing) {
             delay(1000)
             timerTick++
         }
@@ -959,7 +1185,18 @@ internal fun RecordingTimerDialog(
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold
                 )
-                Text(recording.mode.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (bluetooth.isFinalizing) bluetooth.status() else recording.mode.displayName,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (bluetooth.isFinalizing) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Analyzing and saving the recording...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
                 SwiftMetricRow("Samples", recording.samples.size.toString())
                 SwiftMetricRow("Packets", recording.rawPackets.size.toString())
@@ -970,8 +1207,63 @@ internal fun RecordingTimerDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onStop) {
-                Text("Stop and View Results")
+            Button(onClick = onStop, enabled = !bluetooth.isFinalizing) {
+                Text(if (bluetooth.isFinalizing) "Finishing..." else "Stop and View Results")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun USBRecordingTimerDialog(
+    usbSerial: AndroidUSBSerialManager,
+    onStop: () -> Unit
+) {
+    var timerTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(usbSerial.isRecording, usbSerial.isFinalizing) {
+        while (usbSerial.isRecording && !usbSerial.isFinalizing) {
+            delay(1000)
+            timerTick++
+        }
+    }
+    timerTick.hashCode()
+
+    val recording = usbSerial.currentRecording
+    val sample = usbSerial.latestSample
+    val elapsedMillis = (System.currentTimeMillis() - recording.startedAtMillis).coerceAtLeast(0)
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("USB Recording") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    formatDuration(elapsedMillis),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(usbSerial.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (usbSerial.isFinalizing) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Text(
+                        "Analyzing and saving the recording...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+                SwiftMetricRow("Samples", recording.samples.size.toString())
+                SwiftMetricRow("Packets", recording.rawPackets.size.toString())
+                SwiftMetricRow("Weight", sample?.weightGrams?.let { String.format(Locale.US, "%.3f g", it) } ?: "--")
+                SwiftMetricRow("Flow", sample?.flowGramsPerSecond?.let { String.format(Locale.US, "%.2f g/s", it) } ?: "--")
+                SwiftMetricRow("Device cadence", sample?.usbSerial?.let { String.format(Locale.US, "%.2f Hz", it.hx711Hz) } ?: "--")
+                SwiftMetricRow("Received rate", usbSerial.hostReceiveRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+                SwiftMetricRow("USB dropped", usbSerial.droppedCount.toString())
+                SwiftMetricRow("Battery", sample?.batteryPercent?.let { "$it%" } ?: "Unavailable")
+            }
+        },
+        confirmButton = {
+            Button(onClick = onStop, enabled = !usbSerial.isFinalizing) {
+                Text(if (usbSerial.isFinalizing) "Finishing..." else "Stop and View Results")
             }
         }
     )
@@ -991,6 +1283,7 @@ internal fun RecordingResultsDialog(
 ) {
     val hasRecordingData = recording.samples.isNotEmpty() || recording.rawPackets.isNotEmpty()
     val canShareScorecard = hasRecordingData && canShareOfficialScorecard(recording.mode, metrics)
+    var showVisualizer by rememberSaveable(recording.id) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.fillMaxWidth(0.96f),
@@ -1022,7 +1315,12 @@ internal fun RecordingResultsDialog(
                         Text("Recording summary", fontWeight = FontWeight.SemiBold)
                         SwiftMetricRow("Samples", recording.samples.size.toString())
                         SwiftMetricRow("Raw packets", recording.rawPackets.size.toString())
-                        SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+	                        if (recording.source == RecordingSource.USB_SERIAL) {
+	                            SwiftMetricRow("Device cadence", usbDeviceCadence(recording))
+	                            SwiftMetricRow("Received rate", usbHostReceiveRate(recording))
+	                        } else {
+                            SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+                        }
                         SwiftMetricRow("Interval p95", metrics.packetIntervalP95Milliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
                         SwiftMetricRow("Max gap", metrics.packetIntervalMaxMilliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
                         SwiftMetricRow("Long gaps", metrics.longGapCount.toString())
@@ -1058,9 +1356,18 @@ internal fun RecordingResultsDialog(
                         }
                     }
                 }
-                if (hasRecordingData) {
+                if (hasRecordingData && showVisualizer) {
                     item {
                         RecordingVisualizer(recording = recording, metrics = metrics)
+                    }
+                } else if (hasRecordingData) {
+                    item {
+                        OutlinedButton(
+                            onClick = { showVisualizer = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Show Charts and Packet Inspector")
+                        }
                     }
                 }
                 item {
@@ -1084,6 +1391,20 @@ internal fun RecordingResultsDialog(
             }
         }
     )
+}
+
+internal fun usbDeviceCadence(recording: ScaleRecording): String {
+    val cadences = recording.samples.mapNotNull { it.usbSerial?.hx711Hz }.filter { it.isFinite() && it > 0 }
+    if (cadences.isEmpty()) return "--"
+    val average = cadences.sum() / cadences.size
+    return String.format(Locale.US, "%.2f Hz", average)
+}
+
+internal fun usbHostReceiveRate(recording: ScaleRecording): String {
+    if (recording.samples.size < 2) return "--"
+    val span = recording.samples.last().monotonicSeconds - recording.samples.first().monotonicSeconds
+    if (span <= 0 || !span.isFinite()) return "--"
+    return String.format(Locale.US, "%.1f Hz", recording.samples.size / span)
 }
 
 @Composable

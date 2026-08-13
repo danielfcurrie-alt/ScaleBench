@@ -20,7 +20,7 @@
     "servedSlots": 800,
     "slotCount": 800,
     "spanSeconds": 40.0,
-    "usableRateHz": 20.0,
+    "usableRateHz": 20.025031,
     "usableSampleCount": 800
   },
   "frameClassification": {

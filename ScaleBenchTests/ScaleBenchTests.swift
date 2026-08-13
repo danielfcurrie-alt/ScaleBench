@@ -2,6 +2,263 @@ import XCTest
 @testable import ScaleBench
 
 final class ScaleBenchTests: XCTestCase {
+    func testWMBPlusUSBSerialValidSampleParses() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let receivedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,123456,9821,18.423,1.731,0x0041,98,75,79.82,0",
+            hostReceivedAt: receivedAt,
+            hostMonotonicSeconds: 42
+        )
+
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+        XCTAssertEqual(row.firmwareMillis, 123_456)
+        XCTAssertEqual(row.sequenceNumber, 9_821)
+        XCTAssertEqual(row.weightGrams, 18.423, accuracy: 0.000_001)
+        XCTAssertEqual(row.flowGramsPerSecond, 1.731, accuracy: 0.000_001)
+        XCTAssertEqual(row.firmwareQuality, 98)
+        XCTAssertEqual(row.batteryPercent, 75)
+        XCTAssertEqual(row.hx711Hz, 79.82, accuracy: 0.000_001)
+        XCTAssertEqual(row.hostReceivedAt, receivedAt)
+        XCTAssertEqual(row.hostMonotonicSeconds, 42)
+        XCTAssertTrue(row.status.contains(.hx711Connected))
+        XCTAssertTrue(row.status.contains(.batteryValid))
+    }
+
+    func testWMBPlusUSBSerialOptionalHeaderIsIgnored() {
+        var parser = WMBPlusUSBSerialParser()
+        XCTAssertEqual(
+            parser.parse(line: WMBPlusUSBSerialParser.header, hostReceivedAt: Date(), hostMonotonicSeconds: 1),
+            .ignored
+        )
+    }
+
+    func testWMBPlusUSBSerialUnknownLineIsIgnored() {
+        var parser = WMBPlusUSBSerialParser()
+        XCTAssertEqual(
+            parser.parse(line: "WMB+ ready", hostReceivedAt: Date(), hostMonotonicSeconds: 1),
+            .ignored
+        )
+    }
+
+    func testWMBPlusUSBSerialMalformedLineIsRejected() {
+        var parser = WMBPlusUSBSerialParser()
+        XCTAssertEqual(
+            parser.parse(line: "WMBP_WEIGHT_V1,1,2", hostReceivedAt: Date(), hostMonotonicSeconds: 1),
+            .rejected(.fieldCount)
+        )
+    }
+
+    func testWMBPlusUSBSerialInvalidNumericFieldIsRejected() {
+        var parser = WMBPlusUSBSerialParser()
+        XCTAssertEqual(
+            parser.parse(
+                line: "WMBP_WEIGHT_V1,1,2,not-a-float,1.0,0x0041,98,75,79.82,0",
+                hostReceivedAt: Date(),
+                hostMonotonicSeconds: 1
+            ),
+            .rejected(.invalidFloat(field: "weight_g"))
+        )
+    }
+
+    func testWMBPlusUSBSerialStatusHexParses() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,1,2,3,4,0x01C5,90,80,79.9,0",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 1
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+        XCTAssertEqual(row.status.rawValue, 0x01C5)
+    }
+
+    func testWMBPlusUSBSerialBatteryUnavailableWithoutValidBit() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,1,2,3,4,0x0001,90,-1,79.9,0",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 1
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+        XCTAssertNil(row.batteryPercent)
+    }
+
+    func testWMBPlusUSBSerialRejectsInvalidAvailableBattery() {
+        var parser = WMBPlusUSBSerialParser()
+        XCTAssertEqual(
+            parser.parse(
+                line: "WMBP_WEIGHT_V1,1,2,3,4,0x0041,90,101,79.9,0",
+                hostReceivedAt: Date(),
+                hostMonotonicSeconds: 1
+            ),
+            .rejected(.invalidRange(field: "battery_pct"))
+        )
+    }
+
+    func testWMBPlusUSBSerialRequiresConnectedHX711ForValidWeight() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,1,2,3,4,0x0040,90,80,79.9,0",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 1
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB row") }
+        XCTAssertFalse(row.isValidWeightSample)
+    }
+
+    func testWMBPlusUSBSerialDroppedDeltaIsDetected() throws {
+        var parser = WMBPlusUSBSerialParser()
+        _ = parser.parse(
+            line: "WMBP_WEIGHT_V1,1,2,3,4,0x0041,90,80,79.9,7",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 1
+        )
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,2,3,3,4,0x0041,90,80,79.9,11",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 2
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+        XCTAssertEqual(row.droppedDelta, 4)
+    }
+
+    func testWMBPlusUSBSerialBumpAndGlitchFlagsDecode() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let result = parser.parse(
+            line: "WMBP_WEIGHT_V1,1,2,3,4,0x000D,90,80,79.9,0",
+            hostReceivedAt: Date(),
+            hostMonotonicSeconds: 1
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+        XCTAssertTrue(row.status.contains(.recentBump))
+        XCTAssertTrue(row.status.contains(.recentGlitch))
+        XCTAssertTrue(row.status.labels.contains("Recent bump"))
+        XCTAssertTrue(row.status.labels.contains("Recent glitch"))
+    }
+
+    func testWMBPlusUSBSerialRequiresExactFieldCount() {
+        var parser = WMBPlusUSBSerialParser()
+        let tooMany = "WMBP_WEIGHT_V1,1,2,3,4,0x0041,90,80,79.9,0,extra"
+        XCTAssertEqual(
+            parser.parse(line: tooMany, hostReceivedAt: Date(), hostMonotonicSeconds: 1),
+            .rejected(.fieldCount)
+        )
+    }
+
+    func testWMBPlusUSBSerialLineBufferHandlesPartialLines() {
+        var buffer = USBSerialLineBuffer()
+        XCTAssertTrue(buffer.append(Data("WMBP_WEIGHT".utf8)).isEmpty)
+        XCTAssertEqual(
+            buffer.append(Data("_V1,1,2,3,4,0x0041,90,80,79.9,0\r\n".utf8)),
+            ["WMBP_WEIGHT_V1,1,2,3,4,0x0041,90,80,79.9,0"]
+        )
+    }
+
+    func testWMBPlusUSBSerialScoringUsesDeviceCadenceAndDroppedFrames() throws {
+        var parser = WMBPlusUSBSerialParser()
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.source = .usbSerial
+        recording.protocolName = WMBPlusUSBSerialRow.protocolName
+        recording.serialBaud = WMBPlusUSBSerialRow.baud
+        recording.recordingStartMonotonicSeconds = 100
+        recording.recordingEndMonotonicSeconds = 120.05
+        recording.protocolCapabilities = ProtocolScoringCapabilities(
+            hasChecksum: false,
+            hasSequence: true,
+            sequenceModulus: UInt64(UInt32.max) + 1,
+            hasDeviceClock: true,
+            deviceClockSemantics: .freeRunning,
+            deviceClockModulus: UInt64(UInt32.max) + 1
+        )
+
+        for index in 0...400 {
+            let sequence = index < 200 ? index : index + 10
+            let dropped = index < 200 ? 0 : 10
+            let line = "WMBP_WEIGHT_V1,\(index * 50),\(sequence),\(Double(index) * 0.02),0.4,0x0041,98,75,80.0,\(dropped)"
+            let result = parser.parse(
+                line: line,
+                hostReceivedAt: Date(timeIntervalSince1970: Double(index) / 1_000),
+                hostMonotonicSeconds: 100 + Double(index) / 1_000
+            )
+            guard case let .sample(row) = result else { return XCTFail("Expected row \(index)") }
+            let sample = row.sample
+            recording.samples.append(sample)
+            recording.rawPackets.append(RawScalePacket(
+                arrivalTime: row.hostReceivedAt,
+                monotonicSeconds: row.hostMonotonicSeconds,
+                scaleKind: .weighMyBruPlus,
+                characteristicUUID: "USB-SERIAL-115200",
+                role: .weight,
+                bytesHex: Data(line.utf8).hexString,
+                rejectionReason: nil,
+                weightGrams: row.weightGrams,
+                deviceTimestampMilliseconds: row.firmwareMillis,
+                fields: row.fields,
+                usbSerial: row.metadata
+            ))
+        }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+        XCTAssertEqual(try XCTUnwrap(metrics.effectiveSampleRateHz), 20, accuracy: 0.1)
+        XCTAssertEqual(metrics.missingSequenceCount, 10)
+        XCTAssertEqual(try XCTUnwrap(metrics.delivery?.purity), 401.0 / 411.0, accuracy: 0.000_001)
+        XCTAssertLessThan(try XCTUnwrap(metrics.transportScore), 100)
+    }
+
+    func testWMBPlusUSBSerialSharedExportRoundTrip() throws {
+        var parser = WMBPlusUSBSerialParser()
+        let receivedAt = Date(timeIntervalSince1970: 1_700_000_000.125)
+        let line = "WMBP_WEIGHT_V1,4294967290,4294967291,18.423,1.731,0x004D,98,75,79.82,4"
+        let result = parser.parse(
+            line: line,
+            hostReceivedAt: receivedAt,
+            hostMonotonicSeconds: 42
+        )
+        guard case let .sample(row) = result else { return XCTFail("Expected a parsed USB sample") }
+
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.source = .usbSerial
+        recording.protocolName = WMBPlusUSBSerialRow.protocolName
+        recording.serialBaud = WMBPlusUSBSerialRow.baud
+        recording.device = ScaleDeviceIdentity(
+            name: "WMB+ USB",
+            identifier: "/dev/cu.usbmodem-test",
+            kind: .weighMyBruPlus,
+            advertisedServices: []
+        )
+        recording.samples = [row.sample]
+        recording.rawPackets = [RawScalePacket(
+            arrivalTime: receivedAt,
+            monotonicSeconds: 42,
+            scaleKind: .weighMyBruPlus,
+            characteristicUUID: "USB-SERIAL-115200",
+            role: .weight,
+            bytesHex: Data(line.utf8).hexString,
+            weightGrams: row.weightGrams,
+            deviceTimestampMilliseconds: row.firmwareMillis,
+            fields: row.fields,
+            usbSerial: row.metadata
+        )]
+
+        let data = try SharedRecordingCodec.exportData(from: recording, recalculateMetrics: false)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["source"] as? String, "usbSerial")
+        XCTAssertEqual(object["protocol"] as? String, WMBPlusUSBSerialRow.protocolName)
+        XCTAssertEqual(object["serialBaud"] as? Int, 115_200)
+        let samples = try XCTUnwrap(object["samples"] as? [[String: Any]])
+        XCTAssertEqual(samples.first?["firmwareMillis"] as? UInt32, row.firmwareMillis)
+        XCTAssertEqual(samples.first?["sequenceNumber"] as? UInt32, row.sequenceNumber)
+        XCTAssertEqual(samples.first?["usbStatusRaw"] as? UInt16, row.status.rawValue)
+        XCTAssertEqual(samples.first?["usbDroppedCumulative"] as? UInt32, 4)
+
+        let decoded = try SharedRecordingCodec.decodeRecording(from: data)
+        XCTAssertEqual(decoded.source, .usbSerial)
+        XCTAssertEqual(decoded.protocolName, WMBPlusUSBSerialRow.protocolName)
+        XCTAssertEqual(decoded.serialBaud, 115_200)
+        XCTAssertEqual(decoded.samples.first?.usbSerial, row.metadata)
+        XCTAssertEqual(decoded.rawPackets.first?.usbSerial, row.metadata)
+    }
+
     func testWMBPlusCapabilitiesParse() {
         let data = Data([0x03, 0x0C, 0x01, 0x10, 0x01, 0x00, 0xFF, 0x7F, 0x00, 0x00, 0x07, 0x00, 0x01, 0x14, 0x00, 0x8D])
         let capabilities = WeighMyBruParser.parseCapabilities(data)
@@ -517,6 +774,47 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertTrue(analysis.packetTimeline.entries.contains { $0.severity == .penalty })
         XCTAssertEqual(analysis.problemWindows.first?.category, .gap)
         XCTAssertEqual(analysis.deductionBreakdown.first?.category, .gap)
+    }
+
+    func testLegacyWMBPlusDualTransportUsesTwentyByteStreamOnly() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.device = ScaleDeviceIdentity(name: "Legacy WMB+", identifier: "legacy", kind: .weighMyBru, advertisedServices: [])
+        recording.recordingStartMonotonicSeconds = 0
+        recording.recordingEndMonotonicSeconds = 30
+
+        for index in 0..<300 {
+            let baseTime = Double(index) / 10.0
+            let weight = Double(index) / 100.0
+            let twentyByteSample = makeSample(seconds: baseTime, weight: weight)
+            let floatSample = makeSample(seconds: baseTime + 0.002, weight: weight)
+            recording.samples.append(twentyByteSample)
+            recording.samples.append(floatSample)
+            recording.rawPackets.append(RawScalePacket(
+                arrivalTime: twentyByteSample.arrivalTime,
+                monotonicSeconds: twentyByteSample.monotonicSeconds,
+                scaleKind: .weighMyBru,
+                characteristicUUID: WeighMyBruParser.weight20UUID,
+                role: .weight,
+                bytesHex: "",
+                weightGrams: weight
+            ))
+            recording.rawPackets.append(RawScalePacket(
+                arrivalTime: floatSample.arrivalTime,
+                monotonicSeconds: floatSample.monotonicSeconds,
+                scaleKind: .weighMyBru,
+                characteristicUUID: WeighMyBruParser.float32UUID,
+                role: .weight,
+                bytesHex: "",
+                weightGrams: weight
+            ))
+        }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+        let analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
+
+        XCTAssertEqual(metrics.usableSampleCount, 300)
+        XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 10, accuracy: 0.01)
+        XCTAssertEqual(analysis.weightPoints.count, 300)
     }
 
     func testChartAnalysisUsesRecordingStartForEverySeries() {
@@ -1258,6 +1556,8 @@ private struct VectorEntry: Decodable {
 private struct VectorInput: Decodable {
     let vectorId: String
     let mode: RecordingMode
+    let source: RecordingSource?
+    let deviceKind: ScaleKind?
     let frames: [VectorFrame]
     let events: [VectorEvent]
     let protocolCapabilities: VectorProtocolCapabilities?
@@ -1266,7 +1566,12 @@ private struct VectorInput: Decodable {
 
     func recording() -> ScaleRecording {
         var recording = ScaleRecording.empty(mode: mode)
-        recording.device = ScaleDeviceIdentity(name: "Vector", identifier: UUID().uuidString, kind: .weighMyBru, advertisedServices: [])
+        let recordingSource = source ?? .bluetooth
+        let scaleKind = deviceKind ?? (recordingSource == .usbSerial ? .weighMyBruPlus : .weighMyBru)
+        recording.source = recordingSource
+        recording.protocolName = recordingSource == .usbSerial ? WMBPlusUSBSerialRow.protocolName : nil
+        recording.serialBaud = recordingSource == .usbSerial ? WMBPlusUSBSerialRow.baud : nil
+        recording.device = ScaleDeviceIdentity(name: "Vector", identifier: UUID().uuidString, kind: scaleKind, advertisedServices: [])
         recording.recordingStartMonotonicSeconds = recordingStartMonotonicSeconds
         recording.recordingEndMonotonicSeconds = recordingEndMonotonicSeconds
         recording.protocolCapabilities = protocolCapabilities?.native
@@ -1275,14 +1580,16 @@ private struct VectorInput: Decodable {
             RawScalePacket(
                 arrivalTime: Date(timeIntervalSince1970: frame.monotonicSeconds),
                 monotonicSeconds: frame.monotonicSeconds,
-                scaleKind: .weighMyBru,
+                scaleKind: scaleKind,
                 characteristicUUID: "VECTOR",
                 role: frame.packetRole,
                 bytesHex: "",
                 rejectionReason: frame.parseFailed == true ? .invalidChecksum : nil,
                 weightGrams: frame.weightGrams,
-                sequence: frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
-                deviceTimestampMilliseconds: frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:))
+                sequence: recordingSource == .usbSerial ? nil : frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
+                deviceTimestampMilliseconds: frame.firmwareMillis
+                    ?? frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
+                usbSerial: frame.usbMetadata(source: recordingSource)
             )
         }
         recording.samples = frames.compactMap { frame in
@@ -1290,16 +1597,18 @@ private struct VectorInput: Decodable {
             return ScaleSample(
                 arrivalTime: Date(timeIntervalSince1970: frame.monotonicSeconds),
                 monotonicSeconds: frame.monotonicSeconds,
-                scaleKind: .weighMyBru,
+                scaleKind: scaleKind,
                 weightGrams: weight,
-                deviceTimestampMilliseconds: frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
-                sequence: frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
+                deviceTimestampMilliseconds: frame.firmwareMillis
+                    ?? frame.deviceTimestampMs.map(UInt32.init(truncatingIfNeeded:)),
+                sequence: recordingSource == .usbSerial ? nil : frame.sequence.map(UInt8.init(truncatingIfNeeded:)),
                 batteryPercent: nil,
                 flowGramsPerSecond: nil,
                 firmwareQualityScore: nil,
                 detectedSampleRateHz: nil,
                 statusFlags: nil,
-                diagnosticFlags: nil
+                diagnosticFlags: nil,
+                usbSerial: frame.usbMetadata(source: recordingSource)
             )
         }
         return recording
@@ -1313,6 +1622,25 @@ private struct VectorFrame: Decodable {
     let parseFailed: Bool?
     let sequence: UInt64?
     let deviceTimestampMs: UInt64?
+    let firmwareMillis: UInt32?
+    let sequenceNumber: UInt32?
+    let usbDroppedCumulative: UInt32?
+    let usbDroppedDelta: UInt32?
+
+    func usbMetadata(source: RecordingSource) -> USBSerialSampleMetadata? {
+        guard source == .usbSerial, let firmwareMillis, let sequenceNumber else { return nil }
+        return USBSerialSampleMetadata(
+            firmwareMillis: firmwareMillis,
+            sequenceNumber: sequenceNumber,
+            usbStatusRaw: 0x0001,
+            usbStatusLabels: ["HX711 connected"],
+            firmwareQuality: 100,
+            hx711Hz: 20,
+            usbDroppedCumulative: usbDroppedCumulative ?? 0,
+            usbDroppedDelta: usbDroppedDelta ?? 0,
+            hostReceivedAt: Date(timeIntervalSince1970: monotonicSeconds)
+        )
+    }
 
     var packetRole: PacketRole {
         switch kind {

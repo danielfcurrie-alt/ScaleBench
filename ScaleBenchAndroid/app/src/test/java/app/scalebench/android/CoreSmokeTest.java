@@ -16,6 +16,7 @@ public final class CoreSmokeTest {
     private static void runAll() {
         testWmbPlusCapabilitiesParse();
         testWmbPlusExtendedPacketParse();
+        testWmbPlusUsbSerialParser();
         testBookooPacketParse();
         testAdditionalParsers();
         testStandardV1RateAnchors();
@@ -24,6 +25,7 @@ public final class CoreSmokeTest {
         testCompoundingErrorsAndRecordingEdges();
         testSampleRecordings();
         testChartAnalysisFindsGapsAndPacketPenalties();
+        testLegacyWmbPlusDualTransportUsesTwentyByteStreamOnly();
         testChartAnalysisUsesRecordingStartForEverySeries();
         testOfficialAnalysisPayload();
         testSharedRecordingFixtures();
@@ -78,6 +80,48 @@ public final class CoreSmokeTest {
         check(sample.detectedSampleRateHz == 12, "sample rate");
         check(sample.diagnosticFlags.extensionPresent, "extension flag");
         check(sample.diagnosticFlags.detected80Sps, "80 SPS flag");
+    }
+
+    private static void testWmbPlusUsbSerialParser() {
+        WMBPlusUSBSerialParser parser = new WMBPlusUSBSerialParser();
+        WMBPlusUSBSerialParser.ParseResult header = parser.parse(
+                WMBPlusUSBSerialParser.HEADER,
+                1_000,
+                1.0
+        );
+        check(header.ignored, "usb header ignored");
+
+        String line = "WMBP_WEIGHT_V1,123456,9821,18.423,1.731,0x0041,98,75,79.82,0";
+        WMBPlusUSBSerialParser.ParseResult result = parser.parse(line, 2_000, 2.0);
+        check(!result.ignored && result.sample != null && result.packet != null, "usb sample parsed");
+        check(result.sample.statusFlags.hx711Connected, "usb hx711 valid");
+        close(result.sample.weightGrams, 18.423, "usb weight");
+        check(result.sample.batteryPercent == 75, "usb battery");
+        check(result.sample.usbSerial.sequenceNumber == 9821L, "usb sequence");
+        check(result.sample.usbSerial.usbStatusLabels.contains("HX711 connected"), "usb status label");
+        check(result.packet.bytesHex.equals(ScaleParsers.hex(line.getBytes(java.nio.charset.StandardCharsets.UTF_8))), "usb raw row encoded as hex");
+        check(new String(ScaleParsers.parseHex(result.packet.bytesHex), java.nio.charset.StandardCharsets.UTF_8).equals(line), "usb raw hex round trip");
+
+        WMBPlusUSBSerialParser.ParseResult dropped = parser.parse(
+                "WMBP_WEIGHT_V1,123506,9822,18.500,1.500,0x0041,98,75,79.82,3",
+                2_050,
+                2.05
+        );
+        check(dropped.sample.usbSerial.usbDroppedDelta == 3L, "usb dropped delta");
+
+        WMBPlusUSBSerialParser.ParseResult noHx711 = parser.parse(
+                "WMBP_WEIGHT_V1,123556,9823,18.500,1.500,0x0040,98,75,79.82,3",
+                2_100,
+                2.1
+        );
+        check(noHx711.sample != null && !noHx711.sample.statusFlags.hx711Connected, "usb hx711 invalid");
+
+        WMBPlusUSBSerialParser.ParseResult invalid = parser.parse(
+                "WMBP_WEIGHT_V1,1,2,not-a-number,1.0,0x0041,98,75,79.82,0",
+                2_150,
+                2.15
+        );
+        check(!invalid.ignored && invalid.sample == null && invalid.rejectionReason != null, "usb invalid numeric rejected");
     }
 
     private static void testBookooPacketParse() {
@@ -297,6 +341,65 @@ public final class CoreSmokeTest {
         check(analysis.packetTimeline.entries.stream().anyMatch(entry -> entry.severity == AndroidPacketSeverity.PENALTY), "chart analysis packet penalty");
         check(analysis.problemWindows.get(0).category == AndroidChartProblemCategory.GAP, "chart analysis problem window");
         check(!analysis.deductionBreakdown.isEmpty(), "chart analysis deductions");
+    }
+
+    private static void testLegacyWmbPlusDualTransportUsesTwentyByteStreamOnly() {
+        ScaleRecording recording = ScaleRecording.empty(RecordingMode.SHOT);
+        recording.device = new ScaleDeviceIdentity();
+        recording.device.name = "Legacy WMB+";
+        recording.device.identifier = "legacy";
+        recording.device.kind = ScaleKind.WEIGH_MY_BRU;
+        recording.recordingStartMonotonicSeconds = 0.0;
+        recording.recordingEndMonotonicSeconds = 30.0;
+
+        for (int i = 0; i < 300; i++) {
+            double baseTime = i / 10.0;
+            double weight = i / 100.0;
+
+            ScaleSample twentyByteSample = new ScaleSample();
+            twentyByteSample.arrivalTimeMillis = Math.round(baseTime * 1000.0);
+            twentyByteSample.monotonicSeconds = baseTime;
+            twentyByteSample.scaleKind = ScaleKind.WEIGH_MY_BRU;
+            twentyByteSample.weightGrams = weight;
+
+            ScaleSample floatSample = new ScaleSample();
+            floatSample.arrivalTimeMillis = Math.round((baseTime + 0.002) * 1000.0);
+            floatSample.monotonicSeconds = baseTime + 0.002;
+            floatSample.scaleKind = ScaleKind.WEIGH_MY_BRU;
+            floatSample.weightGrams = weight;
+
+            recording.samples.add(twentyByteSample);
+            recording.samples.add(floatSample);
+
+            RawScalePacket twentyBytePacket = new RawScalePacket();
+            twentyBytePacket.arrivalTimeMillis = twentyByteSample.arrivalTimeMillis;
+            twentyBytePacket.monotonicSeconds = twentyByteSample.monotonicSeconds;
+            twentyBytePacket.scaleKind = ScaleKind.WEIGH_MY_BRU;
+            twentyBytePacket.characteristicUuid = ScaleParsers.WMB_WEIGHT20_UUID;
+            twentyBytePacket.role = PacketRole.WEIGHT;
+            twentyBytePacket.bytesHex = "";
+            twentyBytePacket.weightGrams = weight;
+            recording.rawPackets.add(twentyBytePacket);
+
+            RawScalePacket floatPacket = new RawScalePacket();
+            floatPacket.arrivalTimeMillis = floatSample.arrivalTimeMillis;
+            floatPacket.monotonicSeconds = floatSample.monotonicSeconds;
+            floatPacket.scaleKind = ScaleKind.WEIGH_MY_BRU;
+            floatPacket.characteristicUuid = ScaleParsers.WMB_FLOAT32_UUID;
+            floatPacket.role = PacketRole.WEIGHT;
+            floatPacket.bytesHex = "";
+            floatPacket.weightGrams = weight;
+            recording.rawPackets.add(floatPacket);
+        }
+
+        ScaleQualityMetrics metrics = ScaleQualityAnalyzer.analyze(recording);
+        AndroidChartAnalysis analysis = ChartAnalysis.create(recording, metrics);
+
+        check(metrics.usableSampleCount == 300, "legacy WMB+ usable count");
+        double expectedUsableRate = 300.0 / 29.9;
+        check(metrics.effectiveSampleRateHz != null
+                && Math.abs(metrics.effectiveSampleRateHz - expectedUsableRate) <= 0.01, "legacy WMB+ effective rate");
+        check(analysis.weightPoints.size() == 300, "legacy WMB+ chart points");
     }
 
     private static void testChartAnalysisUsesRecordingStartForEverySeries() {

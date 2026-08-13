@@ -47,6 +47,8 @@
     "purity": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
     "verificationCoveragePercent": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
     "sampleRateHz": { "type": ["number", "null"] },
+    "deviceCadenceHz": { "type": ["number", "null"], "minimum": 0 },
+    "receivedSampleRateHz": { "type": ["number", "null"], "minimum": 0 },
     "p95IntervalMilliseconds": { "type": ["number", "null"] },
     "maxGapMilliseconds": { "type": ["number", "null"] },
     "longGapCount": { "type": "integer" },

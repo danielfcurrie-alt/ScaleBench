@@ -45,6 +45,17 @@ enum RecordingMode {
     }
 }
 
+enum RecordingSource {
+    BLUETOOTH("bluetooth"),
+    USB_SERIAL("usbSerial");
+
+    final String wireValue;
+
+    RecordingSource(String wireValue) {
+        this.wireValue = wireValue;
+    }
+}
+
 enum DeviceClockSemantics {
     NONE, FREE_RUNNING, SHOT_TIMER
 }
@@ -178,6 +189,18 @@ final class WmbPlusCapabilities {
     }
 }
 
+final class USBSerialSampleMetadata {
+    long firmwareMillis;
+    long sequenceNumber;
+    int usbStatusRaw;
+    final List<String> usbStatusLabels = new ArrayList<>();
+    int firmwareQuality;
+    double hx711Hz;
+    long usbDroppedCumulative;
+    long usbDroppedDelta;
+    long hostReceivedAtMillis;
+}
+
 final class ScaleSample {
     final String id = UUID.randomUUID().toString();
     long arrivalTimeMillis;
@@ -192,6 +215,7 @@ final class ScaleSample {
     Integer detectedSampleRateHz;
     ScaleStatusFlags statusFlags;
     ScaleDiagnosticFlags diagnosticFlags;
+    USBSerialSampleMetadata usbSerial;
 }
 
 final class ScaleBatteryEvent {
@@ -254,6 +278,7 @@ final class RawScalePacket {
     Integer sequence;
     Long deviceTimestampMilliseconds;
     final List<PacketFieldAnnotation> fields = new ArrayList<>();
+    USBSerialSampleMetadata usbSerial;
 }
 
 final class ScoringValidity {
@@ -448,6 +473,9 @@ final class ScaleRecording {
     String appBuild = "unknown";
     String platform = "android";
     String scoringModelVersion = SCORING_MODEL_VERSION;
+    RecordingSource source = RecordingSource.BLUETOOTH;
+    String protocolName;
+    Integer serialBaud;
     String title;
     RecordingMode mode;
     ScaleDeviceIdentity device;
@@ -475,13 +503,17 @@ final class ScaleRecording {
 
     String defaultTitle() {
         if (title != null && !title.trim().isEmpty()) return title.trim();
-        String protocol = device != null ? device.kind.displayName
+        String protocol = protocolName != null && !protocolName.trim().isEmpty()
+                ? protocolName.trim()
+                : device != null ? device.kind.displayName
                 : samples.isEmpty() ? "Unknown Scale" : samples.get(samples.size() - 1).scaleKind.displayName;
         return String.format(Locale.US, "%s - %s", protocol, mode.displayName);
     }
 }
 
 final class SavedRecordingSummary {
+    int summarySchemaVersion;
+    String scoringModelVersion;
     String id;
     long savedAtMillis;
     String title;

@@ -30,6 +30,9 @@ enum ScaleQualityAnalyzer {
         var weightGrams: Double?
         var sequence: UInt64?
         var deviceTimestampMilliseconds: UInt64?
+        var diagnosticFlags: ScaleDiagnosticFlags?
+        var usbDroppedDelta: UInt64
+        var usbStatusLabels: [String]
     }
 
     private struct ClassifiedFrames {
@@ -76,6 +79,7 @@ enum ScaleQualityAnalyzer {
             mode: recording.mode,
             capabilities: protocolCapabilities
         )
+        let usbDroppedFrameCount = classified.frames.reduce(UInt64(0)) { $0 + $1.usbDroppedDelta }
         let usableSamples = zip(classified.frames, classified.classes).compactMap { frame, frameClass -> ScaleSample? in
             guard frameClass == .usable, let weight = frame.weightGrams else { return nil }
             return ScaleSample(
@@ -105,7 +109,8 @@ enum ScaleQualityAnalyzer {
             frames: classified.frames,
             classes: classified.classes,
             recordingStart: recordingStart,
-            recordingEnd: recordingEnd
+            recordingEnd: recordingEnd,
+            additionalLostFrameCount: usbDroppedFrameCount
         )
         let frameCounts = frameClassification(classes: classified.classes)
         let relevantFrameCount = classified.frames.count
@@ -131,7 +136,8 @@ enum ScaleQualityAnalyzer {
         let p75 = percentile(sortedIntervals, 0.75)
         let p95 = percentile(sortedIntervals, 0.95)
         let intervalMax = intervals.max()
-        let span = max(0, recordingEnd - recordingStart)
+        let recordingSpan = max(0, recordingEnd - recordingStart)
+        let sampleSpan = usableSamplesSampleSpan(usableSamples)
         let idle = recording.mode == .idleStability
             ? idleStability(samples: usableSamples, recordingStart: recordingStart)
             : nil
@@ -151,12 +157,15 @@ enum ScaleQualityAnalyzer {
             transportScore: isDeliveryMode ? deliveryScore : nil,
             stabilityScore: recording.mode == .idleStability ? idleScore : nil,
             metadataScore: verification.verificationCoveragePercent,
-            effectiveSampleRateHz: span > 0 ? Double(usableSamples.count) / span : nil,
+            effectiveSampleRateHz: sampleSpan > 0 ? Double(usableSamples.count) / sampleSpan : nil,
             packetIntervalP50Milliseconds: rounded6(p50),
             packetIntervalP95Milliseconds: rounded6(p95),
             packetIntervalMaxMilliseconds: rounded6(intervalMax),
             longGapCount: longGapCount,
-            missingSequenceCount: missingSequenceCount(classified.frames),
+            missingSequenceCount: max(
+                missingSequenceCount(classified.frames, modulus: protocolCapabilities.sequenceModulus),
+                Int(clamping: usbDroppedFrameCount)
+            ),
             duplicateOrOutOfOrderTimestampCount: frameCounts.stale,
             rejectedPacketCount: frameCounts.parseFailure,
             idleNoisePeakToPeakGrams: idle?.residualPeakToPeakGrams,
@@ -183,10 +192,10 @@ enum ScaleQualityAnalyzer {
         metrics.relevantWeightFrameCount = relevantFrameCount
         metrics.excludedFrameCount = allFrames.count - relevantFrameCount
         metrics.usableSampleCount = usableSamples.count
-        metrics.recordingSpanSeconds = rounded6(span)
+        metrics.recordingSpanSeconds = rounded6(recordingSpan)
         metrics.recordingBoundaryInferred = !boundariesPresent
-        metrics.frameRateHz = span > 0 ? rounded6(Double(relevantFrameCount) / span) : nil
-        metrics.usableRateHz = span > 0 ? rounded6(Double(usableSamples.count) / span) : nil
+        metrics.frameRateHz = recordingSpan > 0 ? rounded6(Double(relevantFrameCount) / recordingSpan) : nil
+        metrics.usableRateHz = sampleSpan > 0 ? rounded6(Double(usableSamples.count) / sampleSpan) : nil
         metrics.estimatedResolutionGrams = rounded6(classified.resolutionGrams)
         metrics.slotCount = coverage?.slotCount
         metrics.servedSlots = coverage?.servedSlots
@@ -237,30 +246,131 @@ enum ScaleQualityAnalyzer {
     private static func scoringFrames(_ recording: ScaleRecording) -> [ScoringFrame] {
         if !recording.rawPackets.isEmpty {
             let samplesByTimestamp = Dictionary(grouping: recording.samples, by: \.monotonicSeconds)
-            return recording.rawPackets.map { packet in
+            let hasWMBPlus20WeightStream = hasWMBCompatibilityPair(recording)
+            let frames = recording.rawPackets.map { packet in
                 let sample = samplesByTimestamp[packet.monotonicSeconds]?.first
+                let isCompatibilityFloat32 = hasWMBPlus20WeightStream
+                    && isWMBFloat32Packet(packet)
                 return ScoringFrame(
                     packetID: packet.id,
                     monotonicSeconds: packet.monotonicSeconds,
-                    isWeight: packet.role == .weight,
-                    parseFailed: packet.role == .weight && packet.rejectionReason != nil,
+                    isWeight: packet.role == .weight && !isCompatibilityFloat32,
+                    parseFailed: packet.role == .weight && !isCompatibilityFloat32 && packet.rejectionReason != nil,
                     weightGrams: packet.weightGrams ?? sample?.weightGrams,
-                    sequence: (packet.sequence ?? sample?.sequence).map(UInt64.init),
-                    deviceTimestampMilliseconds: (packet.deviceTimestampMilliseconds ?? sample?.deviceTimestampMilliseconds).map(UInt64.init)
+                    sequence: packet.usbSerial.map { UInt64($0.sequenceNumber) }
+                        ?? sample?.usbSerial.map { UInt64($0.sequenceNumber) }
+                        ?? (packet.sequence ?? sample?.sequence).map(UInt64.init),
+                    deviceTimestampMilliseconds: packet.usbSerial.map { UInt64($0.firmwareMillis) }
+                        ?? sample?.usbSerial.map { UInt64($0.firmwareMillis) }
+                        ?? (packet.deviceTimestampMilliseconds ?? sample?.deviceTimestampMilliseconds).map(UInt64.init),
+                    diagnosticFlags: sample?.diagnosticFlags ?? diagnosticFlags(from: packet),
+                    usbDroppedDelta: UInt64(packet.usbSerial?.usbDroppedDelta ?? sample?.usbSerial?.usbDroppedDelta ?? 0),
+                    usbStatusLabels: packet.usbSerial?.usbStatusLabels ?? sample?.usbSerial?.usbStatusLabels ?? []
                 )
             }
+            return recording.source == .usbSerial ? deviceTimedUSBFrames(frames) : frames
         }
-        return recording.samples.map {
+        let samples = canonicalWeightSamples(recording)
+        let frames = samples.map {
             ScoringFrame(
                 packetID: nil,
                 monotonicSeconds: $0.monotonicSeconds,
                 isWeight: true,
                 parseFailed: false,
                 weightGrams: $0.weightGrams,
-                sequence: $0.sequence.map(UInt64.init),
-                deviceTimestampMilliseconds: $0.deviceTimestampMilliseconds.map(UInt64.init)
+                sequence: $0.usbSerial.map { UInt64($0.sequenceNumber) } ?? $0.sequence.map(UInt64.init),
+                deviceTimestampMilliseconds: $0.usbSerial.map { UInt64($0.firmwareMillis) }
+                    ?? $0.deviceTimestampMilliseconds.map(UInt64.init),
+                diagnosticFlags: $0.diagnosticFlags,
+                usbDroppedDelta: UInt64($0.usbSerial?.usbDroppedDelta ?? 0),
+                usbStatusLabels: $0.usbSerial?.usbStatusLabels ?? []
             )
         }
+        return recording.source == .usbSerial ? deviceTimedUSBFrames(frames) : frames
+    }
+
+    private static func deviceTimedUSBFrames(_ frames: [ScoringFrame]) -> [ScoringFrame] {
+        guard let firstIndex = frames.firstIndex(where: { $0.deviceTimestampMilliseconds != nil }),
+              let firstTimestamp = frames[firstIndex].deviceTimestampMilliseconds else {
+            return frames
+        }
+        let modulus = UInt64(UInt32.max) + 1
+        let anchor = frames[firstIndex].monotonicSeconds
+        var previousTimestamp = firstTimestamp
+        var elapsedMilliseconds: UInt64 = 0
+        return frames.enumerated().map { index, input in
+            var frame = input
+            guard index >= firstIndex, let timestamp = input.deviceTimestampMilliseconds else { return frame }
+            if index > firstIndex,
+               let delta = forwardDelta(previous: previousTimestamp, current: timestamp, modulus: modulus) {
+                elapsedMilliseconds &+= delta
+                previousTimestamp = timestamp
+            }
+            frame.monotonicSeconds = anchor + Double(elapsedMilliseconds) / 1_000
+            return frame
+        }
+    }
+
+    static func canonicalWeightSamples(_ recording: ScaleRecording) -> [ScaleSample] {
+        if hasWMBCompatibilityPair(recording) {
+            let samplesByTimestamp = Dictionary(grouping: recording.samples, by: \.monotonicSeconds)
+            let repaired = recording.rawPackets
+                .filter { $0.role == .weight && isWMB20BytePacket($0) }
+                .compactMap { packet -> ScaleSample? in
+                    let sample = samplesByTimestamp[packet.monotonicSeconds]?.first
+                    guard let weight = packet.weightGrams ?? sample?.weightGrams else { return nil }
+                    return ScaleSample(
+                        arrivalTime: packet.arrivalTime,
+                        monotonicSeconds: packet.monotonicSeconds,
+                        scaleKind: sample?.scaleKind ?? packet.scaleKind,
+                        weightGrams: weight,
+                        deviceTimestampMilliseconds: packet.deviceTimestampMilliseconds ?? sample?.deviceTimestampMilliseconds,
+                        sequence: packet.sequence ?? sample?.sequence,
+                        batteryPercent: sample?.batteryPercent,
+                        flowGramsPerSecond: sample?.flowGramsPerSecond,
+                        firmwareQualityScore: sample?.firmwareQualityScore,
+                        detectedSampleRateHz: sample?.detectedSampleRateHz,
+                        statusFlags: sample?.statusFlags,
+                        diagnosticFlags: sample?.diagnosticFlags ?? diagnosticFlags(from: packet),
+                        usbSerial: sample?.usbSerial ?? packet.usbSerial
+                    )
+                }
+            if !repaired.isEmpty {
+                return repaired
+            }
+        }
+        let hasWMBPlusStream = recording.samples.contains { $0.scaleKind == .weighMyBruPlus }
+            || recording.rawPackets.contains {
+                $0.role == .weight
+                    && isWMB20BytePacket($0)
+                    && $0.scaleKind == .weighMyBruPlus
+            }
+        guard hasWMBPlusStream else { return recording.samples }
+        return recording.samples.filter { $0.scaleKind != .weighMyBru }
+    }
+
+    private static func hasWMBCompatibilityPair(_ recording: ScaleRecording) -> Bool {
+        var has20ByteWeight = false
+        var hasFloat32Weight = false
+        for packet in recording.rawPackets where packet.role == .weight {
+            if isWMB20BytePacket(packet) {
+                has20ByteWeight = true
+            } else if isWMBFloat32Packet(packet) {
+                hasFloat32Weight = true
+            }
+            if has20ByteWeight && hasFloat32Weight {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func isWMB20BytePacket(_ packet: RawScalePacket) -> Bool {
+        packet.characteristicUUID.uppercased() == WeighMyBruParser.weight20UUID
+    }
+
+    private static func isWMBFloat32Packet(_ packet: RawScalePacket) -> Bool {
+        packet.characteristicUUID.uppercased() == WeighMyBruParser.float32UUID
     }
 
     private static func inferredProtocolCapabilities(
@@ -277,6 +387,7 @@ enum ScaleQualityAnalyzer {
             }
         }()
         let clockModulus: UInt64? = {
+            if recording.source == .usbSerial { return UInt64(UInt32.max) + 1 }
             switch kind {
             case .bookoo, .bookooMini, .bookooUltra, .weighMyBruPlus: return 1 << 24
             case .difluid, .difluidTi: return 1 << 32
@@ -296,7 +407,9 @@ enum ScaleQualityAnalyzer {
         return ProtocolScoringCapabilities(
             hasChecksum: hasChecksum,
             hasSequence: hasSequence,
-            sequenceModulus: hasSequence ? 256 : nil,
+            sequenceModulus: hasSequence
+                ? (recording.source == .usbSerial ? UInt64(UInt32.max) + 1 : 256)
+                : nil,
             hasDeviceClock: hasClock,
             deviceClockSemantics: semantics,
             deviceClockModulus: clockModulus
@@ -348,6 +461,27 @@ enum ScaleQualityAnalyzer {
                 addEvidence("Unreadable packet: parser rejected this weight frame.", frame: frame, into: &evidenceByPacketID)
                 continue
             }
+            if frame.usbDroppedDelta > 0 {
+                addEvidence(
+                    "USB backpressure: device reported \(frame.usbDroppedDelta) skipped frame\(frame.usbDroppedDelta == 1 ? "" : "s") before this sample.",
+                    frame: frame,
+                    into: &evidenceByPacketID
+                )
+            }
+            if frame.usbStatusLabels.contains("Recent bump") {
+                addEvidence(
+                    "Firmware diagnostic: recent bump. The sample remains usable unless its weight is independently implausible.",
+                    frame: frame,
+                    into: &evidenceByPacketID
+                )
+            }
+            if frame.usbStatusLabels.contains("Recent glitch") {
+                addEvidence(
+                    "Firmware diagnostic: recent glitch. The sample remains usable unless another check rejects it.",
+                    frame: frame,
+                    into: &evidenceByPacketID
+                )
+            }
             if let sequence = frame.sequence, let sequenceHighWater,
                forwardDelta(previous: sequenceHighWater, current: sequence, modulus: sequenceModulus) == nil {
                 classes[index] = .outOfOrder
@@ -382,6 +516,7 @@ enum ScaleQualityAnalyzer {
                         frame: frame,
                         into: &evidenceByPacketID
                     )
+                    addFirmwareBumpEvidenceIfPresent(frame: frame, into: &evidenceByPacketID)
                 }
             }
             if checksPhysicalRate, let lastUsableIndex {
@@ -396,6 +531,7 @@ enum ScaleQualityAnalyzer {
                             frame: frame,
                             into: &evidenceByPacketID
                         )
+                        addFirmwareBumpEvidenceIfPresent(frame: frame, into: &evidenceByPacketID)
                     }
                 }
             }
@@ -445,6 +581,28 @@ enum ScaleQualityAnalyzer {
         evidenceByPacketID[packetID, default: []].append(message)
     }
 
+    private static func addFirmwareBumpEvidenceIfPresent(
+        frame: ScoringFrame,
+        into evidenceByPacketID: inout [UUID: [String]]
+    ) {
+        guard frame.diagnosticFlags?.recentBump == true else { return }
+        addEvidence(
+            "Firmware flag: recent bump. The scale also marked this frame as physically disturbed.",
+            frame: frame,
+            into: &evidenceByPacketID
+        )
+    }
+
+    private static func diagnosticFlags(from packet: RawScalePacket) -> ScaleDiagnosticFlags? {
+        guard packet.scaleKind == .weighMyBruPlus,
+              packet.characteristicUUID.uppercased() == WeighMyBruParser.weight20UUID,
+              let bytes = PacketFieldDecoder.bytes(fromHex: packet.bytesHex),
+              bytes.count > 18 else {
+            return nil
+        }
+        return ScaleDiagnosticFlags(byte: bytes[18])
+    }
+
     private static func parseableWeight(_ frame: ScoringFrame) -> Double? {
         guard !frame.parseFailed, let weight = frame.weightGrams, weight.isFinite else { return nil }
         return weight
@@ -470,7 +628,8 @@ enum ScaleQualityAnalyzer {
         frames: [ScoringFrame],
         classes: [FrameClass],
         recordingStart: Double,
-        recordingEnd: Double
+        recordingEnd: Double,
+        additionalLostFrameCount: UInt64 = 0
     ) -> CoverageResult? {
         guard !frames.isEmpty else { return nil }
         let spanMilliseconds = (recordingEnd - recordingStart) * 1000
@@ -494,7 +653,7 @@ enum ScaleQualityAnalyzer {
         let servedCount = served.filter { $0 }.count
         return CoverageResult(
             coverage: Double(servedCount) / Double(slotCount),
-            purity: Double(usableCount) / Double(frames.count),
+            purity: Double(usableCount) / Double(frames.count + Int(clamping: additionalLostFrameCount)),
             slotCount: slotCount,
             servedSlots: servedCount,
             longestUnservedRunMilliseconds: Double(longestRun) * slotMilliseconds
@@ -691,13 +850,13 @@ enum ScaleQualityAnalyzer {
         )
     }
 
-    private static func missingSequenceCount(_ frames: [ScoringFrame]) -> Int {
+    private static func missingSequenceCount(_ frames: [ScoringFrame], modulus: UInt64?) -> Int {
         var count = 0
         var acceptedHighWater: UInt64?
         for frame in frames {
             guard let current = frame.sequence else { continue }
             if let previous = acceptedHighWater {
-                guard let delta = forwardDelta(previous: previous, current: current, modulus: 256) else { continue }
+                guard let delta = forwardDelta(previous: previous, current: current, modulus: modulus) else { continue }
                 if delta > 1 { count += Int(delta - 1) }
             }
             acceptedHighWater = current
@@ -714,6 +873,12 @@ enum ScaleQualityAnalyzer {
             active = hasBump
         }
         return count
+    }
+
+    private static func usableSamplesSampleSpan(_ samples: [ScaleSample]) -> Double {
+        guard let first = samples.first?.monotonicSeconds,
+              let last = samples.last?.monotonicSeconds else { return 0 }
+        return max(0, last - first)
     }
 
     private static func percentile(_ sortedValues: [Double], _ probability: Double) -> Double? {

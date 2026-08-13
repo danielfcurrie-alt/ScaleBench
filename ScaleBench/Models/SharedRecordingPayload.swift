@@ -1,8 +1,14 @@
 import Foundation
 
 enum SharedRecordingCodec {
-    static func exportData(from recording: ScaleRecording) throws -> Data {
-        let payload = SharedRecordingPayload(recording: recording)
+    static func exportData(
+        from recording: ScaleRecording,
+        recalculateMetrics: Bool = true
+    ) throws -> Data {
+        let payload = SharedRecordingPayload(
+            recording: recording,
+            recalculateMetrics: recalculateMetrics
+        )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(payload)
@@ -22,6 +28,9 @@ private struct SharedRecordingPayload: Codable {
     var appBuild: String
     var platform: String
     var scoringModelVersion: String
+    var source: String?
+    var `protocol`: String?
+    var serialBaud: Int?
     var title: String?
     var mode: String
     var startedAtMillis: Int64
@@ -39,10 +48,12 @@ private struct SharedRecordingPayload: Codable {
     var events: [SharedRecordingEventPayload]
     var rawPackets: [SharedRawPacketPayload]
 
-    init(recording: ScaleRecording) {
+    init(recording: ScaleRecording, recalculateMetrics: Bool) {
         var finalized = recording
         finalized.schemaVersion = ScaleRecording.schemaVersion
-        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized, profile: finalized.scoringProfile)
+        if recalculateMetrics {
+            finalized.metrics = ScaleQualityAnalyzer.analyze(finalized, profile: finalized.scoringProfile)
+        }
 
         schemaVersion = finalized.schemaVersion
         id = finalized.id.uuidString
@@ -51,6 +62,9 @@ private struct SharedRecordingPayload: Codable {
         appBuild = finalized.appBuild
         platform = finalized.platform
         scoringModelVersion = finalized.scoringModelVersion
+        source = finalized.source == .usbSerial ? finalized.source.rawValue : nil
+        `protocol` = finalized.source == .usbSerial ? finalized.protocolName : nil
+        serialBaud = finalized.source == .usbSerial ? finalized.serialBaud : nil
         title = finalized.title
         mode = finalized.mode.rawValue
         startedAtMillis = milliseconds(finalized.startedAt)
@@ -94,6 +108,25 @@ private struct SharedRecordingPayload: Codable {
         guard let recordingID = UUID(uuidString: id) else {
             throw sharedRecordingError("Shared recording id must be a valid UUID.")
         }
+        let recordingSource: RecordingSource
+        if let source {
+            guard let parsedSource = RecordingSource(rawValue: source) else {
+                throw sharedRecordingError("Unknown recording source \(source).")
+            }
+            recordingSource = parsedSource
+        } else {
+            recordingSource = .bluetooth
+        }
+        if recordingSource == .usbSerial {
+            guard `protocol` == WMBPlusUSBSerialRow.protocolName else {
+                throw sharedRecordingError("USB recording protocol must be \(WMBPlusUSBSerialRow.protocolName).")
+            }
+            guard serialBaud == WMBPlusUSBSerialRow.baud else {
+                throw sharedRecordingError("WMB+ USB Serial recordings must use 115200 baud.")
+            }
+        } else if `protocol` != nil || serialBaud != nil {
+            throw sharedRecordingError("Serial metadata requires source usbSerial.")
+        }
         return ScaleRecording(
             id: recordingID,
             schemaVersion: schemaVersion,
@@ -102,6 +135,9 @@ private struct SharedRecordingPayload: Codable {
             appBuild: appBuild,
             platform: platform,
             scoringModelVersion: scoringModelVersion,
+            source: recordingSource,
+            protocolName: `protocol`,
+            serialBaud: serialBaud,
             title: title,
             mode: modeValue,
             device: try device?.device(),
@@ -162,6 +198,15 @@ private struct SharedSamplePayload: Codable {
     var detectedSampleRateHz: Int?
     var statusFlags: ScaleStatusFlags?
     var diagnosticFlags: ScaleDiagnosticFlags?
+    var firmwareMillis: UInt32?
+    var sequenceNumber: UInt32?
+    var usbStatusRaw: UInt16?
+    var usbStatusLabels: [String]?
+    var firmwareQuality: Int?
+    var hx711Hz: Double?
+    var usbDroppedCumulative: UInt32?
+    var usbDroppedDelta: UInt32?
+    var hostReceivedAt: Int64?
 
     init(sample: ScaleSample) {
         arrivalTimeMillis = milliseconds(sample.arrivalTime)
@@ -176,6 +221,15 @@ private struct SharedSamplePayload: Codable {
         detectedSampleRateHz = sample.detectedSampleRateHz
         statusFlags = sample.statusFlags
         diagnosticFlags = sample.diagnosticFlags
+        firmwareMillis = sample.usbSerial?.firmwareMillis
+        sequenceNumber = sample.usbSerial?.sequenceNumber
+        usbStatusRaw = sample.usbSerial?.usbStatusRaw
+        usbStatusLabels = sample.usbSerial?.usbStatusLabels
+        firmwareQuality = sample.usbSerial?.firmwareQuality
+        hx711Hz = sample.usbSerial?.hx711Hz
+        usbDroppedCumulative = sample.usbSerial?.usbDroppedCumulative
+        usbDroppedDelta = sample.usbSerial?.usbDroppedDelta
+        hostReceivedAt = sample.usbSerial.map { milliseconds($0.hostReceivedAt) }
     }
 
     func sample() throws -> ScaleSample {
@@ -194,7 +248,34 @@ private struct SharedSamplePayload: Codable {
             firmwareQualityScore: firmwareQualityScore,
             detectedSampleRateHz: detectedSampleRateHz,
             statusFlags: statusFlags,
-            diagnosticFlags: diagnosticFlags
+            diagnosticFlags: diagnosticFlags,
+            usbSerial: try usbMetadata()
+        )
+    }
+
+    private func usbMetadata() throws -> USBSerialSampleMetadata? {
+        let valuesPresent = firmwareMillis != nil || sequenceNumber != nil || usbStatusRaw != nil
+            || usbStatusLabels != nil || firmwareQuality != nil || hx711Hz != nil
+            || usbDroppedCumulative != nil || usbDroppedDelta != nil || hostReceivedAt != nil
+        guard valuesPresent else { return nil }
+        guard let firmwareMillis, let sequenceNumber, let usbStatusRaw, let usbStatusLabels,
+              let firmwareQuality, let hx711Hz, let usbDroppedCumulative, let usbDroppedDelta,
+              let hostReceivedAt else {
+            throw sharedRecordingError("USB sample metadata is incomplete.")
+        }
+        guard (0...100).contains(firmwareQuality), hx711Hz.isFinite, hx711Hz >= 0 else {
+            throw sharedRecordingError("USB sample metadata is invalid.")
+        }
+        return USBSerialSampleMetadata(
+            firmwareMillis: firmwareMillis,
+            sequenceNumber: sequenceNumber,
+            usbStatusRaw: usbStatusRaw,
+            usbStatusLabels: usbStatusLabels,
+            firmwareQuality: firmwareQuality,
+            hx711Hz: hx711Hz,
+            usbDroppedCumulative: usbDroppedCumulative,
+            usbDroppedDelta: usbDroppedDelta,
+            hostReceivedAt: date(hostReceivedAt)
         )
     }
 }
@@ -251,6 +332,15 @@ private struct SharedRawPacketPayload: Codable {
     var sequence: UInt8?
     var deviceTimestampMilliseconds: UInt32?
     var fields: [PacketFieldAnnotation]?
+    var firmwareMillis: UInt32?
+    var sequenceNumber: UInt32?
+    var usbStatusRaw: UInt16?
+    var usbStatusLabels: [String]?
+    var firmwareQuality: Int?
+    var hx711Hz: Double?
+    var usbDroppedCumulative: UInt32?
+    var usbDroppedDelta: UInt32?
+    var hostReceivedAt: Int64?
 
     init(packet: RawScalePacket) {
         arrivalTimeMillis = milliseconds(packet.arrivalTime)
@@ -264,6 +354,15 @@ private struct SharedRawPacketPayload: Codable {
         sequence = packet.sequence
         deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds
         fields = PacketFieldDecoder.annotations(for: packet)
+        firmwareMillis = packet.usbSerial?.firmwareMillis
+        sequenceNumber = packet.usbSerial?.sequenceNumber
+        usbStatusRaw = packet.usbSerial?.usbStatusRaw
+        usbStatusLabels = packet.usbSerial?.usbStatusLabels
+        firmwareQuality = packet.usbSerial?.firmwareQuality
+        hx711Hz = packet.usbSerial?.hx711Hz
+        usbDroppedCumulative = packet.usbSerial?.usbDroppedCumulative
+        usbDroppedDelta = packet.usbSerial?.usbDroppedDelta
+        hostReceivedAt = packet.usbSerial.map { milliseconds($0.hostReceivedAt) }
     }
 
     func packet() throws -> RawScalePacket {
@@ -284,7 +383,34 @@ private struct SharedRawPacketPayload: Codable {
             weightGrams: weightGrams,
             sequence: sequence,
             deviceTimestampMilliseconds: deviceTimestampMilliseconds,
-            fields: fields
+            fields: fields,
+            usbSerial: try usbMetadata()
+        )
+    }
+
+    private func usbMetadata() throws -> USBSerialSampleMetadata? {
+        let valuesPresent = firmwareMillis != nil || sequenceNumber != nil || usbStatusRaw != nil
+            || usbStatusLabels != nil || firmwareQuality != nil || hx711Hz != nil
+            || usbDroppedCumulative != nil || usbDroppedDelta != nil || hostReceivedAt != nil
+        guard valuesPresent else { return nil }
+        guard let firmwareMillis, let sequenceNumber, let usbStatusRaw, let usbStatusLabels,
+              let firmwareQuality, let hx711Hz, let usbDroppedCumulative, let usbDroppedDelta,
+              let hostReceivedAt else {
+            throw sharedRecordingError("USB packet metadata is incomplete.")
+        }
+        guard (0...100).contains(firmwareQuality), hx711Hz.isFinite, hx711Hz >= 0 else {
+            throw sharedRecordingError("USB packet metadata is invalid.")
+        }
+        return USBSerialSampleMetadata(
+            firmwareMillis: firmwareMillis,
+            sequenceNumber: sequenceNumber,
+            usbStatusRaw: usbStatusRaw,
+            usbStatusLabels: usbStatusLabels,
+            firmwareQuality: firmwareQuality,
+            hx711Hz: hx711Hz,
+            usbDroppedCumulative: usbDroppedCumulative,
+            usbDroppedDelta: usbDroppedDelta,
+            hostReceivedAt: date(hostReceivedAt)
         )
     }
 }

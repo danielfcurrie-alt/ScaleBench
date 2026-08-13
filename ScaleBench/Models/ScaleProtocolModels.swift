@@ -104,6 +104,11 @@ enum DeviceClockSemantics: String, Codable {
     case shotTimer
 }
 
+enum RecordingSource: String, Codable {
+    case bluetooth
+    case usbSerial
+}
+
 struct ProtocolScoringCapabilities: Codable, Equatable {
     var hasChecksum: Bool
     var hasSequence: Bool
@@ -371,6 +376,18 @@ struct ScaleDeviceIdentity: Codable, Equatable {
     var advertisedServices: [String]
 }
 
+struct USBSerialSampleMetadata: Codable, Equatable {
+    var firmwareMillis: UInt32
+    var sequenceNumber: UInt32
+    var usbStatusRaw: UInt16
+    var usbStatusLabels: [String]
+    var firmwareQuality: Int
+    var hx711Hz: Double
+    var usbDroppedCumulative: UInt32
+    var usbDroppedDelta: UInt32
+    var hostReceivedAt: Date
+}
+
 struct RawScalePacket: Codable, Identifiable, Equatable {
     var id = UUID()
     var arrivalTime: Date
@@ -384,6 +401,7 @@ struct RawScalePacket: Codable, Identifiable, Equatable {
     var sequence: UInt8? = nil
     var deviceTimestampMilliseconds: UInt32? = nil
     var fields: [PacketFieldAnnotation]? = nil
+    var usbSerial: USBSerialSampleMetadata? = nil
 }
 
 struct ScaleSample: Codable, Identifiable, Equatable {
@@ -400,6 +418,7 @@ struct ScaleSample: Codable, Identifiable, Equatable {
     var detectedSampleRateHz: Int?
     var statusFlags: ScaleStatusFlags?
     var diagnosticFlags: ScaleDiagnosticFlags?
+    var usbSerial: USBSerialSampleMetadata? = nil
 }
 
 struct ScaleBatteryEvent: Codable, Identifiable, Equatable {
@@ -486,6 +505,9 @@ struct ScaleRecording: Codable, Equatable {
     var appBuild: String
     var platform: String
     var scoringModelVersion: String
+    var source: RecordingSource
+    var protocolName: String?
+    var serialBaud: Int?
     var title: String?
     var mode: RecordingMode
     var device: ScaleDeviceIdentity?
@@ -512,6 +534,9 @@ struct ScaleRecording: Codable, Equatable {
         appBuild: String = ScaleRecording.currentAppBuild,
         platform: String = ScaleRecording.currentPlatform,
         scoringModelVersion: String = Self.scoringModelVersion,
+        source: RecordingSource = .bluetooth,
+        protocolName: String? = nil,
+        serialBaud: Int? = nil,
         title: String? = nil,
         mode: RecordingMode,
         device: ScaleDeviceIdentity? = nil,
@@ -537,6 +562,9 @@ struct ScaleRecording: Codable, Equatable {
         self.appBuild = appBuild
         self.platform = platform
         self.scoringModelVersion = scoringModelVersion
+        self.source = source
+        self.protocolName = protocolName
+        self.serialBaud = serialBaud
         self.title = title
         self.mode = mode
         self.device = device
@@ -600,6 +628,9 @@ struct ScaleRecording: Codable, Equatable {
         case appBuild
         case platform
         case scoringModelVersion
+        case source
+        case protocolName
+        case serialBaud
         case title
         case mode
         case device
@@ -628,6 +659,9 @@ struct ScaleRecording: Codable, Equatable {
         appBuild = try container.decodeIfPresent(String.self, forKey: .appBuild) ?? "unknown"
         platform = try container.decodeIfPresent(String.self, forKey: .platform) ?? "unknown"
         scoringModelVersion = try container.decodeIfPresent(String.self, forKey: .scoringModelVersion) ?? Self.scoringModelVersion
+        source = try container.decodeIfPresent(RecordingSource.self, forKey: .source) ?? .bluetooth
+        protocolName = try container.decodeIfPresent(String.self, forKey: .protocolName)
+        serialBaud = try container.decodeIfPresent(Int.self, forKey: .serialBaud)
         title = try container.decodeIfPresent(String.self, forKey: .title)
         mode = try container.decodeIfPresent(RecordingMode.self, forKey: .mode) ?? .shot
         device = try container.decodeIfPresent(ScaleDeviceIdentity.self, forKey: .device)
@@ -663,13 +697,16 @@ struct SavedScaleRecording: Codable, Identifiable, Equatable {
     static func make(
         recording inputRecording: ScaleRecording,
         title inputTitle: String? = nil,
-        notes inputNotes: String
+        notes inputNotes: String,
+        recalculateMetrics: Bool = true
     ) -> SavedScaleRecording {
         var finalized = inputRecording
         finalized.schemaVersion = ScaleRecording.schemaVersion
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.notes = inputNotes
-        finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+        if recalculateMetrics {
+            finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
+        }
 
         let title = firstNonEmpty(inputTitle, finalized.title) ?? defaultTitle(for: finalized)
         finalized.title = title
@@ -685,7 +722,8 @@ struct SavedScaleRecording: Codable, Identifiable, Equatable {
     }
 
     private static func defaultTitle(for recording: ScaleRecording) -> String {
-        let protocolName = recording.device?.kind.displayName
+        let protocolName = recording.protocolName
+            ?? recording.device?.kind.displayName
             ?? recording.samples.last?.scaleKind.displayName
             ?? "Unknown Scale"
         return "\(protocolName) · \(recording.mode.displayName)"
@@ -760,6 +798,243 @@ struct ProtocolComparison: Equatable {
         }
         return lhs.title < rhs.title
     }
+}
+
+struct TransportComparisonPoint: Equatable {
+    var seconds: Double
+    var weightGrams: Double
+}
+
+struct TransportComparisonRow: Identifiable, Equatable {
+    var id: String
+    var title: String
+    var detail: String
+    var isOfficial: Bool
+    var packetCount: Int
+    var rateHz: Double?
+    var medianIntervalMilliseconds: Double?
+    var p95IntervalMilliseconds: Double?
+    var maxGapMilliseconds: Double?
+    var matchedReferenceCount: Int?
+    var medianLagMilliseconds: Double?
+    var medianAbsoluteDeltaGrams: Double?
+}
+
+struct TransportComparison: Equatable {
+    var rows: [TransportComparisonRow]
+
+    var isVisible: Bool { rows.count > 1 }
+
+    static func make(recording: ScaleRecording) -> TransportComparison {
+        let streams = transportStreams(recording: recording)
+        guard streams.count > 1 else {
+            return TransportComparison(rows: [])
+        }
+
+        let referenceKey = streams
+            .filter { $0.key.isOfficial }
+            .max { $0.value.count < $1.value.count }?
+            .key ?? streams.max { $0.value.count < $1.value.count }!.key
+        let referencePoints = streams[referenceKey] ?? []
+        let start = recording.recordingStartMonotonicSeconds
+            ?? streams.values.flatMap { $0.map(\.seconds) }.min()
+            ?? 0
+        let end = recording.recordingEndMonotonicSeconds
+            ?? streams.values.flatMap { $0.map(\.seconds) }.max()
+            ?? start
+        let duration = max(0, end - start)
+
+        let rows = streams
+            .map { key, points in
+                makeRow(
+                    key: key,
+                    points: points.sorted { $0.seconds < $1.seconds },
+                    referencePoints: referencePoints.sorted { $0.seconds < $1.seconds },
+                    durationSeconds: duration,
+                    isReference: key == referenceKey
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.isOfficial != rhs.isOfficial { return lhs.isOfficial && !rhs.isOfficial }
+                if lhs.packetCount != rhs.packetCount { return lhs.packetCount > rhs.packetCount }
+                return lhs.title < rhs.title
+            }
+
+        return TransportComparison(rows: rows)
+    }
+
+    private static func makeRow(
+        key: TransportStreamKey,
+        points: [TransportComparisonPoint],
+        referencePoints: [TransportComparisonPoint],
+        durationSeconds: Double,
+        isReference: Bool
+    ) -> TransportComparisonRow {
+        let intervals = zip(points, points.dropFirst()).map { max(0, $1.seconds - $0.seconds) * 1_000 }
+        let alignment = isReference ? nil : compare(points: points, referencePoints: referencePoints)
+        return TransportComparisonRow(
+            id: key.id,
+            title: key.title,
+            detail: key.detail,
+            isOfficial: key.isOfficial,
+            packetCount: points.count,
+            rateHz: durationSeconds > 0 ? Double(points.count) / durationSeconds : nil,
+            medianIntervalMilliseconds: percentile(intervals, 0.50),
+            p95IntervalMilliseconds: percentile(intervals, 0.95),
+            maxGapMilliseconds: intervals.max(),
+            matchedReferenceCount: alignment?.matchedCount,
+            medianLagMilliseconds: alignment?.medianLagMilliseconds,
+            medianAbsoluteDeltaGrams: alignment?.medianAbsoluteDeltaGrams
+        )
+    }
+
+    private static func transportStreams(recording: ScaleRecording) -> [TransportStreamKey: [TransportComparisonPoint]] {
+        recording.rawPackets.reduce(into: [:]) { result, packet in
+            guard let decoded = decodeTransportPoint(packet: packet, recording: recording) else { return }
+            result[decoded.key, default: []].append(decoded.point)
+        }
+    }
+
+    private static func decodeTransportPoint(
+        packet: RawScalePacket,
+        recording: ScaleRecording
+    ) -> (key: TransportStreamKey, point: TransportComparisonPoint)? {
+        guard packet.rejectionReason == nil else { return nil }
+        let uuid = packet.characteristicUUID.uppercased()
+        let bytes = bytes(fromHex: packet.bytesHex)
+
+        if uuid == WeighMyBruParser.weight20UUID, bytes.count == 20 {
+            let extended = recording.device?.kind == .weighMyBruPlus || packet.scaleKind == .weighMyBruPlus || bytes[5] == 0x01
+            let key = TransportStreamKey(
+                id: "wmb-20-byte",
+                title: extended ? "WMB+ 20-byte" : "WMB 20-byte",
+                detail: "Official benchmark stream",
+                isOfficial: true
+            )
+            return (key, TransportComparisonPoint(
+                seconds: packet.monotonicSeconds,
+                weightGrams: signedCentiValue(signByte: bytes[6], high: bytes[7], mid: bytes[8], low: bytes[9])
+            ))
+        }
+
+        if uuid == WeighMyBruParser.float32UUID, bytes.count == 4 {
+            let bitPattern = UInt32(bytes[0])
+                | UInt32(bytes[1]) << 8
+                | UInt32(bytes[2]) << 16
+                | UInt32(bytes[3]) << 24
+            let value = Float(bitPattern: bitPattern)
+            guard value.isFinite else { return nil }
+            let key = TransportStreamKey(
+                id: "bean-conqueror-float32",
+                title: "Bean Conqueror Float32",
+                detail: "Compatibility stream; not used for official scoring when 20-byte data is present",
+                isOfficial: false
+            )
+            return (key, TransportComparisonPoint(seconds: packet.monotonicSeconds, weightGrams: Double(value)))
+        }
+
+        if isBookooWeightPacket(packet: packet, uuid: uuid, bytes: bytes) {
+            let kind = normalizedBookooKind(packet.scaleKind == .unknown ? (recording.device?.kind ?? .bookoo) : packet.scaleKind)
+            let key = TransportStreamKey(
+                id: "bookoo-\(kind.rawValue)-\(shortUUID(uuid))",
+                title: "\(kind.displayName) 20-byte",
+                detail: "Native BooKoo benchmark stream",
+                isOfficial: true
+            )
+            return (key, TransportComparisonPoint(
+                seconds: packet.monotonicSeconds,
+                weightGrams: signedCentiValue(signByte: bytes[6], high: bytes[7], mid: bytes[8], low: bytes[9])
+            ))
+        }
+
+        return nil
+    }
+
+    private static func compare(
+        points: [TransportComparisonPoint],
+        referencePoints: [TransportComparisonPoint]
+    ) -> (matchedCount: Int, medianLagMilliseconds: Double?, medianAbsoluteDeltaGrams: Double?) {
+        guard !points.isEmpty, !referencePoints.isEmpty else {
+            return (0, nil, nil)
+        }
+        var referenceIndex = 0
+        var lags: [Double] = []
+        var deltas: [Double] = []
+        for point in points {
+            while referenceIndex + 1 < referencePoints.count,
+                  abs(referencePoints[referenceIndex + 1].seconds - point.seconds) < abs(referencePoints[referenceIndex].seconds - point.seconds) {
+                referenceIndex += 1
+            }
+            let reference = referencePoints[referenceIndex]
+            let lag = point.seconds - reference.seconds
+            guard abs(lag) <= 0.080 else { continue }
+            lags.append(lag * 1_000)
+            deltas.append(abs(point.weightGrams - reference.weightGrams))
+        }
+        return (lags.count, percentile(lags, 0.50), percentile(deltas, 0.50))
+    }
+
+    private static func bytes(fromHex hex: String) -> [UInt8] {
+        let cleaned = hex.filter(\.isHexDigit)
+        guard cleaned.count.isMultiple(of: 2) else { return [] }
+        var bytes: [UInt8] = []
+        var index = cleaned.startIndex
+        while index < cleaned.endIndex {
+            let next = cleaned.index(index, offsetBy: 2)
+            if let byte = UInt8(cleaned[index..<next], radix: 16) {
+                bytes.append(byte)
+            }
+            index = next
+        }
+        return bytes
+    }
+
+    private static func isBookooWeightPacket(packet: RawScalePacket, uuid: String, bytes: [UInt8]) -> Bool {
+        guard bytes.count == 20, bytes[0] == 0x03, bytes[1] == 0x0B else { return false }
+        if uuid == BookooParser.notifyUUID { return true }
+        switch packet.scaleKind {
+        case .bookoo, .bookooMini, .bookooUltra:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func normalizedBookooKind(_ kind: ScaleKind) -> ScaleKind {
+        switch kind {
+        case .bookooMini, .bookooUltra:
+            return kind
+        default:
+            return .bookoo
+        }
+    }
+
+    private static func shortUUID(_ uuid: String) -> String {
+        let suffix = "-0000-1000-8000-00805F9B34FB"
+        if uuid.hasPrefix("0000"), uuid.hasSuffix(suffix), uuid.count >= 8 {
+            return String(uuid.dropFirst(4).prefix(4))
+        }
+        return uuid
+    }
+
+    private static func percentile(_ values: [Double], _ percentile: Double) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let clamped = max(0, min(1, percentile))
+        let position = clamped * Double(sorted.count - 1)
+        let lower = Int(floor(position))
+        let upper = Int(ceil(position))
+        guard lower != upper else { return sorted[lower] }
+        let fraction = position - Double(lower)
+        return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction
+    }
+}
+
+private struct TransportStreamKey: Hashable {
+    var id: String
+    var title: String
+    var detail: String
+    var isOfficial: Bool
 }
 
 struct ScoringValidity: Codable, Equatable {

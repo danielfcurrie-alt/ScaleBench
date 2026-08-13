@@ -103,7 +103,12 @@ internal fun ScorecardSection(recording: ScaleRecording, metrics: ScaleQualityMe
             isValid = metrics.validity?.isValid
         )
         StandardScoreRows(recording.mode, metrics, showScore = false)
-        SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+        if (recording.source == RecordingSource.USB_SERIAL) {
+            SwiftMetricRow("Device cadence", usbDeviceCadence(recording))
+            SwiftMetricRow("Received rate", usbHostReceiveRate(recording))
+        } else {
+            SwiftMetricRow("Effective rate", metrics.effectiveSampleRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
+        }
         SwiftMetricRow("Interval p95", metrics.packetIntervalP95Milliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
         SwiftMetricRow("Max gap", metrics.packetIntervalMaxMilliseconds?.let { String.format(Locale.US, "%.0f ms", it) } ?: "--")
         SwiftMetricRow("Long gaps", metrics.longGapCount.toString())

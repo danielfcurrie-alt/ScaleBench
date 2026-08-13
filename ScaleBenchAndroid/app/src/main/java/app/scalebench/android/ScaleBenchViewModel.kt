@@ -8,20 +8,34 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import java.util.concurrent.Executors
 
 internal class ScaleBenchViewModel(application: Application) : AndroidViewModel(application) {
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    val savedRecordingStore = SavedRecordingStore(application)
-    val bluetooth = BluetoothScaleManager(application) { invalidate() }
+    private val libraryRecoveryExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "ScaleBench-LibraryRecovery").apply { isDaemon = true }
+    }
 
     var renderTick by mutableIntStateOf(0)
         private set
+
+    val savedRecordingStore = SavedRecordingStore(application)
+    val bluetooth = BluetoothScaleManager(application) { invalidate() }
+    val usbSerial = AndroidUSBSerialManager(application) { invalidate() }
 
     var deviceUtilityState by mutableStateOf(DeviceUtilityState())
         private set
 
     var pendingJsonExport: PendingJsonExport? = null
+
+    init {
+        libraryRecoveryExecutor.execute {
+            val recoveredCount = savedRecordingStore.recoverMissingSummaries()
+            if (recoveredCount > 0 || savedRecordingStore.lastErrorMessage() != null) {
+                invalidate()
+            }
+        }
+    }
 
     fun invalidate() {
         if (Looper.myLooper() == Looper.getMainLooper()) {
@@ -37,7 +51,9 @@ internal class ScaleBenchViewModel(application: Application) : AndroidViewModel(
     }
 
     override fun onCleared() {
+        libraryRecoveryExecutor.shutdownNow()
         bluetooth.shutdown()
+        usbSerial.shutdown()
         mainHandler.removeCallbacksAndMessages(null)
         super.onCleared()
     }

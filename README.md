@@ -4,7 +4,7 @@
   <img src="ScaleBench/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png" alt="ScaleBench app icon" width="120" height="120">
 </p>
 
-ScaleBench is an open Bluetooth coffee-scale analyzer for iPhone, iPad, macOS Catalyst, and Android. It records BLE notifications at callback time, preserves raw packets, parses them into a canonical weight stream, computes mode-specific quality results, and exports the evidence as JSON.
+ScaleBench is an open coffee-scale analyzer for iPhone, iPad, macOS Catalyst, and Android. It records Bluetooth notifications at callback time and can record WMB+ firmware over USB serial on Mac and Android. It preserves raw transport data, parses a canonical weight stream, computes mode-specific quality results, and exports the evidence as JSON.
 
 ScaleBench is a diagnostic benchmark, not a brew log. Its purpose is to compare scale hardware and protocols under controlled procedures.
 
@@ -17,24 +17,35 @@ For recording procedures, scoring explanations, diagnostics, and troubleshooting
 ## Current app status
 
 - **iPhone and iPad**: live BLE recording, Standard v1 scoring, charts, packet inspection, saved recordings, JSON import/export, score explanation, scorecard export, and first-run examples.
-- **macOS Catalyst**: the same recording and analysis workflow, plus Device Utility for cabled maintenance experiments.
-- **Android**: live BLE recording, Standard v1 scoring, dark/light theme, richer diagnostic overlays, packet inspection, saved-recording details, JSON import/export through the Android file picker, scorecard sharing, Nordic DFU support, USB device detection, and first-run examples.
+- **macOS Catalyst**: the same recording and analysis workflow, WMB+ USB Serial recording at 115200 baud, plus Device Utility for cabled maintenance experiments.
+- **Android**: live BLE recording, WMB+ USB Serial recording at 115200 baud, Standard v1 scoring, dark/light theme, richer diagnostic overlays, packet inspection, saved-recording details, JSON import/export through the Android file picker, scorecard sharing, Nordic DFU support, USB device detection, and first-run examples.
 - Saved recordings use a shared recording format. Exports from iOS/macOS can be imported by Android and Android exports can be imported by iOS/macOS.
+
+## What's new in 1.1.0
+
+- Added WMB+ USB Serial recording on macOS and Android.
+- Split USB rate reporting into device cadence and received sample rate, so high-rate captures do not hide serial batching.
+- Fixed WMB+ compatibility captures so the 20-byte stream and Bean Conqueror Float32 stream are not combined into one official benchmark stream.
+- Improved Android saved-recording analysis, charts, packet timeline, packet inspector, scorecards, imports, examples, and USB support.
+- Improved macOS importing, saved-recording layout, packet-check explanations, Bluetooth disconnect control, and high-rate recording performance.
+- Expanded shared JSON exports, scorecard payloads, schemas, fixtures, and cross-platform conformance checks for USB and signal diagnostics.
+- Kept ScaleBench Standard v1 as the public scoring contract, with the scoring model still identified as `standard-1.0.0`.
 
 ## Requirements
 
 - iOS/iPadOS 17 or newer
 - macOS 14 or newer through Mac Catalyst
 - Android 8.0 (API 26) or newer
-- Bluetooth permission and a supported scale for live recording
+- Bluetooth permission and a supported scale for wireless recording
+- A USB data cable and WMB+ firmware exposing `WMBP_WEIGHT_V1` for optional wired recording on Mac or Android
 
 ## Downloads
 
 Published builds are attached to [GitHub Releases](https://github.com/danielfcurrie-alt/ScaleBench/releases):
 
-- **macOS**: download `ScaleBench-1.0.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is Developer ID signed and Apple-notarized.
+- **macOS**: download `ScaleBench-1.1.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is Developer ID signed and Apple-notarized.
 - **Android**: download the release-signed APK and allow installation from your browser or file manager when Android asks.
-- **iOS/iPadOS**: download `ScaleBench-1.0.0-iOS-unsigned.ipa` for self-signing, or build the `v1.0.0` source tag in Xcode with your own signing team. The IPA is not directly installable: sign it with your own Apple ID using a third-party tool such as [Sideloadly](https://sideloadly.io/) or [AltStore Classic](https://faq.altstore.io/), then install it with Developer Mode enabled. With a free Personal Team, Apple limits the provisioning profile to seven days, after which the app must be refreshed or reinstalled. See [Apple's Personal Team documentation](https://developer.apple.com/help/account/basics/about-your-developer-account). TestFlight will be the normal public installation route when available.
+- **iOS/iPadOS**: download `ScaleBench-1.1.0-iOS-unsigned.ipa` for self-signing, or build the `v1.1.0` source tag in Xcode with your own signing team. The IPA is not directly installable: sign it with your own Apple ID using a third-party tool such as [Sideloadly](https://sideloadly.io/) or [AltStore Classic](https://faq.altstore.io/), then install it with Developer Mode enabled. With a free Personal Team, Apple limits the provisioning profile to seven days, after which the app must be refreshed or reinstalled. See [Apple's Personal Team documentation](https://developer.apple.com/help/account/basics/about-your-developer-account). TestFlight will be the normal public installation route when available.
 
 Every release also includes SHA-256 checksums. GitHub automatically provides source archives for the exact tagged revision.
 
@@ -43,6 +54,7 @@ Every release also includes SHA-256 checksums. GitHub automatically provides sou
 | Family | Parsed data |
 | --- | --- |
 | WeighMyBru / WeighMyBru+ | weight; extended packets may include timestamp, sequence, flow, battery, status, and diagnostics |
+| WMB+ USB Serial (Mac / Android) | weight, flow, 32-bit firmware timestamp and sequence, status, firmware quality, battery, HX711 cadence, and serial backpressure drops |
 | BooKoo Standard / Mini / Ultra | weight, timestamp, flow, battery, and protocol-specific status fields |
 | Acaia | weight |
 | Decent / Espressi | weight and shot timer when present |
@@ -71,7 +83,7 @@ Delivery = round(100 x coverage x purity)
 - **Purity** is usable weight frames divided by all relevant weight frames. Parse failures, out-of-order sequence values, stale free-running timestamps, isolated implausible spikes, and avoidable duplicates each have a fixed classification order. Sustained Shot / Pour motion is not treated as packet corruption.
 - Multiplication makes defects compound. Half coverage and half purity produce 25, not 50 or 75.
 
-Checksums, sequence numbers, and device clocks do not earn points merely for existing. They make additional defect classes observable. Available checks also respect the selected mode: Transport Stress deliberately disables weight-physics and duplicate checks. When every class is not checked, Delivery is rendered as an upper bound such as `<=100`, beside a label such as `3 of 5 available`.
+Checksums, sequence numbers, and device clocks do not earn points merely for existing. They make additional defect classes observable. Available checks also respect the selected mode: Transport Stress deliberately disables weight-physics and duplicate checks. When every class is not checked, Delivery is shown as a best-case score such as `<=100`, beside a label such as `3 of 5 available`.
 
 **Idle Stability** is a separate score based on detrended residual noise and drift. **Step Response** reports rise time, settling time, and overshoot without a 0-100 score. These domains are never combined into a weighted overall score.
 
@@ -98,20 +110,23 @@ Always compare:
 
 - the same recording mode and procedure
 - the same platform family
+- the same transport source, such as BLE vs BLE or USB vs USB
 - the Delivery value together with available protocol checks
 - the exported `scoringModelVersion`
 
 iOS and Android BLE connection controls differ, so their Delivery results are different measurement conditions and should not be ranked directly against one another. Android official captures request high connection priority and an MTU of 247; Apple controls connection parameters through CoreBluetooth.
 
+WMB+ USB Serial is a separate transport condition and should be labelled and compared separately from BLE. BLE cadence is measured when packets arrive at the app; USB cadence is measured from the scale's firmware time and sequence because serial drivers can batch rows. USB results show both device cadence and received sample rate, and firmware-reported dropped rows count as USB backpressure loss.
+
 ## Exports
 
-JSON exports include platform/app build identity, raw packets, decoded packet field maps, parsed samples, explicit recording boundaries, disconnect/reconnect and app-state events, link setup, protocol scoring capabilities, Standard v1 validity, frame classifications, mode-specific results, and diagnostics. The schema version describes the container; `scoringModelVersion` identifies the mathematics.
+JSON exports include platform/app build identity, transport source, raw packets, decoded packet field maps, parsed samples, explicit recording boundaries, disconnect/reconnect and app-state events, link setup, protocol scoring capabilities, Standard v1 validity, frame classifications, mode-specific results, and diagnostics. USB exports also preserve firmware time and sequence, raw and decoded status, firmware quality, HX711 cadence, cumulative and per-row drops, serial baud, and host receive time. The schema version describes the container; `scoringModelVersion` identifies the mathematics.
 
 Saved recordings are recalculated from stored raw packets and samples whenever they are loaded or exported. This keeps captures in the current shared format usable while Standard v1 is still being tuned, without confusing container schema changes with scoring math changes.
 
 The visible JSON export buttons write the shared recording JSON. The app also has an internal official analysis/scorecard payload model used by the scorecard and cross-platform analysis tests; this is separate from the normal recording export.
 
-Scorecards are generated only for valid scored modes. They show the platform and, for Delivery, coverage, purity, and Protocol detail. Metrics-only and invalid recordings remain exportable as JSON but cannot produce an official 0-100 scorecard.
+Scorecards are generated only for valid scored modes. They show the platform and, for Delivery, delivered packets, received/effective rate, usable readings, and packet checks. USB scorecards also distinguish device cadence from received sample rate. Metrics-only and invalid recordings remain exportable as JSON but cannot produce an official 0-100 scorecard.
 
 ## Recordings library
 

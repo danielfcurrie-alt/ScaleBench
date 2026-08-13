@@ -22,6 +22,8 @@ struct OfficialScorecardPayload: Codable, Equatable {
     var purity: Double?
     var verificationCoveragePercent: Int?
     var sampleRateHz: Double?
+    var deviceCadenceHz: Double?
+    var receivedSampleRateHz: Double?
     var p95IntervalMilliseconds: Double?
     var maxGapMilliseconds: Double?
     var longGapCount: Int
@@ -58,6 +60,8 @@ struct OfficialScorecardPayload: Codable, Equatable {
             purity: metrics.delivery?.purity,
             verificationCoveragePercent: metrics.protocolVerification?.verificationCoveragePercent,
             sampleRateHz: metrics.effectiveSampleRateHz,
+            deviceCadenceHz: Self.usbDeviceCadenceHz(finalized),
+            receivedSampleRateHz: Self.usbReceivedSampleRateHz(finalized),
             p95IntervalMilliseconds: metrics.packetIntervalP95Milliseconds,
             maxGapMilliseconds: metrics.packetIntervalMaxMilliseconds,
             longGapCount: metrics.longGapCount,
@@ -67,6 +71,21 @@ struct OfficialScorecardPayload: Codable, Equatable {
             rawPacketCount: finalized.rawPackets.count,
             notes: finalized.notes
         )
+    }
+
+    private static func usbDeviceCadenceHz(_ recording: ScaleRecording) -> Double? {
+        guard recording.source == .usbSerial else { return nil }
+        let values = recording.samples.compactMap { $0.usbSerial?.hx711Hz }.filter { $0.isFinite && $0 > 0 }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    private static func usbReceivedSampleRateHz(_ recording: ScaleRecording) -> Double? {
+        guard recording.source == .usbSerial,
+              let first = recording.samples.first?.monotonicSeconds,
+              let last = recording.samples.last?.monotonicSeconds,
+              last > first else { return nil }
+        return Double(recording.samples.count) / (last - first)
     }
 
     func exportData() throws -> Data {

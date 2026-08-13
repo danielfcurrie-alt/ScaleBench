@@ -7,6 +7,7 @@ struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
     @EnvironmentObject private var appCommands: AppCommandRouter
     @StateObject private var savedStore = SavedRecordingStore()
+    @StateObject private var usbSerial = WMBPlusUSBSerialManager()
     @State private var selectedMode: RecordingMode = .shot
     @State private var recordingNotes = ""
     @State private var exportURL: URL?
@@ -14,6 +15,7 @@ struct ContentView: View {
     @State private var activeSheet: ActiveSheet?
     @State private var isImportingRecording = false
     @State private var importStatusMessage: String?
+    @State private var importAlertMessage: String?
     @State private var isRecordingsExpanded = true
     @State private var recordingLibraryMode: RecordingLibraryMode = .date
     @State private var recordingSearchText = ""
@@ -28,7 +30,7 @@ struct ContentView: View {
             [
                 saved.title,
                 saved.notes,
-                saved.protocolKind.displayName,
+                recordingProtocolDisplayName(saved.recording),
                 saved.recording.mode.displayName,
                 platformDisplayName(saved.recording.platform),
             ].contains { $0.localizedCaseInsensitiveContains(query) }
@@ -39,9 +41,21 @@ struct ContentView: View {
         NavigationStack {
             List {
                 Section {
-                    ScaleBenchBrandHeader(status: bluetooth.statusMessage)
+                    ScaleBenchBrandHeader(
+                        status: (usbSerial.isRecording || usbSerial.isStarting || usbSerial.isFinalizing)
+                            ? usbSerial.statusMessage
+                            : bluetooth.statusMessage
+                    )
                 }
                 .listRowBackground(Color.clear)
+
+                if let importStatusMessage {
+                    Section {
+                        Label(importStatusMessage, systemImage: importStatusMessage.hasPrefix("Imported") ? "checkmark.circle" : "tray.and.arrow.down")
+                            .font(.callout)
+                            .foregroundStyle(importStatusMessage.hasPrefix("Import failed") ? .red : .secondary)
+                    }
+                }
 
                 Section("Bluetooth") {
                     HStack {
@@ -64,9 +78,7 @@ struct ContentView: View {
                         ContentUnavailableView("No scales yet", systemImage: "antenna.radiowaves.left.and.right", description: Text("Start scanning and power on a supported Bluetooth scale."))
                     } else {
                         ForEach(bluetooth.discoveredScales) { device in
-                            Button {
-                                bluetooth.connect(to: device)
-                            } label: {
+                            if bluetooth.connectedDevice?.id == device.id {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(device.name)
@@ -76,19 +88,58 @@ struct ContentView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    if bluetooth.connectedDevice?.id == device.id {
+                                    HStack(spacing: 12) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
                                             .accessibilityLabel("Connected")
+                                        Button("Disconnect") {
+                                            bluetooth.disconnect()
+                                        }
+                                        .buttonStyle(.bordered)
                                     }
                                 }
-                                .contentShape(Rectangle())
                                 .foregroundStyle(.primary)
+                            } else {
+                                Button {
+                                    bluetooth.connect(to: device)
+                                } label: {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(device.name)
+                                                .font(.headline)
+                                            Text("\(device.kind.displayName) · RSSI \(device.rssi)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Text("Connect")
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(.tint)
+                                    }
+                                    .contentShape(Rectangle())
+                                    .foregroundStyle(.primary)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
+
+#if targetEnvironment(macCatalyst)
+                Section("Wired USB") {
+                    WMBPlusUSBRecordingSection(
+                        manager: usbSerial,
+                        mode: selectedMode,
+                        bluetoothRecordingActive: bluetooth.isRecording
+                    )
+                }
+#else
+                Section("Wired USB") {
+                    Label(WMBPlusUSBSerialManager.unavailableMessage, systemImage: "cable.connector")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+#endif
 
                 Section("Recording") {
                     VStack(alignment: .leading, spacing: 6) {
@@ -131,7 +182,11 @@ struct ContentView: View {
 
                     RecordingActionButtons(
                         isRecording: bluetooth.isRecording,
-                        canRecord: bluetooth.isConnectionReady,
+                        canRecord: bluetooth.isConnectionReady
+                            && !bluetooth.isFinalizing
+                            && !usbSerial.isRecording
+                            && !usbSerial.isStarting
+                            && !usbSerial.isFinalizing,
                         canExport: !bluetooth.currentRecording.samples.isEmpty || !bluetooth.currentRecording.rawPackets.isEmpty,
                         startOrStop: {
                             if bluetooth.isRecording {
@@ -173,7 +228,7 @@ struct ContentView: View {
                 Section("Scorecard") {
                     let metrics = bluetooth.currentMetrics
                     BenchmarkScoreRows(mode: bluetooth.currentRecording.mode, metrics: metrics)
-                    MetricRow(title: "Effective rate", value: metrics.effectiveSampleRateHz.map { String(format: "%.1f Hz", $0) } ?? "—")
+                    MetricRow(title: "Received rate", value: metrics.effectiveSampleRateHz.map { String(format: "%.1f Hz", $0) } ?? "—")
                     MetricRow(title: "Interval p95", value: metrics.packetIntervalP95Milliseconds.map { String(format: "%.0f ms", $0) } ?? "—")
                     MetricRow(title: "Max gap", value: metrics.packetIntervalMaxMilliseconds.map { String(format: "%.0f ms", $0) } ?? "—")
                     MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
@@ -220,47 +275,32 @@ struct ContentView: View {
                             case .date, .score:
                                 let recordings = sortedSavedRecordings(visibleRecordings, mode: recordingLibraryMode)
                                 ForEach(recordings) { saved in
-                                    NavigationLink {
-                                        SavedRecordingDetailView(saved: saved) {
-                                            activeSheet = .scoreExplanation(saved.recording)
-                                        }
-                                    } label: {
-                                        SavedRecordingRow(saved: saved)
-                                    }
-                                    .recordingDeleteAction {
+                                    SavedRecordingNavigationRow(saved: saved, explain: {
+                                        activeSheet = .scoreExplanation(saved.recording)
+                                    }, delete: {
                                         savedStore.delete(saved)
-                                    }
+                                    })
                                 }
                             case .protocolKind:
                                 ForEach(recordingGroups(visibleRecordings, mode: .protocolKind)) { group in
                                     RecordingGroupHeader(title: group.title, count: group.recordings.count)
                                     ForEach(group.recordings) { saved in
-                                        NavigationLink {
-                                            SavedRecordingDetailView(saved: saved) {
-                                                activeSheet = .scoreExplanation(saved.recording)
-                                            }
-                                        } label: {
-                                            SavedRecordingRow(saved: saved)
-                                        }
-                                        .recordingDeleteAction {
+                                        SavedRecordingNavigationRow(saved: saved, explain: {
+                                            activeSheet = .scoreExplanation(saved.recording)
+                                        }, delete: {
                                             savedStore.delete(saved)
-                                        }
+                                        })
                                     }
                                 }
                             case .mode:
                                 ForEach(recordingGroups(visibleRecordings, mode: .mode)) { group in
                                     RecordingGroupHeader(title: group.title, count: group.recordings.count)
                                     ForEach(group.recordings) { saved in
-                                        NavigationLink {
-                                            SavedRecordingDetailView(saved: saved) {
-                                                activeSheet = .scoreExplanation(saved.recording)
-                                            }
-                                        } label: {
-                                            SavedRecordingRow(saved: saved)
-                                        }
-                                        .recordingDeleteAction {
+                                        SavedRecordingNavigationRow(saved: saved, explain: {
+                                            activeSheet = .scoreExplanation(saved.recording)
+                                        }, delete: {
                                             savedStore.delete(saved)
-                                        }
+                                        })
                                     }
                                 }
                             }
@@ -378,6 +418,50 @@ struct ContentView: View {
                 recordingCompleted: showCompletedRecording,
                 syncCommands: syncAppCommandState
             ))
+            .onChange(of: usbSerial.isRecording) { _, _ in
+                RecordingWakeLock.setActive(bluetooth.isRecording || usbSerial.isRecording)
+                syncAppCommandState()
+            }
+            .onChange(of: bluetooth.isFinalizing) { _, _ in
+                syncAppCommandState()
+            }
+            .onChange(of: usbSerial.completedRecording?.id) { _, completedID in
+                if completedID != nil {
+                    showCompletedUSBRecording()
+                }
+            }
+            .onChange(of: usbSerial.isStarting) { _, _ in
+                syncAppCommandState()
+            }
+            .onChange(of: usbSerial.isFinalizing) { _, _ in
+                syncAppCommandState()
+            }
+            .onAppear {
+                usbSerial.refreshPorts()
+            }
+#if targetEnvironment(macCatalyst)
+            .sheet(isPresented: $isImportingRecording) {
+                RecordingImportDocumentPicker(
+                    onPick: { result in
+                        isImportingRecording = false
+                        DispatchQueue.main.async {
+                            switch result {
+                            case let .success(selection):
+                                importRecordingData(
+                                    selection.data,
+                                    fallbackTitle: selection.fallbackTitle
+                                )
+                            case let .failure(error):
+                                setImportStatus("Import failed: \(error.localizedDescription)")
+                            }
+                        }
+                    },
+                    onCancel: {
+                        isImportingRecording = false
+                    }
+                )
+            }
+#else
             .fileImporter(
                 isPresented: $isImportingRecording,
                 allowedContentTypes: [.json, .data],
@@ -391,6 +475,7 @@ struct ContentView: View {
                     importStatusMessage = error.localizedDescription
                 }
             }
+#endif
             .alert(
                 "Could Not Complete Command",
                 isPresented: Binding(
@@ -404,11 +489,28 @@ struct ContentView: View {
             } message: {
                 Text(commandErrorMessage ?? "Unknown error")
             }
+            .alert(
+                "Import Result",
+                isPresented: Binding(
+                    get: { importAlertMessage != nil },
+                    set: { if !$0 { importAlertMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    importAlertMessage = nil
+                }
+            } message: {
+                Text(importAlertMessage ?? "Unknown import result.")
+            }
         }
     }
 
     private func startRecordingAndShowTimer() {
-        guard bluetooth.isConnectionReady else { return }
+        guard bluetooth.isConnectionReady,
+              !bluetooth.isFinalizing,
+              !usbSerial.isRecording,
+              !usbSerial.isStarting,
+              !usbSerial.isFinalizing else { return }
         bluetooth.applyScoringProfile(.standard)
         exportURL = nil
         bluetooth.startRecording(mode: selectedMode, scoringProfile: .standard)
@@ -416,6 +518,11 @@ struct ContentView: View {
     }
 
     private func stopRecordingAndShowResults() {
+        if usbSerial.isRecording || usbSerial.isStarting {
+            usbSerial.stopRecording()
+            return
+        }
+        guard !bluetooth.isFinalizing else { return }
         guard bluetooth.isRecording else {
             showCompletedRecording()
             return
@@ -425,22 +532,39 @@ struct ContentView: View {
 
     private func showCompletedRecording() {
         guard let snapshot = bluetooth.takeCompletedRecording() else { return }
+        saveAndPresentCompletedRecording(snapshot)
+    }
+
+    private func showCompletedUSBRecording() {
+        guard let snapshot = usbSerial.takeCompletedRecording() else { return }
+        saveAndPresentCompletedRecording(snapshot)
+    }
+
+    private func saveAndPresentCompletedRecording(_ snapshot: ScaleRecording) {
         if snapshot.samples.isEmpty && snapshot.rawPackets.isEmpty {
             recordingResultSaveStatusMessage = "No saved shot was created because no packets were captured."
             activeSheet = .recordingResults(snapshot)
             return
         }
-        if let saved = savedStore.save(recording: snapshot, notes: recordingNotes) {
-            recordingResultSaveStatusMessage = "Saved automatically. Detailed charts and packet analysis are ready in Saved shots."
-            activeSheet = .recordingResults(saved.recording)
-        } else {
-            let reason = savedStore.lastErrorMessage ?? "The recording file could not be written."
-            recordingResultSaveStatusMessage = "Automatic save failed: \(reason) Use Export JSON below to keep this recording."
-            activeSheet = .recordingResults(snapshot)
+        recordingResultSaveStatusMessage = "Saving automatically. Detailed charts and packet analysis will be ready in Saved shots."
+        activeSheet = .recordingResults(snapshot)
+        savedStore.saveInBackground(
+            recording: snapshot,
+            notes: recordingNotes,
+            metricsAreCurrent: true
+        ) { result in
+            switch result {
+            case .success:
+                recordingResultSaveStatusMessage = "Saved automatically. Detailed charts and packet analysis are ready in Saved shots."
+            case let .failure(error):
+                let reason = savedStore.lastErrorMessage ?? error.localizedDescription
+                recordingResultSaveStatusMessage = "Automatic save failed: \(reason) Use Export JSON below to keep this recording."
+            }
         }
     }
 
     private func startRecordingImport() {
+        importStatusMessage = nil
         isImportingRecording = true
     }
 
@@ -463,6 +587,7 @@ struct ContentView: View {
 
     private func resetCurrentRecording() {
         bluetooth.resetRecording()
+        usbSerial.reset()
         exportURL = nil
         activeSheet = nil
         syncAppCommandState()
@@ -471,7 +596,7 @@ struct ContentView: View {
     private func syncAppCommandState() {
         let hasRecordingData = !bluetooth.currentRecording.samples.isEmpty
             || !bluetooth.currentRecording.rawPackets.isEmpty
-        let canExport = !bluetooth.isRecording && hasRecordingData
+        let canExport = !bluetooth.isRecording && !bluetooth.isFinalizing && hasRecordingData
         let canExportScorecard = canExport
             && bluetooth.currentMetrics.validity?.isValid == true
             && benchmarkScore(
@@ -479,25 +604,50 @@ struct ContentView: View {
                 metrics: bluetooth.currentMetrics
             ) != nil
         appCommands.updateState(
-            canStartRecording: bluetooth.isConnectionReady && !bluetooth.isRecording,
-            isRecording: bluetooth.isRecording,
+            canStartRecording: bluetooth.isConnectionReady
+                && !bluetooth.isRecording
+                && !bluetooth.isFinalizing
+                && !usbSerial.isRecording
+                && !usbSerial.isStarting
+                && !usbSerial.isFinalizing,
+            isRecording: bluetooth.isRecording || bluetooth.isFinalizing || usbSerial.isRecording || usbSerial.isStarting,
             canExport: canExport,
             canExportScorecard: canExportScorecard
         )
     }
 
     private func importRecording(from url: URL) {
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                url.stopAccessingSecurityScopedResource()
+        setImportStatus("Importing \(url.lastPathComponent)…", showAlert: false)
+        savedStore.importRecordingInBackground(from: url) { result in
+            switch result {
+            case let .success(saved):
+                setImportStatus(importSuccessMessage(for: saved))
+            case let .failure(error):
+                setImportStatus("Import failed: \(error.localizedDescription)")
             }
         }
+    }
 
-        if let saved = savedStore.importRecording(from: url) {
-            importStatusMessage = "Imported \(saved.title)."
-        } else {
-            importStatusMessage = savedStore.lastErrorMessage ?? "Import failed."
+    private func importRecordingData(_ data: Data, fallbackTitle: String) {
+        setImportStatus("Importing \(fallbackTitle)…", showAlert: false)
+        savedStore.importRecordingDataInBackground(data, fallbackTitle: fallbackTitle) { result in
+            switch result {
+            case let .success(saved):
+                setImportStatus(importSuccessMessage(for: saved))
+            case let .failure(error):
+                setImportStatus("Import failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func importSuccessMessage(for saved: SavedScaleRecording) -> String {
+        "Imported \(saved.title) (\(saved.recording.samples.count) samples, \(saved.recording.rawPackets.count) packets)."
+    }
+
+    private func setImportStatus(_ message: String, showAlert: Bool = true) {
+        importStatusMessage = message
+        if showAlert || message.hasPrefix("Import failed") {
+            importAlertMessage = message
         }
     }
 }
@@ -604,6 +754,75 @@ private struct ShareSheet: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
+
+#if targetEnvironment(macCatalyst)
+private struct RecordingImportSelection {
+    let data: Data
+    let fallbackTitle: String
+}
+
+private struct RecordingImportDocumentPicker: UIViewControllerRepresentable {
+    let onPick: (Result<RecordingImportSelection, Error>) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick, onCancel: onCancel)
+    }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [.json, .data],
+            asCopy: true
+        )
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        picker.shouldShowFileExtensions = true
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onPick: (Result<RecordingImportSelection, Error>) -> Void
+        let onCancel: () -> Void
+
+        init(
+            onPick: @escaping (Result<RecordingImportSelection, Error>) -> Void,
+            onCancel: @escaping () -> Void
+        ) {
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else {
+                onCancel()
+                return
+            }
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                let selection = RecordingImportSelection(
+                    data: try Data(contentsOf: url),
+                    fallbackTitle: "Imported \(url.deletingPathExtension().lastPathComponent)"
+                )
+                onPick(.success(selection))
+            } catch {
+                onPick(.failure(error))
+            }
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            onCancel()
+        }
+    }
+}
+#endif
 
 private enum ScaleBenchGlass {
     // Rollback switch for the Liquid Glass trial.
@@ -921,8 +1140,8 @@ private func sortedSavedRecordings(
         }
     case .protocolKind:
         recordings.sorted { lhs, rhs in
-            let lhsProtocol = lhs.protocolKind.displayName
-            let rhsProtocol = rhs.protocolKind.displayName
+            let lhsProtocol = recordingProtocolDisplayName(lhs.recording)
+            let rhsProtocol = recordingProtocolDisplayName(rhs.recording)
             if lhsProtocol != rhsProtocol { return lhsProtocol < rhsProtocol }
             let lhsScore = benchmarkScore(mode: lhs.recording.mode, metrics: lhs.scoreSnapshot) ?? -1
             let rhsScore = benchmarkScore(mode: rhs.recording.mode, metrics: rhs.scoreSnapshot) ?? -1
@@ -947,7 +1166,7 @@ private func recordingGroups(
     let pairs: [(id: String, title: String, saved: SavedScaleRecording)] = sorted.map { saved in
         switch mode {
         case .protocolKind:
-            let title = saved.protocolKind.displayName
+            let title = recordingProtocolDisplayName(saved.recording)
             return (title, title, saved)
         case .mode:
             let title = saved.recording.mode.displayName
@@ -1088,6 +1307,100 @@ private struct SharedHelpItemRow: View {
         }
     }
 }
+
+#if targetEnvironment(macCatalyst)
+private struct WMBPlusUSBRecordingSection: View {
+    @ObservedObject var manager: WMBPlusUSBSerialManager
+    let mode: RecordingMode
+    let bluetoothRecordingActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Picker("Serial port", selection: $manager.selectedPort) {
+                    if manager.serialPorts.isEmpty {
+                        Text("No serial ports found").tag("")
+                    } else {
+                        ForEach(manager.serialPorts, id: \.self) { path in
+                            Text(URL(fileURLWithPath: path).lastPathComponent).tag(path)
+                        }
+                    }
+                }
+                .disabled(manager.isRecording || manager.isStarting || manager.isFinalizing)
+
+                Button {
+                    manager.refreshPorts()
+                } label: {
+                    Label("Refresh ports", systemImage: "arrow.clockwise")
+                        .labelStyle(.iconOnly)
+                }
+                .help("Refresh serial ports")
+                .disabled(manager.isRecording || manager.isStarting || manager.isFinalizing)
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(WMBPlusUSBSerialRow.protocolName)
+                        .font(.headline)
+                    Text(manager.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("115200 baud")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if manager.isRecording || manager.isFinalizing || manager.latestSample != nil {
+                MetricRow(
+                    title: "Live weight",
+                    value: manager.latestSample.map { String(format: "%.3f g", $0.weightGrams) } ?? "—"
+                )
+                MetricRow(
+                    title: "Device cadence",
+                    value: manager.latestSample?.usbSerial.map { String(format: "%.2f Hz", $0.hx711Hz) } ?? "—"
+                )
+                MetricRow(title: "Received rate", value: formatRate(manager.hostReceiveRateHz))
+                MetricRow(title: "Samples", value: "\(manager.sampleCount)")
+                MetricRow(title: "USB dropped", value: "\(manager.droppedCount)")
+                MetricRow(
+                    title: "Battery",
+                    value: manager.latestSample?.batteryPercent.map { "\($0)%" } ?? "Unavailable"
+                )
+                MetricRow(
+                    title: "Firmware quality",
+                    value: manager.latestSample?.firmwareQualityScore.map(String.init) ?? "—"
+                )
+                MetricRow(
+                    title: "Status flags",
+                    value: manager.statusLabels.isEmpty ? "None" : manager.statusLabels.joined(separator: ", ")
+                )
+            }
+
+            Button {
+                if manager.isRecording || manager.isStarting {
+                    manager.stopRecording()
+                } else {
+                    manager.startRecording(mode: mode)
+                }
+            } label: {
+                Label(
+                    manager.isRecording || manager.isStarting ? "Stop USB Recording" : "Start USB Recording",
+                    systemImage: manager.isRecording || manager.isStarting ? "stop.fill" : "record.circle"
+                )
+            }
+            .scaleBenchProminentButtonStyle()
+            .disabled(
+                manager.isFinalizing
+                    || bluetoothRecordingActive
+                    || (!manager.isRecording && !manager.isStarting && manager.selectedPort.isEmpty)
+            )
+        }
+        .padding(.vertical, 4)
+    }
+}
+#endif
 
 private struct DeviceUtilitySummaryView: View {
     let connectedDevice: DiscoveredScale?
@@ -1834,7 +2147,7 @@ private struct RecordingTimerView: View {
 #else
                 recordingList(now: context.date, includesStopAction: false)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        stopAction
+                        bottomAction
                             .padding(.horizontal, 20)
                             .padding(.vertical, 12)
                             .background(.ultraThinMaterial)
@@ -1849,9 +2162,10 @@ private struct RecordingTimerView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Recording", systemImage: "record.circle.fill")
+                    Label(bluetooth.isFinalizing ? "Analyzing recording" : "Recording",
+                          systemImage: bluetooth.isFinalizing ? "chart.xyaxis.line" : "record.circle.fill")
                         .font(.headline)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(bluetooth.isFinalizing ? Color.secondary : Color.red)
 
                     Text(formatDuration(recordingDuration(bluetooth.currentRecording, now: now)))
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
@@ -1877,7 +2191,16 @@ private struct RecordingTimerView: View {
 
             if includesStopAction {
                 Section {
-                    stopAction
+                    if bluetooth.isFinalizing {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Preparing results...")
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        stopAction
+                    }
                 }
             }
         }
@@ -1891,8 +2214,23 @@ private struct RecordingTimerView: View {
         }
         .scaleBenchProminentButtonStyle()
         .tint(.red)
+        .disabled(bluetooth.isFinalizing)
         .frame(maxWidth: 360)
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    @ViewBuilder
+    private var bottomAction: some View {
+        if bluetooth.isFinalizing {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Preparing results...")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            stopAction
+        }
     }
 }
 
@@ -1991,6 +2329,8 @@ private struct SavedRecordingDetailView: View {
     @State private var jsonURL: URL?
     @State private var scoreCardShareItem: ShareSheetItem?
     @State private var exportErrorMessage: String?
+    @State private var visualizerAnalysis: ChartAnalysis?
+    @State private var transportComparison: TransportComparison?
 
     private var recording: ScaleRecording { saved.recording }
     private var metrics: ScaleQualityMetrics { saved.scoreSnapshot }
@@ -2009,14 +2349,6 @@ private struct SavedRecordingDetailView: View {
                 MetricRow(title: "Saved", value: saved.savedAt.formatted(date: .abbreviated, time: .shortened))
             }
 
-            Section("How it was calculated") {
-                ScoreBreakdownView(recording: recording, metrics: metrics)
-            }
-
-            Section("Packet visualizer") {
-                RecordingVisualizerView(recording: recording, metrics: metrics)
-            }
-
             Section("Score") {
                 Button(action: explain) {
                     Label("Explain This Score", systemImage: "questionmark.circle")
@@ -2024,7 +2356,7 @@ private struct SavedRecordingDetailView: View {
                 BenchmarkScoreRows(mode: recording.mode, metrics: metrics)
             }
 
-            Section("Export") {
+            Section("Actions") {
                 Button {
                     do {
                         jsonURL = try RecordingExporter.export(recording)
@@ -2060,6 +2392,30 @@ private struct SavedRecordingDetailView: View {
                 }
             }
 
+            if let transportComparison, transportComparison.isVisible {
+                Section("Transport comparison") {
+                    TransportComparisonView(comparison: transportComparison)
+                }
+            }
+
+            Section("How it was calculated") {
+                ScoreBreakdownView(recording: recording, metrics: metrics)
+            }
+
+            Section("Packet visualizer") {
+                if let visualizerAnalysis {
+                    RecordingVisualizerView(recording: recording, metrics: metrics, analysis: visualizerAnalysis)
+                } else {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Preparing charts and packet inspector...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+
             if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Section("Notes") {
                     Text(saved.notes)
@@ -2070,6 +2426,26 @@ private struct SavedRecordingDetailView: View {
         .navigationTitle(saved.title)
         .sheet(item: $scoreCardShareItem) { item in
             ShareSheet(items: [item.url])
+        }
+        .onAppear(perform: prepareDetailAnalysis)
+        .onChange(of: saved.id) { _, _ in
+            visualizerAnalysis = nil
+            transportComparison = nil
+            prepareDetailAnalysis()
+        }
+    }
+
+    private func prepareDetailAnalysis() {
+        guard visualizerAnalysis == nil || transportComparison == nil else { return }
+        let recording = recording
+        let metrics = metrics
+        DispatchQueue.global(qos: .userInitiated).async {
+            let analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
+            let comparison = TransportComparison.make(recording: recording)
+            DispatchQueue.main.async {
+                visualizerAnalysis = analysis
+                transportComparison = comparison
+            }
         }
     }
 }
@@ -2115,17 +2491,53 @@ private struct RecordingSummaryRows: View {
         MetricRow(title: "Scoring", value: "ScaleBench Standard v1")
         MetricRow(title: "Model", value: metrics.scoringModelVersion ?? ScaleRecording.scoringModelVersion)
         MetricRow(title: "Duration", value: recordingDurationDisplay(recording: recording, metrics: metrics))
-        MetricRow(title: "Protocol", value: recording.device?.kind.displayName ?? recording.samples.last?.scaleKind.displayName ?? "—")
+        MetricRow(title: "Protocol", value: recordingProtocolDisplayName(recording))
+        if recording.source == .usbSerial {
+            MetricRow(title: "Source", value: "USB serial")
+            MetricRow(title: "Serial port", value: recording.device?.identifier ?? "—")
+            MetricRow(title: "Serial baud", value: recording.serialBaud.map(String.init) ?? "—")
+        }
         MetricRow(title: "Samples", value: "\(recording.samples.count)")
         MetricRow(title: "Packets", value: "\(recording.rawPackets.count)")
         if !recording.batteryEvents.isEmpty {
             MetricRow(title: "Battery events", value: "\(recording.batteryEvents.count)")
         }
-        MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+        if recording.source != .usbSerial {
+            MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+        }
         MetricRow(title: "p95 interval", value: formatMilliseconds(metrics.packetIntervalP95Milliseconds))
         MetricRow(title: "Max gap", value: formatMilliseconds(metrics.packetIntervalMaxMilliseconds))
         MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
         MetricRow(title: "Rejected packets", value: "\(metrics.rejectedPacketCount)")
+        if recording.source == .usbSerial {
+            USBSerialRecordingRows(recording: recording)
+        }
+    }
+}
+
+private struct USBSerialRecordingRows: View {
+    let recording: ScaleRecording
+
+    var body: some View {
+        let metadata = recording.samples.compactMap(\.usbSerial)
+        let qualities = metadata.map { Double($0.firmwareQuality) }
+        let cadences = metadata.map(\.hx711Hz)
+        let qualityAverage = qualities.isEmpty ? nil : qualities.reduce(0, +) / Double(qualities.count)
+        let cadenceAverage = cadences.isEmpty ? nil : cadences.reduce(0, +) / Double(cadences.count)
+        let dropped = metadata.reduce(UInt64(0)) { $0 + UInt64($1.usbDroppedDelta) }
+        let lastMetadata = metadata.last
+        let bumpCount = metadata.filter { $0.usbStatusLabels.contains("Recent bump") }.count
+        let glitchCount = metadata.filter { $0.usbStatusLabels.contains("Recent glitch") }.count
+        let hostRate = usbReceivedSampleRateHz(recording)
+
+        MetricRow(title: "Device cadence", value: cadenceAverage.map { String(format: "%.2f Hz", $0) } ?? "—")
+        MetricRow(title: "Received sample rate", value: formatRate(hostRate))
+        MetricRow(title: "USB dropped", value: "\(dropped)")
+        MetricRow(title: "Firmware quality", value: qualityAverage.map { String(format: "%.1f/100", $0) } ?? "—")
+        MetricRow(title: "Latest USB status", value: lastMetadata.map { String(format: "0x%04X", $0.usbStatusRaw) } ?? "—")
+        MetricRow(title: "Status flags", value: lastMetadata?.usbStatusLabels.joined(separator: ", ") ?? "None")
+        MetricRow(title: "Recent bump flags", value: "\(bumpCount)")
+        MetricRow(title: "Recent glitch flags", value: "\(glitchCount)")
     }
 }
 
@@ -2239,7 +2651,7 @@ private struct ScoreInfoButtons: View {
     @State private var selectedTopic: ScoreHelpTopic?
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 10) {
             Text("Help")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -2247,8 +2659,13 @@ private struct ScoreInfoButtons: View {
                 Button {
                     selectedTopic = topic
                 } label: {
-                    Image(systemName: "info.circle")
-                        .imageScale(.medium)
+                    Label(topic.title, systemImage: "info.circle")
+                        .font(.caption.weight(.semibold))
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.quaternary.opacity(0.45), in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tint)
@@ -2314,17 +2731,102 @@ private struct FrameClassificationRows: View {
     }
 }
 
+private struct TransportComparisonView: View {
+    let comparison: TransportComparison
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This compares weight transports captured during the same recording. The official stream is the one ScaleBench uses for scoring; compatibility streams are kept as evidence.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(comparison.rows) { row in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                                .font(.subheadline.weight(.semibold))
+                            Text(row.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(row.isOfficial ? "Official" : "Compare")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(row.isOfficial ? .green : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary.opacity(0.5), in: Capsule())
+                    }
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], alignment: .leading, spacing: 8) {
+                        TransportMetricPill(title: "Packets", value: "\(row.packetCount)")
+                        TransportMetricPill(title: "Rate", value: formatRate(row.rateHz))
+                        TransportMetricPill(title: "p95 interval", value: formatMilliseconds(row.p95IntervalMilliseconds))
+                        TransportMetricPill(title: "Max gap", value: formatMilliseconds(row.maxGapMilliseconds))
+                        if let matched = row.matchedReferenceCount {
+                            TransportMetricPill(title: "Matched", value: "\(matched)")
+                        }
+                        if let lag = row.medianLagMilliseconds {
+                            TransportMetricPill(title: "Median lag", value: signedMilliseconds(lag))
+                        }
+                        if let delta = row.medianAbsoluteDeltaGrams {
+                            TransportMetricPill(title: "Median delta", value: String(format: "%.2f g", delta))
+                        }
+                    }
+                }
+                .padding(12)
+                .background(.quaternary.opacity(row.isOfficial ? 0.42 : 0.24), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func signedMilliseconds(_ value: Double) -> String {
+        if abs(value) < 0.5 { return "0 ms" }
+        return String(format: "%+.0f ms", value)
+    }
+}
+
+private struct TransportMetricPill: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 private struct RecordingVisualizerView: View {
     let recording: ScaleRecording
     let metrics: ScaleQualityMetrics
-    private let analysis: ChartAnalysis
+    let analysis: ChartAnalysis
+    private let implausibleSampleSeconds: Set<Double>
+    private let badInspectorEntries: [PacketTimelineEntry]
     @State private var selectedPacketID: UUID?
     @State private var packetInspectorFilter: PacketInspectorFilter = .all
 
-    init(recording: ScaleRecording, metrics: ScaleQualityMetrics) {
+    init(recording: ScaleRecording, metrics: ScaleQualityMetrics, analysis: ChartAnalysis) {
         self.recording = recording
         self.metrics = metrics
-        analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
+        self.analysis = analysis
+        implausibleSampleSeconds = Set(
+            analysis.packetTimeline.entries
+                .filter { $0.matchesEvidenceTarget(.implausible) }
+                .map(\.relativeSeconds)
+        )
+        badInspectorEntries = analysis.packetTimeline.entries.filter(\.isBadForInspector)
     }
 
     private var timeline: PacketTimeline {
@@ -2347,7 +2849,7 @@ private struct RecordingVisualizerView: View {
         case .all:
             timeline.entries
         case .badOnly:
-            timeline.entries.filter(\.isBadForInspector)
+            badInspectorEntries
         }
     }
 
@@ -2377,7 +2879,11 @@ private struct RecordingVisualizerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Weight stream", systemImage: "waveform.path.ecg")
                     .font(.headline)
-                WeightStreamChart(recording: recording, timeline: timeline)
+                WeightStreamChart(
+                    points: analysis.weightPoints,
+                    timeline: timeline,
+                    implausibleSeconds: implausibleSampleSeconds
+                )
                     .frame(height: 180)
                 Text("Parsed weight samples over the full recording. Red markers frame missing-update gaps.")
                     .font(.caption)
@@ -2669,16 +3175,20 @@ private struct ProblemAreasSection: View {
 }
 
 private struct ProblemAreaWeightChart: View {
-    let points: [ChartPoint]
     let window: ChartProblemWindow
+    private let visiblePoints: [ChartPoint]
 
-    private var visiblePoints: [ChartPoint] {
+    init(points: [ChartPoint], window: ChartProblemWindow) {
+        self.window = window
         let visible = points.filter { $0.seconds >= window.startSeconds && $0.seconds <= window.endSeconds }
-        if visible.count >= 2 { return visible }
-        let before = points.last { $0.seconds < window.startSeconds }
-        let after = points.first { $0.seconds > window.endSeconds }
-        let fallback = [before, after].compactMap(\.self)
-        return fallback.count >= 2 ? fallback : Array(points.prefix(2))
+        if visible.count >= 2 {
+            visiblePoints = downsampleChartPoints(visible, maximumCount: 500)
+        } else {
+            let before = points.last { $0.seconds < window.startSeconds }
+            let after = points.first { $0.seconds > window.endSeconds }
+            let fallback = [before, after].compactMap(\.self)
+            visiblePoints = fallback.count >= 2 ? fallback : Array(points.prefix(2))
+        }
     }
 
     var body: some View {
@@ -2740,44 +3250,71 @@ private struct EvidencePill: View {
 }
 
 private struct WeightStreamChart: View {
-    let recording: ScaleRecording
     let timeline: PacketTimeline
+    private let chartPoints: [ChartPoint]
+    private let renderedSegments: [ChartPointSegment]
+    private let excludedImplausiblePoints: [ChartPoint]
+    private let implausibleBands: [ChartBand]
+    private let yDomain: ClosedRange<Double>?
     @State private var selectedSeconds: Double?
 
-    private var samples: [ScaleSample] {
-        recording.samples.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
+    init(points: [ChartPoint], timeline: PacketTimeline, implausibleSeconds: Set<Double>) {
+        self.timeline = timeline
+        let split = splitChartPoints(points, excludingSeconds: implausibleSeconds)
+        let filtered = split.flatMap(\.points)
+        let hasUsableFilteredStream = filtered.count >= 2
+        let included = hasUsableFilteredStream ? filtered : points
+        chartPoints = included
+        renderedSegments = hasUsableFilteredStream
+            ? split.map { segment in
+                ChartPointSegment(
+                    id: segment.id,
+                    points: downsampleChartPoints(segment.points, maximumCount: 350)
+                )
+            }.filter { $0.points.count >= 2 }
+            : [
+                ChartPointSegment(
+                    id: "all",
+                    points: downsampleChartPoints(points, maximumCount: 1_000)
+                )
+            ]
+        let hiddenPoints = points.filter { implausibleSeconds.contains($0.seconds) }
+        excludedImplausiblePoints = hiddenPoints
+        implausibleBands = implausibleChartBands(
+            hiddenPoints,
+            yDomain: chartYDomain(included),
+            mergeGapSeconds: max(0.2, timeline.longGapThresholdMilliseconds / 1_000)
+        )
+        yDomain = chartYDomain(included)
     }
 
-    private var referenceTime: Double? {
-        recording.recordingStartMonotonicSeconds ?? samples.first?.monotonicSeconds
-    }
-
-    private var selectedSample: ScaleSample? {
-        guard let selectedSeconds, let referenceTime else { return nil }
-        return samples.min { lhs, rhs in
-            abs((lhs.monotonicSeconds - referenceTime) - selectedSeconds)
-                < abs((rhs.monotonicSeconds - referenceTime) - selectedSeconds)
-        }
+    private var selectedPoint: ChartPoint? {
+        guard let selectedSeconds else { return nil }
+        return nearestChartPoint(to: selectedSeconds, in: chartPoints)
     }
 
     var body: some View {
-        if samples.count >= 2, let referenceTime {
+        if chartPoints.count >= 2 {
             let chart = Chart {
-                ForEach(samples) { sample in
-                    LineMark(
-                        x: .value("Seconds", sample.monotonicSeconds - referenceTime),
-                        y: .value("Weight", sample.weightGrams)
+                ForEach(implausibleBands) { band in
+                    RectangleMark(
+                        xStart: .value("Implausible start", band.startSeconds),
+                        xEnd: .value("Implausible end", band.endSeconds),
+                        yStart: .value("Band low", band.minimumValue),
+                        yEnd: .value("Band high", band.maximumValue)
                     )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.orange.opacity(0.16))
+                }
 
-                    if sample.diagnosticFlags?.recentBump == true {
-                        PointMark(
-                            x: .value("Seconds", sample.monotonicSeconds - referenceTime),
-                            y: .value("Weight", sample.weightGrams)
+                ForEach(renderedSegments) { segment in
+                    ForEach(segment.points) { point in
+                        LineMark(
+                            x: .value("Seconds", point.seconds),
+                            y: .value("Weight", point.value),
+                            series: .value("Clean segment", segment.id)
                         )
-                        .foregroundStyle(.yellow)
-                        .symbolSize(45)
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.blue)
                     }
                 }
 
@@ -2788,50 +3325,305 @@ private struct WeightStreamChart: View {
                         .foregroundStyle(.red.opacity(0.55))
                 }
 
-                if let selectedSample {
-                    let seconds = selectedSample.monotonicSeconds - referenceTime
-                    RuleMark(x: .value("Selected time", seconds))
+                if let selectedPoint {
+                    RuleMark(x: .value("Selected time", selectedPoint.seconds))
                         .foregroundStyle(.secondary.opacity(0.6))
                     PointMark(
-                        x: .value("Selected time", seconds),
-                        y: .value("Selected weight", selectedSample.weightGrams)
+                        x: .value("Selected time", selectedPoint.seconds),
+                        y: .value("Selected weight", selectedPoint.value)
                     )
                     .foregroundStyle(.blue)
                     .symbolSize(55)
                     .annotation(position: .top) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(formatSeconds(seconds))
-                            Text(String(format: "%.2f g", selectedSample.weightGrams))
+                            Text(formatSeconds(selectedPoint.seconds))
+                            Text(String(format: "%.2f g", selectedPoint.value))
                         }
                         .font(.caption2.monospacedDigit())
                         .padding(6)
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
+
+                ForEach(implausibleBands) { band in
+                    RuleMark(x: .value("Implausible start", band.startSeconds))
+                        .foregroundStyle(.orange.opacity(0.55))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    RuleMark(x: .value("Implausible end", band.endSeconds))
+                        .foregroundStyle(.orange.opacity(0.55))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                }
             }
             .chartXScale(domain: 0...max(timeline.durationSeconds, 0.001))
             .chartXAxisLabel("seconds")
             .chartYAxisLabel("grams")
             .chartXSelection(value: $selectedSeconds)
+            .modifier(WeightStreamYDomain(domain: yDomain))
 
-            if recording.mode == .transportStress, timeline.durationSeconds > 30 {
-                chart
-                    .chartScrollableAxes(.horizontal)
-                    .chartXVisibleDomain(length: 30)
+            if timeline.durationSeconds > 30 {
+                VStack(alignment: .leading, spacing: 6) {
+                    chart
+                        .chartScrollableAxes(.horizontal)
+                        .chartXVisibleDomain(length: 30)
+                    implausibleChartNote
+                }
             } else {
-                chart
+                VStack(alignment: .leading, spacing: 6) {
+                    chart
+                    implausibleChartNote
+                }
             }
         } else {
             EmptyVisualizerChart(message: "No parsed weight stream.")
+        }
+    }
+
+    @ViewBuilder
+    private var implausibleChartNote: some View {
+        if !excludedImplausiblePoints.isEmpty {
+            let count = excludedImplausiblePoints.count
+            let sampleText = count == 1 ? "sample" : "samples"
+            Text("Orange band marks \(count) implausible \(sampleText) hidden from the weight line. Tap Implausible in Score evidence to inspect.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct ChartPointSegment: Identifiable {
+    let id: String
+    let points: [ChartPoint]
+}
+
+private struct ChartBand: Identifiable {
+    let id: String
+    let startSeconds: Double
+    let endSeconds: Double
+    let minimumValue: Double
+    let maximumValue: Double
+}
+
+private func splitChartPoints(_ points: [ChartPoint], excludingSeconds excludedSeconds: Set<Double>) -> [ChartPointSegment] {
+    var segments: [ChartPointSegment] = []
+    var current: [ChartPoint] = []
+    var segmentIndex = 0
+
+    func flushCurrentSegment() {
+        guard current.count >= 2 else {
+            current.removeAll(keepingCapacity: true)
+            return
+        }
+        segments.append(ChartPointSegment(id: "clean-\(segmentIndex)", points: current))
+        segmentIndex += 1
+        current.removeAll(keepingCapacity: true)
+    }
+
+    for point in points {
+        if excludedSeconds.contains(point.seconds) {
+            flushCurrentSegment()
+        } else {
+            current.append(point)
+        }
+    }
+    flushCurrentSegment()
+    return segments
+}
+
+private func implausibleChartBands(
+    _ points: [ChartPoint],
+    yDomain: ClosedRange<Double>?,
+    mergeGapSeconds: Double
+) -> [ChartBand] {
+    guard let domain = yDomain, !points.isEmpty else { return [] }
+    let sortedPoints = points.sorted { $0.seconds < $1.seconds }
+    let minimumBandWidth = 0.06
+    var bands: [ChartBand] = []
+    var bandStart = sortedPoints[0].seconds
+    var bandEnd = sortedPoints[0].seconds
+
+    func appendBand() {
+        let start = max(0, bandStart - minimumBandWidth / 2)
+        let end = max(start + minimumBandWidth, bandEnd + minimumBandWidth / 2)
+        bands.append(
+            ChartBand(
+                id: "implausible-\(bands.count)-\(start)-\(end)",
+                startSeconds: start,
+                endSeconds: end,
+                minimumValue: domain.lowerBound,
+                maximumValue: domain.upperBound
+            )
+        )
+    }
+
+    for point in sortedPoints.dropFirst() {
+        if point.seconds - bandEnd <= mergeGapSeconds {
+            bandEnd = point.seconds
+        } else {
+            appendBand()
+            bandStart = point.seconds
+            bandEnd = point.seconds
+        }
+    }
+    appendBand()
+    return bands
+}
+
+private func chartYDomain(_ points: [ChartPoint]) -> ClosedRange<Double>? {
+    let weights = points.lazy.map(\.value).filter(\.isFinite)
+    guard let minimumWeight = weights.min(), let maximumWeight = weights.max() else {
+        return nil
+    }
+    let span = maximumWeight - minimumWeight
+    if span < 1 {
+        let midpoint = (minimumWeight + maximumWeight) / 2
+        return (midpoint - 0.5)...(midpoint + 0.5)
+    }
+    let padding = max(0.2, span * 0.08)
+    return (minimumWeight - padding)...(maximumWeight + padding)
+}
+
+private func nearestChartPoint(to seconds: Double, in points: [ChartPoint]) -> ChartPoint? {
+    guard !points.isEmpty else { return nil }
+    var low = 0
+    var high = points.count
+    while low < high {
+        let middle = (low + high) / 2
+        if points[middle].seconds < seconds {
+            low = middle + 1
+        } else {
+            high = middle
+        }
+    }
+    if low == 0 { return points[0] }
+    if low == points.count { return points[points.count - 1] }
+    let before = points[low - 1]
+    let after = points[low]
+    return abs(before.seconds - seconds) <= abs(after.seconds - seconds) ? before : after
+}
+
+private func downsampleChartPoints(_ points: [ChartPoint], maximumCount: Int) -> [ChartPoint] {
+    guard maximumCount >= 4, points.count > maximumCount else { return points }
+    let interiorCount = points.count - 2
+    let bucketCount = max(1, (maximumCount - 2) / 2)
+    var result: [ChartPoint] = []
+    result.reserveCapacity(maximumCount)
+    result.append(points[0])
+
+    for bucket in 0..<bucketCount {
+        let lower = 1 + Int(Double(bucket) * Double(interiorCount) / Double(bucketCount))
+        let upper = 1 + Int(Double(bucket + 1) * Double(interiorCount) / Double(bucketCount))
+        guard lower < upper else { continue }
+
+        var minimumIndex = lower
+        var maximumIndex = lower
+        for index in (lower + 1)..<upper {
+            if points[index].value < points[minimumIndex].value { minimumIndex = index }
+            if points[index].value > points[maximumIndex].value { maximumIndex = index }
+        }
+        if minimumIndex == maximumIndex {
+            result.append(points[minimumIndex])
+        } else if minimumIndex < maximumIndex {
+            result.append(points[minimumIndex])
+            result.append(points[maximumIndex])
+        } else {
+            result.append(points[maximumIndex])
+            result.append(points[minimumIndex])
+        }
+    }
+
+    result.append(points[points.count - 1])
+    return result
+}
+
+private func downsampleSampleIntervals(
+    _ entries: [SampleIntervalEntry],
+    maximumCount: Int
+) -> [SampleIntervalEntry] {
+    guard maximumCount > 0, entries.count > maximumCount else { return entries }
+    var result: [SampleIntervalEntry] = []
+    result.reserveCapacity(maximumCount)
+    for bucket in 0..<maximumCount {
+        let lower = Int(Double(bucket) * Double(entries.count) / Double(maximumCount))
+        let upper = Int(Double(bucket + 1) * Double(entries.count) / Double(maximumCount))
+        guard lower < upper else { continue }
+        let largest = entries[lower..<upper].max {
+            $0.intervalMilliseconds < $1.intervalMilliseconds
+        }
+        if let largest { result.append(largest) }
+    }
+    return result
+}
+
+private func compactTimelineEntries(
+    _ entries: [PacketTimelineEntry],
+    maximumCount: Int
+) -> [PacketTimelineEntry] {
+    guard maximumCount > 0, entries.count > maximumCount else { return entries }
+    let important = entries.filter { $0.severity == .warning || $0.severity == .penalty }
+    let regular = entries.filter { $0.severity != .warning && $0.severity != .penalty }
+    let regularBudget = max(0, maximumCount - important.count)
+    guard regularBudget > 0 else {
+        return important.sorted { $0.relativeSeconds < $1.relativeSeconds }
+    }
+
+    var sampled: [PacketTimelineEntry] = []
+    for lane in PacketLane.allCases {
+        let laneEntries = regular.filter { $0.lane == lane }
+        guard !laneEntries.isEmpty else { continue }
+        let proportional = Int(
+            (Double(laneEntries.count) / Double(max(regular.count, 1)) * Double(regularBudget)).rounded()
+        )
+        sampled.append(contentsOf: evenlySample(laneEntries, maximumCount: max(1, proportional)))
+    }
+    if sampled.count > regularBudget {
+        sampled = evenlySample(sampled.sorted { $0.relativeSeconds < $1.relativeSeconds }, maximumCount: regularBudget)
+    }
+
+    return (important + sampled)
+        .reduce(into: [UUID: PacketTimelineEntry]()) { $0[$1.id] = $1 }
+        .values
+        .sorted { $0.relativeSeconds < $1.relativeSeconds }
+}
+
+private func evenlySample<T>(_ values: [T], maximumCount: Int) -> [T] {
+    guard maximumCount > 0 else { return [] }
+    guard values.count > maximumCount else { return values }
+    if maximumCount == 1 { return [values[values.count / 2]] }
+    return (0..<maximumCount).map { index in
+        let sourceIndex = Int(
+            (Double(index) * Double(values.count - 1) / Double(maximumCount - 1)).rounded()
+        )
+        return values[sourceIndex]
+    }
+}
+
+private struct WeightStreamYDomain: ViewModifier {
+    let domain: ClosedRange<Double>?
+
+    func body(content: Content) -> some View {
+        if let domain {
+            content.chartYScale(domain: domain)
+        } else {
+            content
         }
     }
 }
 
 private struct PacketIntervalChart: View {
     let timeline: PacketTimeline
+    private let renderedIntervals: [SampleIntervalEntry]
+
+    init(timeline: PacketTimeline) {
+        self.timeline = timeline
+        renderedIntervals = downsampleSampleIntervals(
+            timeline.sampleIntervals,
+            maximumCount: 700
+        )
+    }
 
     var body: some View {
-        let intervalEntries = timeline.sampleIntervals
+        let intervalEntries = renderedIntervals
         let hasLongGaps = !timeline.scoringGaps.isEmpty
         if intervalEntries.isEmpty {
             EmptyVisualizerChart(message: "No parsed sample intervals.")
@@ -2919,7 +3711,26 @@ private struct PacketTimelineCanvas: View {
     let timeline: PacketTimeline
     let selectedPacketID: UUID?
     let onSelect: (PacketTimelineEntry) -> Void
+    private let renderedEntries: [PacketTimelineEntry]
     @State private var hoveredPacketID: UUID?
+
+    init(
+        timeline: PacketTimeline,
+        selectedPacketID: UUID?,
+        onSelect: @escaping (PacketTimelineEntry) -> Void
+    ) {
+        self.timeline = timeline
+        self.selectedPacketID = selectedPacketID
+        self.onSelect = onSelect
+        var entries = compactTimelineEntries(timeline.entries, maximumCount: 1_200)
+        if let selectedPacketID,
+           !entries.contains(where: { $0.id == selectedPacketID }),
+           let selected = timeline.entries.first(where: { $0.id == selectedPacketID }) {
+            entries.append(selected)
+            entries.sort { $0.relativeSeconds < $1.relativeSeconds }
+        }
+        renderedEntries = entries
+    }
 
     private var hoveredEntry: PacketTimelineEntry? {
         guard let hoveredPacketID else { return nil }
@@ -2958,7 +3769,7 @@ private struct PacketTimelineCanvas: View {
                 context.fill(Path(bandRect), with: .color(.red.opacity(0.12)))
             }
 
-            for entry in timeline.entries {
+            for entry in renderedEntries {
                 let x = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
                 let lane = entry.lane
                 let y = rect.minY + laneHeight * (CGFloat(lane.index) + 0.5)
@@ -3040,10 +3851,10 @@ private struct PacketTimelineCanvas: View {
 
         let duration = max(timeline.durationSeconds, 0.001)
         let laneHeight = layout.laneHeight
-        let horizontalTolerance = max(12, min(28, rect.width / CGFloat(max(timeline.entries.count, 1)) * 2.5))
+        let horizontalTolerance = max(12, min(28, rect.width / CGFloat(max(renderedEntries.count, 1)) * 2.5))
         let verticalTolerance = max(12, laneHeight * 0.48)
 
-        let candidates = timeline.entries.compactMap { entry -> (entry: PacketTimelineEntry, distance: CGFloat)? in
+        let candidates = renderedEntries.compactMap { entry -> (entry: PacketTimelineEntry, distance: CGFloat)? in
             let x = rect.minX + rect.width * CGFloat(entry.relativeSeconds / duration)
             let y = rect.minY + laneHeight * (CGFloat(entry.lane.index) + 0.5)
             let dx = abs(location.x - x)
@@ -3374,7 +4185,11 @@ private struct LiveDiagnosticsRows: View {
     let metrics: ScaleQualityMetrics
 
     var body: some View {
-        MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+        if recording.source == .usbSerial {
+            MetricRow(title: "Received rate", value: formatRate(usbReceivedSampleRateHz(recording)))
+        } else {
+            MetricRow(title: "Effective rate", value: formatRate(metrics.effectiveSampleRateHz))
+        }
         MetricRow(title: "Resolution", value: resolutionDisplay(metrics))
         MetricRow(title: "Bad packets", value: "\(badPacketCount(metrics))")
         MetricRow(title: "Long gaps", value: "\(metrics.longGapCount)")
@@ -3452,24 +4267,45 @@ private struct SavedRecordingRow: View {
     let saved: SavedScaleRecording
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(saved.title)
                     .font(.headline)
-                Spacer()
-                Text(benchmarkScoreDisplay(mode: saved.recording.mode, metrics: saved.scoreSnapshot))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            Text("\(saved.protocolKind.displayName) · \(platformDisplayName(saved.recording.platform)) · \(recordingDurationDisplay(recording: saved.recording, metrics: saved.scoreSnapshot))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(saved.notes)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(recordingProtocolDisplayName(saved.recording)) · \(platformDisplayName(saved.recording.platform)) · \(recordingDurationDisplay(recording: saved.recording, metrics: saved.scoreSnapshot))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if !saved.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(saved.notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .layoutPriority(1)
+
+            Text(benchmarkScoreDisplay(mode: saved.recording.mode, metrics: saved.scoreSnapshot))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .fixedSize(horizontal: true, vertical: false)
         }
+    }
+}
+
+private struct SavedRecordingNavigationRow: View {
+    let saved: SavedScaleRecording
+    let explain: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        NavigationLink {
+            SavedRecordingDetailView(saved: saved, explain: explain)
+        } label: {
+            SavedRecordingRow(saved: saved)
+        }
+        .recordingDeleteAction(delete)
     }
 }
 
@@ -3598,6 +4434,14 @@ private func formatRate(_ value: Double?) -> String {
     value.map { String(format: "%.1f Hz", $0) } ?? "—"
 }
 
+private func usbReceivedSampleRateHz(_ recording: ScaleRecording) -> Double? {
+    guard recording.source == .usbSerial,
+          let first = recording.samples.first?.monotonicSeconds,
+          let last = recording.samples.last?.monotonicSeconds,
+          last > first else { return nil }
+    return Double(recording.samples.count) / (last - first)
+}
+
 private func formatMilliseconds(_ value: Double?) -> String {
     value.map { String(format: "%.0f ms", $0) } ?? "—"
 }
@@ -3676,6 +4520,13 @@ private func platformDisplayName(_ platform: String) -> String {
     case "android": "Android"
     default: "Unknown platform"
     }
+}
+
+private func recordingProtocolDisplayName(_ recording: ScaleRecording) -> String {
+    recording.protocolName
+        ?? recording.device?.kind.displayName
+        ?? recording.samples.last?.scaleKind.displayName
+        ?? "Unknown Scale"
 }
 
 private func benchmarkScore(mode: RecordingMode, metrics: ScaleQualityMetrics) -> Int? {

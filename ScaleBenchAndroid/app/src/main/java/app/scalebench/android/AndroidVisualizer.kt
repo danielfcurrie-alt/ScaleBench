@@ -111,7 +111,9 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import no.nordicsemi.android.dfu.DfuProgressListenerAdapter
 import no.nordicsemi.android.dfu.DfuServiceInitiator
@@ -126,14 +128,44 @@ internal fun VisualizerSection(recording: ScaleRecording, metrics: ScaleQualityM
 
 @Composable
 internal fun RecordingVisualizer(recording: ScaleRecording, metrics: ScaleQualityMetrics) {
-    val analysis = remember(
+    var analysis by remember(
         recording.id,
         recording.samples.size,
         recording.rawPackets.size,
         recording.recordingEndMonotonicSeconds
     ) {
-        ChartAnalysis.create(recording, metrics)
+        mutableStateOf<AndroidChartAnalysis?>(null)
     }
+    LaunchedEffect(
+        recording.id,
+        recording.samples.size,
+        recording.rawPackets.size,
+        recording.recordingEndMonotonicSeconds
+    ) {
+        analysis = null
+        analysis = withContext(Dispatchers.Default) {
+            ChartAnalysis.create(recording, metrics)
+        }
+    }
+
+    val prepared = analysis
+    if (prepared == null) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text(
+                "Preparing charts and packet inspector...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    RecordingVisualizerContent(metrics = metrics, analysis = prepared)
+}
+
+@Composable
+private fun RecordingVisualizerContent(metrics: ScaleQualityMetrics, analysis: AndroidChartAnalysis) {
     val timeline = analysis.packetTimeline
     val thresholdMs = timeline.thresholdMs
     val weightPoints = analysis.weightPoints
@@ -141,6 +173,9 @@ internal fun RecordingVisualizer(recording: ScaleRecording, metrics: ScaleQualit
     val defaultEntry = remember(timeline.entries) { defaultPacketEntry(timeline) }
     var selectedPacketID by remember(timeline.entries) { mutableIntStateOf(defaultEntry?.id ?: -1) }
     val selectedEntry = timeline.entries.firstOrNull { it.id == selectedPacketID } ?: defaultEntry
+    val packetIntervals = remember(timeline.sampleIntervals) {
+        timeline.sampleIntervals.map { it.intervalMs }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         PacketEvidenceSummary(metrics = metrics, timeline = timeline)
 
@@ -174,12 +209,12 @@ internal fun RecordingVisualizer(recording: ScaleRecording, metrics: ScaleQualit
 
         Text("Packet cadence", fontWeight = FontWeight.SemiBold)
         ChartPacketCadence(
-            intervals = timeline.sampleIntervals.map { it.intervalMs },
+            intervals = packetIntervals,
             thresholdMs = thresholdMs
         )
         Text(
             cadenceChartExplanation(
-                intervals = timeline.sampleIntervals.map { it.intervalMs },
+                intervals = packetIntervals,
                 thresholdMs = thresholdMs
             ),
             style = MaterialTheme.typography.bodySmall,
@@ -230,27 +265,48 @@ internal fun ChartWeightStream(
         color = text.copy(alpha = 0.78f),
         fontSize = 9.sp
     )
-    val visiblePoints = ChartAnalysis.pointsInWindow(points, window)
-    val visibleFlowPoints = ChartAnalysis.pointsInWindow(flowPoints, window)
-    val minT = window?.startSeconds ?: if (durationSeconds != null) 0.0 else visiblePoints.first().seconds
-    val maxT = window?.endSeconds ?: max(durationSeconds ?: 0.0, visiblePoints.last().seconds)
-    val visibleGaps = scoringGaps.filter { it.startSeconds <= maxT && it.endSeconds >= minT }
-    val minWeight = visiblePoints.minOf { it.value }
-    val maxWeight = visiblePoints.maxOf { it.value }
+    val fullVisiblePoints = remember(points, window) {
+        ChartAnalysis.pointsInWindow(points, window)
+    }
+    val fullVisibleFlowPoints = remember(flowPoints, window) {
+        ChartAnalysis.pointsInWindow(flowPoints, window)
+    }
+    val visiblePoints = remember(fullVisiblePoints) {
+        downsampleChartPointsForDisplay(fullVisiblePoints, maximumCount = 1_000)
+    }
+    val visibleFlowPoints = remember(fullVisibleFlowPoints) {
+        downsampleChartPointsForDisplay(fullVisibleFlowPoints, maximumCount = 1_000)
+    }
+    val minT = window?.startSeconds ?: if (durationSeconds != null) 0.0 else fullVisiblePoints.first().seconds
+    val maxT = window?.endSeconds ?: max(durationSeconds ?: 0.0, fullVisiblePoints.last().seconds)
+    val visibleGaps = remember(scoringGaps, minT, maxT) {
+        compactScoringGapsForDisplay(
+            scoringGaps.filter { it.startSeconds <= maxT && it.endSeconds >= minT },
+            maximumCount = 220
+        )
+    }
+    val minWeight = fullVisiblePoints.minOf { it.value }
+    val maxWeight = fullVisiblePoints.maxOf { it.value }
     val yPad = max(0.05, (maxWeight - minWeight) * 0.08)
     val minY = minWeight - yPad
     val maxY = maxWeight + yPad
-    val minFlow = visibleFlowPoints.minOfOrNull { it.value } ?: 0.0
-    val maxFlow = visibleFlowPoints.maxOfOrNull { it.value } ?: 0.0
+    val minFlow = fullVisibleFlowPoints.minOfOrNull { it.value } ?: 0.0
+    val maxFlow = fullVisibleFlowPoints.maxOfOrNull { it.value } ?: 0.0
+    val showsFlow = visibleFlowPoints.size >= 2 && maxFlow > minFlow
     val chartDescription = String.format(
         Locale.US,
         "Weight stream chart, %d samples, %.2f to %.2f grams over %.1f seconds%s",
-        visiblePoints.size,
+        fullVisiblePoints.size,
         minWeight,
         maxWeight,
         max(0.0, maxT - minT),
-        if (visibleFlowPoints.isEmpty()) "" else ", with reported flow"
+        if (showsFlow) ", with scale-reported flow on a separate visual scale" else ""
     )
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showsFlow) {
+            WeightStreamLegend(weightColor = primary, flowColor = flowColor)
+        }
 
     Canvas(
         modifier = Modifier
@@ -260,7 +316,7 @@ internal fun ChartWeightStream(
     ) {
         val chartLeft = 42.dp.toPx()
         val chartTop = 8.dp.toPx()
-        val chartRight = 8.dp.toPx()
+        val chartRight = if (showsFlow) 36.dp.toPx() else 8.dp.toPx()
         val chartBottom = 24.dp.toPx()
         val chartWidth = max(1f, size.width - chartLeft - chartRight)
         val chartHeight = max(1f, size.height - chartTop - chartBottom)
@@ -346,7 +402,23 @@ internal fun ChartWeightStream(
             )
         )
 
-        if (visibleFlowPoints.size >= 2 && maxFlow > minFlow) {
+        if (showsFlow) {
+            drawChartLabel(
+                textMeasurer = textMeasurer,
+                text = formatFlowAxis(maxFlow, includeUnit = true),
+                style = axisStyle.copy(color = flowColor.copy(alpha = 0.86f)),
+                anchor = Offset(chartLeft + chartWidth + 6.dp.toPx(), chartTop),
+                horizontalAnchor = 0f,
+                verticalAnchor = 0.5f
+            )
+            drawChartLabel(
+                textMeasurer = textMeasurer,
+                text = formatFlowAxis(minFlow, includeUnit = false),
+                style = axisStyle.copy(color = flowColor.copy(alpha = 0.86f)),
+                anchor = Offset(chartLeft + chartWidth + 6.dp.toPx(), chartTop + chartHeight),
+                horizontalAnchor = 0f,
+                verticalAnchor = 0.5f
+            )
             val flowOffsets = visibleFlowPoints.map { Offset(x(it.seconds), flowY(it.value)) }
             drawPath(
                 catmullRomPath(flowOffsets),
@@ -386,6 +458,35 @@ internal fun ChartWeightStream(
                 }
         }
     }
+    }
+}
+
+@Composable
+private fun WeightStreamLegend(weightColor: Color, flowColor: Color) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        ChartLegendItem(color = weightColor, label = "Weight")
+        ChartLegendItem(color = flowColor, label = "Reported flow")
+    }
+}
+
+@Composable
+private fun ChartLegendItem(color: Color, label: String) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Canvas(modifier = Modifier.size(8.dp)) {
+            drawCircle(color)
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
@@ -406,13 +507,19 @@ internal fun ChartPacketCadence(
         color = text.copy(alpha = 0.78f),
         fontSize = 9.sp
     )
-    val maxInterval = max(thresholdMs * 1.25, intervals.maxOrNull() ?: thresholdMs)
+    val actualMaxInterval = intervals.maxOrNull() ?: thresholdMs
+    val maxInterval = cadenceDisplayMax(intervals, thresholdMs)
+    val hasClippedOutliers = actualMaxInterval > maxInterval
+    val renderedIntervals = remember(intervals) {
+        downsampleCadenceIntervals(intervals, maximumCount = 700)
+    }
     val cadenceDescription = String.format(
         Locale.US,
-        "Packet cadence chart, %d sample intervals, longest %.0f milliseconds, long gap threshold %.0f milliseconds",
+        "Packet cadence chart, %d sample intervals, longest %.0f milliseconds, long gap threshold %.0f milliseconds%s",
         intervals.size,
-        intervals.maxOrNull() ?: 0.0,
-        thresholdMs
+        actualMaxInterval,
+        thresholdMs,
+        if (hasClippedOutliers) ", display scale capped so normal cadence remains visible" else ""
     )
 
     Canvas(
@@ -427,7 +534,7 @@ internal fun ChartPacketCadence(
         val chartBottom = 24.dp.toPx()
         val chartWidth = max(1f, size.width - chartLeft - chartRight)
         val chartHeight = max(1f, size.height - chartTop - chartBottom)
-        val barWidth = chartWidth / intervals.size.toFloat()
+        val barWidth = chartWidth / max(1, renderedIntervals.size).toFloat()
         val barGap = if (barWidth > 2.dp.toPx()) 1.dp.toPx() else 0f
         val gridColor = text.copy(alpha = 0.14f)
 
@@ -471,33 +578,56 @@ internal fun ChartPacketCadence(
             )
         }
 
-        intervals.forEachIndexed { index, interval ->
-            val x = chartLeft + index * barWidth
-            val height = ((interval / maxInterval).toFloat() * chartHeight).coerceIn(1f, chartHeight)
+        renderedIntervals.forEach { rendered ->
+            val fraction = if (intervals.size <= 1) 0f else rendered.index.toFloat() / (intervals.size - 1).toFloat()
+            val x = chartLeft + fraction * max(0f, chartWidth - barWidth)
+            val plottedValue = min(rendered.value, maxInterval)
+            val height = ((plottedValue / maxInterval).toFloat() * chartHeight).coerceIn(1f, chartHeight)
             val width = max(0.75f, barWidth - barGap)
             drawRoundRect(
-                color = if (interval >= thresholdMs) warning else primary.copy(alpha = 0.68f),
+                color = if (rendered.value >= thresholdMs) warning else primary.copy(alpha = 0.68f),
                 topLeft = Offset(x, chartTop + chartHeight - height),
                 size = Size(width, height),
                 cornerRadius = CornerRadius(min(2.dp.toPx(), width / 2f))
             )
         }
 
-        val thresholdY = chartTop + chartHeight - ((thresholdMs / maxInterval).toFloat() * chartHeight)
-        drawLine(
-            color = warning.copy(alpha = 0.72f),
-            start = Offset(chartLeft, thresholdY),
-            end = Offset(chartLeft + chartWidth, thresholdY),
-            strokeWidth = 1.dp.toPx()
-        )
-        drawChartLabel(
-            textMeasurer = textMeasurer,
-            text = String.format(Locale.US, "%.0f ms limit", thresholdMs),
-            style = axisStyle.copy(color = warning),
-            anchor = Offset(chartLeft + chartWidth - 3.dp.toPx(), thresholdY - 3.dp.toPx()),
-            horizontalAnchor = 1f,
-            verticalAnchor = 1f
-        )
+        if (thresholdMs <= maxInterval) {
+            val thresholdY = chartTop + chartHeight - ((thresholdMs / maxInterval).toFloat() * chartHeight)
+            drawLine(
+                color = warning.copy(alpha = 0.72f),
+                start = Offset(chartLeft, thresholdY),
+                end = Offset(chartLeft + chartWidth, thresholdY),
+                strokeWidth = 1.dp.toPx()
+            )
+            drawChartLabel(
+                textMeasurer = textMeasurer,
+                text = String.format(Locale.US, "%.0f ms limit", thresholdMs),
+                style = axisStyle.copy(color = warning),
+                anchor = Offset(chartLeft + chartWidth - 3.dp.toPx(), thresholdY - 3.dp.toPx()),
+                horizontalAnchor = 1f,
+                verticalAnchor = 1f
+            )
+        } else {
+            drawChartLabel(
+                textMeasurer = textMeasurer,
+                text = String.format(Locale.US, "%.0f ms limit above chart", thresholdMs),
+                style = axisStyle.copy(color = warning),
+                anchor = Offset(chartLeft + chartWidth - 3.dp.toPx(), chartTop + 3.dp.toPx()),
+                horizontalAnchor = 1f,
+                verticalAnchor = 0f
+            )
+        }
+        if (hasClippedOutliers) {
+            drawChartLabel(
+                textMeasurer = textMeasurer,
+                text = "max ${formatCompactMilliseconds(actualMaxInterval)}",
+                style = axisStyle.copy(color = warning, fontWeight = FontWeight.SemiBold),
+                anchor = Offset(chartLeft + chartWidth - 3.dp.toPx(), chartTop + 3.dp.toPx()),
+                horizontalAnchor = 1f,
+                verticalAnchor = 0f
+            )
+        }
     }
 }
 
@@ -640,6 +770,22 @@ internal fun PacketTimelineChart(
         fontSize = 8.sp
     )
     val duration = max(0.001, timeline.durationSeconds)
+    val compactEntries = remember(timeline.entries) {
+        compactTimelineEntriesForDisplay(timeline.entries, maximumCount = 1_200)
+    }
+    val renderedGaps = remember(timeline.scoringGaps, duration) {
+        compactScoringGapsForDisplay(timeline.scoringGaps, maximumCount = 220)
+    }
+    val selectedEntry = remember(timeline.entries, selectedEntryId) {
+        timeline.entries.firstOrNull { it.id == selectedEntryId }
+    }
+    val renderedEntries = remember(compactEntries, selectedEntry) {
+        if (selectedEntry == null || compactEntries.any { it.id == selectedEntry.id }) {
+            compactEntries
+        } else {
+            (compactEntries + selectedEntry).sortedBy { it.relativeSeconds }
+        }
+    }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
     val chartLeftPx = with(density) { 52.dp.toPx() }
@@ -655,10 +801,11 @@ internal fun PacketTimelineChart(
                 contentDescription = "Packet timeline, ${timeline.entries.size} packets over ${String.format(Locale.US, "%.1f", duration)} seconds, ${timeline.scoringGaps.size} scoring gaps. Individual packets are available in the packet list below."
             }
             .onSizeChanged { canvasSize = it }
-            .pointerInput(timeline.entries, canvasSize) {
+            .pointerInput(renderedEntries, canvasSize) {
                 detectTapGestures { offset ->
                     nearestPacketEntry(
                         timeline = timeline,
+                        entries = renderedEntries,
                         canvasSize = canvasSize,
                         offset = offset,
                         chartLeft = chartLeftPx,
@@ -713,7 +860,7 @@ internal fun PacketTimelineChart(
             )
         }
 
-        timeline.scoringGaps.forEach { gap ->
+        renderedGaps.forEach { gap ->
             val start = chartLeft + ((gap.startSeconds / duration).toFloat().coerceIn(0f, 1f) * chartWidth)
             val end = chartLeft + ((gap.endSeconds / duration).toFloat().coerceIn(0f, 1f) * chartWidth)
             drawRect(
@@ -755,7 +902,7 @@ internal fun PacketTimelineChart(
             )
         }
 
-        timeline.entries.forEach { entry ->
+        renderedEntries.forEach { entry ->
             val x = chartLeft + ((entry.relativeSeconds / duration).toFloat().coerceIn(0f, 1f) * chartWidth)
             val y = chartTop + laneHeight * (entry.lane.index + 0.5f)
             val tickHeight = laneHeight * if (entry.severity == AndroidPacketSeverity.PENALTY) 0.86f else 0.62f
@@ -791,8 +938,11 @@ internal fun PacketTimelineChart(
 
 @Composable
 internal fun PacketLegend(timeline: AndroidPacketTimeline) {
+    val summary = remember(timeline.entries, timeline.scoringGaps, timeline.thresholdMs) {
+        packetLegendSummary(timeline)
+    }
     Text(
-        packetLegendSummary(timeline),
+        summary,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -927,10 +1077,11 @@ private fun PacketInspectorRow(
             }
             Text(
                 formatSecondsValue(entry.relativeSeconds),
-                modifier = Modifier.width(52.dp),
+                modifier = Modifier.width(68.dp),
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
             Text(
                 packetEventLabel(entry, thresholdMs),
@@ -941,9 +1092,11 @@ private fun PacketInspectorRow(
             )
             Text(
                 entry.intervalMs?.let { String.format(Locale.US, "%.0f ms", it) } ?: "start",
+                modifier = Modifier.width(48.dp),
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
     }
@@ -1041,29 +1194,56 @@ internal fun PacketDetailCard(entry: AndroidPacketTimelineEntry) {
             if (entry.fields.isNotEmpty()) {
                 HorizontalDivider()
                 entry.fields.forEach { field ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        Canvas(modifier = Modifier.size(7.dp)) {
-                            drawCircle(packetFieldColor(field.semantic, Color.Gray))
-                        }
-                        Text(
-                            field.label,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            field.decodedValue,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    PacketFieldRow(field)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PacketFieldRow(field: PacketFieldAnnotation) {
+    val fieldColor = packetFieldColor(field.semantic, Color.Gray)
+    val isLongValue = field.decodedValue.length > 18
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Canvas(modifier = Modifier.size(7.dp)) {
+                drawCircle(fieldColor)
+            }
+            Text(
+                field.label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1
+            )
+            if (!isLongValue) {
+                Text(
+                    field.decodedValue,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+        if (isLongValue) {
+            Text(
+                field.decodedValue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -1104,6 +1284,7 @@ internal fun defaultPacketEntry(timeline: AndroidPacketTimeline): AndroidPacketT
 
 internal fun nearestPacketEntry(
     timeline: AndroidPacketTimeline,
+    entries: List<AndroidPacketTimelineEntry> = timeline.entries,
     canvasSize: IntSize,
     offset: Offset,
     chartLeft: Float = 10f,
@@ -1111,17 +1292,17 @@ internal fun nearestPacketEntry(
     chartRight: Float = 10f,
     chartBottom: Float = 10f
 ): AndroidPacketTimelineEntry? {
-    if (timeline.entries.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return null
+    if (entries.isEmpty() || canvasSize.width <= 0 || canvasSize.height <= 0) return null
     val chartWidth = canvasSize.width - chartLeft - chartRight
     val chartHeight = canvasSize.height - chartTop - chartBottom
     if (chartWidth <= 0f || chartHeight <= 0f) return null
     val lanes = AndroidPacketLane.values()
     val laneHeight = chartHeight / lanes.size.toFloat()
     val duration = max(0.001, timeline.durationSeconds)
-    val horizontalTolerance = max(18f, chartWidth / max(1, timeline.entries.size) * 2.5f)
+    val horizontalTolerance = max(18f, chartWidth / max(1, entries.size) * 2.5f)
     val verticalTolerance = max(16f, laneHeight * 0.55f)
 
-    return timeline.entries.minByOrNull { entry ->
+    return entries.minByOrNull { entry ->
         val x = chartLeft + ((entry.relativeSeconds / duration).toFloat().coerceIn(0f, 1f) * chartWidth)
         val y = chartTop + laneHeight * (entry.lane.index + 0.5f)
         abs(offset.x - x) + abs(offset.y - y) * 1.8f
@@ -1130,6 +1311,134 @@ internal fun nearestPacketEntry(
         val y = chartTop + laneHeight * (entry.lane.index + 0.5f)
         abs(offset.x - x) <= horizontalTolerance && abs(offset.y - y) <= verticalTolerance
     }
+}
+
+private data class RenderedCadenceInterval(val index: Int, val value: Double)
+
+private fun cadenceDisplayMax(intervals: List<Double>, thresholdMs: Double): Double {
+    val actualMax = intervals.maxOrNull() ?: thresholdMs
+    val percentile95 = percentile(intervals, 0.95) ?: actualMax
+    val usefulScale = max(thresholdMs * 1.25, percentile95 * 1.35)
+    return min(actualMax, usefulScale)
+}
+
+private fun downsampleChartPointsForDisplay(points: List<ChartPoint>, maximumCount: Int): List<ChartPoint> {
+    if (maximumCount < 4 || points.size <= maximumCount) return points
+    val interiorCount = points.size - 2
+    val bucketCount = max(1, (maximumCount - 2) / 2)
+    val result = ArrayList<ChartPoint>(maximumCount)
+    result += points.first()
+    for (bucket in 0 until bucketCount) {
+        val lower = 1 + (bucket.toDouble() * interiorCount / bucketCount).toInt()
+        val upper = 1 + ((bucket + 1).toDouble() * interiorCount / bucketCount).toInt()
+        if (lower >= upper) continue
+        var minimumIndex = lower
+        var maximumIndex = lower
+        for (index in (lower + 1) until upper) {
+            if (points[index].value < points[minimumIndex].value) minimumIndex = index
+            if (points[index].value > points[maximumIndex].value) maximumIndex = index
+        }
+        when {
+            minimumIndex == maximumIndex -> result += points[minimumIndex]
+            minimumIndex < maximumIndex -> {
+                result += points[minimumIndex]
+                result += points[maximumIndex]
+            }
+            else -> {
+                result += points[maximumIndex]
+                result += points[minimumIndex]
+            }
+        }
+    }
+    result += points.last()
+    return result
+}
+
+private fun downsampleCadenceIntervals(
+    intervals: List<Double>,
+    maximumCount: Int
+): List<RenderedCadenceInterval> {
+    if (maximumCount <= 0) return emptyList()
+    if (intervals.size <= maximumCount) {
+        return intervals.mapIndexed { index, value -> RenderedCadenceInterval(index, value) }
+    }
+    return (0 until maximumCount).mapNotNull { bucket ->
+        val lower = (bucket.toDouble() * intervals.size / maximumCount).toInt()
+        val upper = ((bucket + 1).toDouble() * intervals.size / maximumCount).toInt()
+        if (lower >= upper) return@mapNotNull null
+        var largestIndex = lower
+        for (index in (lower + 1) until upper) {
+            if (intervals[index] > intervals[largestIndex]) largestIndex = index
+        }
+        RenderedCadenceInterval(largestIndex, intervals[largestIndex])
+    }
+}
+
+private fun compactTimelineEntriesForDisplay(
+    entries: List<AndroidPacketTimelineEntry>,
+    maximumCount: Int
+): List<AndroidPacketTimelineEntry> {
+    if (maximumCount <= 0) return emptyList()
+    if (entries.size <= maximumCount) return entries
+    val important = entries.filter {
+        it.severity == AndroidPacketSeverity.WARNING || it.severity == AndroidPacketSeverity.PENALTY
+    }
+    val regular = entries.filter {
+        it.severity != AndroidPacketSeverity.WARNING && it.severity != AndroidPacketSeverity.PENALTY
+    }
+    val regularBudget = max(0, maximumCount - important.size)
+    if (regularBudget == 0) return important.sortedBy { it.relativeSeconds }
+
+    var sampled = AndroidPacketLane.values().flatMap { lane ->
+        val laneEntries = regular.filter { it.lane == lane }
+        if (laneEntries.isEmpty()) {
+            emptyList()
+        } else {
+            val proportional = (
+                laneEntries.size.toDouble() / max(regular.size, 1).toDouble() * regularBudget
+            ).toInt().coerceAtLeast(1)
+            evenlySample(laneEntries, proportional)
+        }
+    }
+    if (sampled.size > regularBudget) {
+        sampled = evenlySample(sampled.sortedBy { it.relativeSeconds }, regularBudget)
+    }
+    return (important + sampled).distinctBy { it.id }.sortedBy { it.relativeSeconds }
+}
+
+private fun compactScoringGapsForDisplay(
+    gaps: List<AndroidScoringGap>,
+    maximumCount: Int
+): List<AndroidScoringGap> {
+    if (maximumCount <= 0) return emptyList()
+    if (gaps.size <= maximumCount) return gaps
+    val keepLargestCount = max(1, maximumCount / 2)
+    val largest = gaps
+        .sortedByDescending { it.intervalMs }
+        .take(keepLargestCount)
+    val sampled = evenlySample(gaps.sortedBy { it.startSeconds }, maximumCount - largest.size)
+    return (largest + sampled)
+        .distinctBy { it.index }
+        .sortedBy { it.startSeconds }
+}
+
+private fun <T> evenlySample(values: List<T>, maximumCount: Int): List<T> {
+    if (maximumCount <= 0) return emptyList()
+    if (values.size <= maximumCount) return values
+    if (maximumCount == 1) return listOf(values[values.size / 2])
+    return (0 until maximumCount).map { index ->
+        val sourceIndex = (
+            index.toDouble() * (values.size - 1).toDouble() / (maximumCount - 1).toDouble()
+        ).toInt()
+        values[sourceIndex]
+    }
+}
+
+private fun percentile(values: List<Double>, fraction: Double): Double? {
+    if (values.isEmpty()) return null
+    val sorted = values.sorted()
+    val index = ((sorted.size - 1) * fraction.coerceIn(0.0, 1.0)).toInt()
+    return sorted[index]
 }
 
 private fun catmullRomPath(points: List<Offset>, baseline: Float? = null): Path {
@@ -1185,6 +1494,11 @@ private fun formatWeightAxis(value: Double, includeUnit: Boolean): String {
     return String.format(Locale.US, format + if (includeUnit) " g" else "", value)
 }
 
+private fun formatFlowAxis(value: Double, includeUnit: Boolean): String {
+    val format = if (abs(value) >= 10) "%.0f" else "%.1f"
+    return String.format(Locale.US, format + if (includeUnit) " g/s" else "", value)
+}
+
 private fun formatMillisecondsAxis(value: Double, includeUnit: Boolean): String {
     return String.format(Locale.US, "%.0f%s", value, if (includeUnit) " ms" else "")
 }
@@ -1197,12 +1511,24 @@ private fun formatGapDuration(milliseconds: Double): String {
     }
 }
 
+private fun formatCompactMilliseconds(milliseconds: Double): String {
+    return if (milliseconds >= 1_000.0) {
+        String.format(Locale.US, "%.2f s", milliseconds / 1_000.0)
+    } else {
+        String.format(Locale.US, "%.0f ms", milliseconds)
+    }
+}
+
 private fun formatThreshold(milliseconds: Double): String =
     String.format(Locale.US, "%.0f ms", milliseconds)
 
 internal fun weightChartExplanation(thresholdMs: Double, hasFlow: Boolean): String {
-    val flow = if (hasFlow) " The second line is flow reported by the scale." else ""
-    return "The line is measured weight over time.$flow Red highlights mark waits of ${formatThreshold(thresholdMs)} or more for the next weight update."
+    val flow = if (hasFlow) {
+        " Purple is flow reported by the scale, shown on its own g/s scale."
+    } else {
+        ""
+    }
+    return "Cyan is measured weight over time.$flow Red highlights mark waits of ${formatThreshold(thresholdMs)} or more for the next weight update."
 }
 
 internal fun cadenceChartExplanation(intervals: List<Double>, thresholdMs: Double): String {

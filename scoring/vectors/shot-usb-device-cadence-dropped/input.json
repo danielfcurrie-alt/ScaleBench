@@ -1,0 +1,3629 @@
+{
+  "description": "WMB+ USB rows arrive at the host in two-frame batches but carry a clean 20 Hz 32-bit firmware clock across wrap. Device time must fill every cadence slot; ten firmware-reported USB backpressure drops reduce purity to 401/411.",
+  "deviceKind": "weighMyBruPlus",
+  "events": [],
+  "frames": [
+    {
+      "firmwareMillis": 4294957296,
+      "kind": "weight",
+      "monotonicSeconds": 100.0,
+      "sequenceNumber": 4294967040,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.0
+    },
+    {
+      "firmwareMillis": 4294957346,
+      "kind": "weight",
+      "monotonicSeconds": 100.0,
+      "sequenceNumber": 4294967041,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.02
+    },
+    {
+      "firmwareMillis": 4294957396,
+      "kind": "weight",
+      "monotonicSeconds": 100.1,
+      "sequenceNumber": 4294967042,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.04
+    },
+    {
+      "firmwareMillis": 4294957446,
+      "kind": "weight",
+      "monotonicSeconds": 100.1,
+      "sequenceNumber": 4294967043,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.06
+    },
+    {
+      "firmwareMillis": 4294957496,
+      "kind": "weight",
+      "monotonicSeconds": 100.2,
+      "sequenceNumber": 4294967044,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.08
+    },
+    {
+      "firmwareMillis": 4294957546,
+      "kind": "weight",
+      "monotonicSeconds": 100.2,
+      "sequenceNumber": 4294967045,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.1
+    },
+    {
+      "firmwareMillis": 4294957596,
+      "kind": "weight",
+      "monotonicSeconds": 100.3,
+      "sequenceNumber": 4294967046,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.12
+    },
+    {
+      "firmwareMillis": 4294957646,
+      "kind": "weight",
+      "monotonicSeconds": 100.3,
+      "sequenceNumber": 4294967047,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.14
+    },
+    {
+      "firmwareMillis": 4294957696,
+      "kind": "weight",
+      "monotonicSeconds": 100.4,
+      "sequenceNumber": 4294967048,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.16
+    },
+    {
+      "firmwareMillis": 4294957746,
+      "kind": "weight",
+      "monotonicSeconds": 100.4,
+      "sequenceNumber": 4294967049,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.18
+    },
+    {
+      "firmwareMillis": 4294957796,
+      "kind": "weight",
+      "monotonicSeconds": 100.5,
+      "sequenceNumber": 4294967050,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.2
+    },
+    {
+      "firmwareMillis": 4294957846,
+      "kind": "weight",
+      "monotonicSeconds": 100.5,
+      "sequenceNumber": 4294967051,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.22
+    },
+    {
+      "firmwareMillis": 4294957896,
+      "kind": "weight",
+      "monotonicSeconds": 100.6,
+      "sequenceNumber": 4294967052,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.24
+    },
+    {
+      "firmwareMillis": 4294957946,
+      "kind": "weight",
+      "monotonicSeconds": 100.6,
+      "sequenceNumber": 4294967053,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.26
+    },
+    {
+      "firmwareMillis": 4294957996,
+      "kind": "weight",
+      "monotonicSeconds": 100.7,
+      "sequenceNumber": 4294967054,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.28
+    },
+    {
+      "firmwareMillis": 4294958046,
+      "kind": "weight",
+      "monotonicSeconds": 100.7,
+      "sequenceNumber": 4294967055,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.3
+    },
+    {
+      "firmwareMillis": 4294958096,
+      "kind": "weight",
+      "monotonicSeconds": 100.8,
+      "sequenceNumber": 4294967056,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.32
+    },
+    {
+      "firmwareMillis": 4294958146,
+      "kind": "weight",
+      "monotonicSeconds": 100.8,
+      "sequenceNumber": 4294967057,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.34
+    },
+    {
+      "firmwareMillis": 4294958196,
+      "kind": "weight",
+      "monotonicSeconds": 100.9,
+      "sequenceNumber": 4294967058,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.36
+    },
+    {
+      "firmwareMillis": 4294958246,
+      "kind": "weight",
+      "monotonicSeconds": 100.9,
+      "sequenceNumber": 4294967059,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.38
+    },
+    {
+      "firmwareMillis": 4294958296,
+      "kind": "weight",
+      "monotonicSeconds": 101.0,
+      "sequenceNumber": 4294967060,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.4
+    },
+    {
+      "firmwareMillis": 4294958346,
+      "kind": "weight",
+      "monotonicSeconds": 101.0,
+      "sequenceNumber": 4294967061,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.42
+    },
+    {
+      "firmwareMillis": 4294958396,
+      "kind": "weight",
+      "monotonicSeconds": 101.1,
+      "sequenceNumber": 4294967062,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.44
+    },
+    {
+      "firmwareMillis": 4294958446,
+      "kind": "weight",
+      "monotonicSeconds": 101.1,
+      "sequenceNumber": 4294967063,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.46
+    },
+    {
+      "firmwareMillis": 4294958496,
+      "kind": "weight",
+      "monotonicSeconds": 101.2,
+      "sequenceNumber": 4294967064,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.48
+    },
+    {
+      "firmwareMillis": 4294958546,
+      "kind": "weight",
+      "monotonicSeconds": 101.2,
+      "sequenceNumber": 4294967065,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.5
+    },
+    {
+      "firmwareMillis": 4294958596,
+      "kind": "weight",
+      "monotonicSeconds": 101.3,
+      "sequenceNumber": 4294967066,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.52
+    },
+    {
+      "firmwareMillis": 4294958646,
+      "kind": "weight",
+      "monotonicSeconds": 101.3,
+      "sequenceNumber": 4294967067,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.54
+    },
+    {
+      "firmwareMillis": 4294958696,
+      "kind": "weight",
+      "monotonicSeconds": 101.4,
+      "sequenceNumber": 4294967068,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.56
+    },
+    {
+      "firmwareMillis": 4294958746,
+      "kind": "weight",
+      "monotonicSeconds": 101.4,
+      "sequenceNumber": 4294967069,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.58
+    },
+    {
+      "firmwareMillis": 4294958796,
+      "kind": "weight",
+      "monotonicSeconds": 101.5,
+      "sequenceNumber": 4294967070,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.6
+    },
+    {
+      "firmwareMillis": 4294958846,
+      "kind": "weight",
+      "monotonicSeconds": 101.5,
+      "sequenceNumber": 4294967071,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.62
+    },
+    {
+      "firmwareMillis": 4294958896,
+      "kind": "weight",
+      "monotonicSeconds": 101.6,
+      "sequenceNumber": 4294967072,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.64
+    },
+    {
+      "firmwareMillis": 4294958946,
+      "kind": "weight",
+      "monotonicSeconds": 101.6,
+      "sequenceNumber": 4294967073,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.66
+    },
+    {
+      "firmwareMillis": 4294958996,
+      "kind": "weight",
+      "monotonicSeconds": 101.7,
+      "sequenceNumber": 4294967074,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.68
+    },
+    {
+      "firmwareMillis": 4294959046,
+      "kind": "weight",
+      "monotonicSeconds": 101.7,
+      "sequenceNumber": 4294967075,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.7
+    },
+    {
+      "firmwareMillis": 4294959096,
+      "kind": "weight",
+      "monotonicSeconds": 101.8,
+      "sequenceNumber": 4294967076,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.72
+    },
+    {
+      "firmwareMillis": 4294959146,
+      "kind": "weight",
+      "monotonicSeconds": 101.8,
+      "sequenceNumber": 4294967077,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.74
+    },
+    {
+      "firmwareMillis": 4294959196,
+      "kind": "weight",
+      "monotonicSeconds": 101.9,
+      "sequenceNumber": 4294967078,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.76
+    },
+    {
+      "firmwareMillis": 4294959246,
+      "kind": "weight",
+      "monotonicSeconds": 101.9,
+      "sequenceNumber": 4294967079,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.78
+    },
+    {
+      "firmwareMillis": 4294959296,
+      "kind": "weight",
+      "monotonicSeconds": 102.0,
+      "sequenceNumber": 4294967080,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.8
+    },
+    {
+      "firmwareMillis": 4294959346,
+      "kind": "weight",
+      "monotonicSeconds": 102.0,
+      "sequenceNumber": 4294967081,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.82
+    },
+    {
+      "firmwareMillis": 4294959396,
+      "kind": "weight",
+      "monotonicSeconds": 102.1,
+      "sequenceNumber": 4294967082,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.84
+    },
+    {
+      "firmwareMillis": 4294959446,
+      "kind": "weight",
+      "monotonicSeconds": 102.1,
+      "sequenceNumber": 4294967083,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.86
+    },
+    {
+      "firmwareMillis": 4294959496,
+      "kind": "weight",
+      "monotonicSeconds": 102.2,
+      "sequenceNumber": 4294967084,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.88
+    },
+    {
+      "firmwareMillis": 4294959546,
+      "kind": "weight",
+      "monotonicSeconds": 102.2,
+      "sequenceNumber": 4294967085,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.9
+    },
+    {
+      "firmwareMillis": 4294959596,
+      "kind": "weight",
+      "monotonicSeconds": 102.3,
+      "sequenceNumber": 4294967086,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.92
+    },
+    {
+      "firmwareMillis": 4294959646,
+      "kind": "weight",
+      "monotonicSeconds": 102.3,
+      "sequenceNumber": 4294967087,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.94
+    },
+    {
+      "firmwareMillis": 4294959696,
+      "kind": "weight",
+      "monotonicSeconds": 102.4,
+      "sequenceNumber": 4294967088,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.96
+    },
+    {
+      "firmwareMillis": 4294959746,
+      "kind": "weight",
+      "monotonicSeconds": 102.4,
+      "sequenceNumber": 4294967089,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 0.98
+    },
+    {
+      "firmwareMillis": 4294959796,
+      "kind": "weight",
+      "monotonicSeconds": 102.5,
+      "sequenceNumber": 4294967090,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.0
+    },
+    {
+      "firmwareMillis": 4294959846,
+      "kind": "weight",
+      "monotonicSeconds": 102.5,
+      "sequenceNumber": 4294967091,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.02
+    },
+    {
+      "firmwareMillis": 4294959896,
+      "kind": "weight",
+      "monotonicSeconds": 102.6,
+      "sequenceNumber": 4294967092,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.04
+    },
+    {
+      "firmwareMillis": 4294959946,
+      "kind": "weight",
+      "monotonicSeconds": 102.6,
+      "sequenceNumber": 4294967093,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.06
+    },
+    {
+      "firmwareMillis": 4294959996,
+      "kind": "weight",
+      "monotonicSeconds": 102.7,
+      "sequenceNumber": 4294967094,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.08
+    },
+    {
+      "firmwareMillis": 4294960046,
+      "kind": "weight",
+      "monotonicSeconds": 102.7,
+      "sequenceNumber": 4294967095,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.1
+    },
+    {
+      "firmwareMillis": 4294960096,
+      "kind": "weight",
+      "monotonicSeconds": 102.8,
+      "sequenceNumber": 4294967096,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.12
+    },
+    {
+      "firmwareMillis": 4294960146,
+      "kind": "weight",
+      "monotonicSeconds": 102.8,
+      "sequenceNumber": 4294967097,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.14
+    },
+    {
+      "firmwareMillis": 4294960196,
+      "kind": "weight",
+      "monotonicSeconds": 102.9,
+      "sequenceNumber": 4294967098,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.16
+    },
+    {
+      "firmwareMillis": 4294960246,
+      "kind": "weight",
+      "monotonicSeconds": 102.9,
+      "sequenceNumber": 4294967099,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.18
+    },
+    {
+      "firmwareMillis": 4294960296,
+      "kind": "weight",
+      "monotonicSeconds": 103.0,
+      "sequenceNumber": 4294967100,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.2
+    },
+    {
+      "firmwareMillis": 4294960346,
+      "kind": "weight",
+      "monotonicSeconds": 103.0,
+      "sequenceNumber": 4294967101,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.22
+    },
+    {
+      "firmwareMillis": 4294960396,
+      "kind": "weight",
+      "monotonicSeconds": 103.1,
+      "sequenceNumber": 4294967102,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.24
+    },
+    {
+      "firmwareMillis": 4294960446,
+      "kind": "weight",
+      "monotonicSeconds": 103.1,
+      "sequenceNumber": 4294967103,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.26
+    },
+    {
+      "firmwareMillis": 4294960496,
+      "kind": "weight",
+      "monotonicSeconds": 103.2,
+      "sequenceNumber": 4294967104,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.28
+    },
+    {
+      "firmwareMillis": 4294960546,
+      "kind": "weight",
+      "monotonicSeconds": 103.2,
+      "sequenceNumber": 4294967105,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.3
+    },
+    {
+      "firmwareMillis": 4294960596,
+      "kind": "weight",
+      "monotonicSeconds": 103.3,
+      "sequenceNumber": 4294967106,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.32
+    },
+    {
+      "firmwareMillis": 4294960646,
+      "kind": "weight",
+      "monotonicSeconds": 103.3,
+      "sequenceNumber": 4294967107,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.34
+    },
+    {
+      "firmwareMillis": 4294960696,
+      "kind": "weight",
+      "monotonicSeconds": 103.4,
+      "sequenceNumber": 4294967108,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.36
+    },
+    {
+      "firmwareMillis": 4294960746,
+      "kind": "weight",
+      "monotonicSeconds": 103.4,
+      "sequenceNumber": 4294967109,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.38
+    },
+    {
+      "firmwareMillis": 4294960796,
+      "kind": "weight",
+      "monotonicSeconds": 103.5,
+      "sequenceNumber": 4294967110,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.4
+    },
+    {
+      "firmwareMillis": 4294960846,
+      "kind": "weight",
+      "monotonicSeconds": 103.5,
+      "sequenceNumber": 4294967111,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.42
+    },
+    {
+      "firmwareMillis": 4294960896,
+      "kind": "weight",
+      "monotonicSeconds": 103.6,
+      "sequenceNumber": 4294967112,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.44
+    },
+    {
+      "firmwareMillis": 4294960946,
+      "kind": "weight",
+      "monotonicSeconds": 103.6,
+      "sequenceNumber": 4294967113,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.46
+    },
+    {
+      "firmwareMillis": 4294960996,
+      "kind": "weight",
+      "monotonicSeconds": 103.7,
+      "sequenceNumber": 4294967114,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.48
+    },
+    {
+      "firmwareMillis": 4294961046,
+      "kind": "weight",
+      "monotonicSeconds": 103.7,
+      "sequenceNumber": 4294967115,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.5
+    },
+    {
+      "firmwareMillis": 4294961096,
+      "kind": "weight",
+      "monotonicSeconds": 103.8,
+      "sequenceNumber": 4294967116,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.52
+    },
+    {
+      "firmwareMillis": 4294961146,
+      "kind": "weight",
+      "monotonicSeconds": 103.8,
+      "sequenceNumber": 4294967117,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.54
+    },
+    {
+      "firmwareMillis": 4294961196,
+      "kind": "weight",
+      "monotonicSeconds": 103.9,
+      "sequenceNumber": 4294967118,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.56
+    },
+    {
+      "firmwareMillis": 4294961246,
+      "kind": "weight",
+      "monotonicSeconds": 103.9,
+      "sequenceNumber": 4294967119,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.58
+    },
+    {
+      "firmwareMillis": 4294961296,
+      "kind": "weight",
+      "monotonicSeconds": 104.0,
+      "sequenceNumber": 4294967120,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.6
+    },
+    {
+      "firmwareMillis": 4294961346,
+      "kind": "weight",
+      "monotonicSeconds": 104.0,
+      "sequenceNumber": 4294967121,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.62
+    },
+    {
+      "firmwareMillis": 4294961396,
+      "kind": "weight",
+      "monotonicSeconds": 104.1,
+      "sequenceNumber": 4294967122,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.64
+    },
+    {
+      "firmwareMillis": 4294961446,
+      "kind": "weight",
+      "monotonicSeconds": 104.1,
+      "sequenceNumber": 4294967123,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.66
+    },
+    {
+      "firmwareMillis": 4294961496,
+      "kind": "weight",
+      "monotonicSeconds": 104.2,
+      "sequenceNumber": 4294967124,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.68
+    },
+    {
+      "firmwareMillis": 4294961546,
+      "kind": "weight",
+      "monotonicSeconds": 104.2,
+      "sequenceNumber": 4294967125,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.7
+    },
+    {
+      "firmwareMillis": 4294961596,
+      "kind": "weight",
+      "monotonicSeconds": 104.3,
+      "sequenceNumber": 4294967126,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.72
+    },
+    {
+      "firmwareMillis": 4294961646,
+      "kind": "weight",
+      "monotonicSeconds": 104.3,
+      "sequenceNumber": 4294967127,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.74
+    },
+    {
+      "firmwareMillis": 4294961696,
+      "kind": "weight",
+      "monotonicSeconds": 104.4,
+      "sequenceNumber": 4294967128,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.76
+    },
+    {
+      "firmwareMillis": 4294961746,
+      "kind": "weight",
+      "monotonicSeconds": 104.4,
+      "sequenceNumber": 4294967129,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.78
+    },
+    {
+      "firmwareMillis": 4294961796,
+      "kind": "weight",
+      "monotonicSeconds": 104.5,
+      "sequenceNumber": 4294967130,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.8
+    },
+    {
+      "firmwareMillis": 4294961846,
+      "kind": "weight",
+      "monotonicSeconds": 104.5,
+      "sequenceNumber": 4294967131,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.82
+    },
+    {
+      "firmwareMillis": 4294961896,
+      "kind": "weight",
+      "monotonicSeconds": 104.6,
+      "sequenceNumber": 4294967132,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.84
+    },
+    {
+      "firmwareMillis": 4294961946,
+      "kind": "weight",
+      "monotonicSeconds": 104.6,
+      "sequenceNumber": 4294967133,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.86
+    },
+    {
+      "firmwareMillis": 4294961996,
+      "kind": "weight",
+      "monotonicSeconds": 104.7,
+      "sequenceNumber": 4294967134,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.88
+    },
+    {
+      "firmwareMillis": 4294962046,
+      "kind": "weight",
+      "monotonicSeconds": 104.7,
+      "sequenceNumber": 4294967135,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.9
+    },
+    {
+      "firmwareMillis": 4294962096,
+      "kind": "weight",
+      "monotonicSeconds": 104.8,
+      "sequenceNumber": 4294967136,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.92
+    },
+    {
+      "firmwareMillis": 4294962146,
+      "kind": "weight",
+      "monotonicSeconds": 104.8,
+      "sequenceNumber": 4294967137,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.94
+    },
+    {
+      "firmwareMillis": 4294962196,
+      "kind": "weight",
+      "monotonicSeconds": 104.9,
+      "sequenceNumber": 4294967138,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.96
+    },
+    {
+      "firmwareMillis": 4294962246,
+      "kind": "weight",
+      "monotonicSeconds": 104.9,
+      "sequenceNumber": 4294967139,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 1.98
+    },
+    {
+      "firmwareMillis": 4294962296,
+      "kind": "weight",
+      "monotonicSeconds": 105.0,
+      "sequenceNumber": 4294967140,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.0
+    },
+    {
+      "firmwareMillis": 4294962346,
+      "kind": "weight",
+      "monotonicSeconds": 105.0,
+      "sequenceNumber": 4294967141,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.02
+    },
+    {
+      "firmwareMillis": 4294962396,
+      "kind": "weight",
+      "monotonicSeconds": 105.1,
+      "sequenceNumber": 4294967142,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.04
+    },
+    {
+      "firmwareMillis": 4294962446,
+      "kind": "weight",
+      "monotonicSeconds": 105.1,
+      "sequenceNumber": 4294967143,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.06
+    },
+    {
+      "firmwareMillis": 4294962496,
+      "kind": "weight",
+      "monotonicSeconds": 105.2,
+      "sequenceNumber": 4294967144,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.08
+    },
+    {
+      "firmwareMillis": 4294962546,
+      "kind": "weight",
+      "monotonicSeconds": 105.2,
+      "sequenceNumber": 4294967145,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.1
+    },
+    {
+      "firmwareMillis": 4294962596,
+      "kind": "weight",
+      "monotonicSeconds": 105.3,
+      "sequenceNumber": 4294967146,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.12
+    },
+    {
+      "firmwareMillis": 4294962646,
+      "kind": "weight",
+      "monotonicSeconds": 105.3,
+      "sequenceNumber": 4294967147,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.14
+    },
+    {
+      "firmwareMillis": 4294962696,
+      "kind": "weight",
+      "monotonicSeconds": 105.4,
+      "sequenceNumber": 4294967148,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.16
+    },
+    {
+      "firmwareMillis": 4294962746,
+      "kind": "weight",
+      "monotonicSeconds": 105.4,
+      "sequenceNumber": 4294967149,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.18
+    },
+    {
+      "firmwareMillis": 4294962796,
+      "kind": "weight",
+      "monotonicSeconds": 105.5,
+      "sequenceNumber": 4294967150,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.2
+    },
+    {
+      "firmwareMillis": 4294962846,
+      "kind": "weight",
+      "monotonicSeconds": 105.5,
+      "sequenceNumber": 4294967151,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.22
+    },
+    {
+      "firmwareMillis": 4294962896,
+      "kind": "weight",
+      "monotonicSeconds": 105.6,
+      "sequenceNumber": 4294967152,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.24
+    },
+    {
+      "firmwareMillis": 4294962946,
+      "kind": "weight",
+      "monotonicSeconds": 105.6,
+      "sequenceNumber": 4294967153,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.26
+    },
+    {
+      "firmwareMillis": 4294962996,
+      "kind": "weight",
+      "monotonicSeconds": 105.7,
+      "sequenceNumber": 4294967154,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.28
+    },
+    {
+      "firmwareMillis": 4294963046,
+      "kind": "weight",
+      "monotonicSeconds": 105.7,
+      "sequenceNumber": 4294967155,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.3
+    },
+    {
+      "firmwareMillis": 4294963096,
+      "kind": "weight",
+      "monotonicSeconds": 105.8,
+      "sequenceNumber": 4294967156,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.32
+    },
+    {
+      "firmwareMillis": 4294963146,
+      "kind": "weight",
+      "monotonicSeconds": 105.8,
+      "sequenceNumber": 4294967157,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.34
+    },
+    {
+      "firmwareMillis": 4294963196,
+      "kind": "weight",
+      "monotonicSeconds": 105.9,
+      "sequenceNumber": 4294967158,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.36
+    },
+    {
+      "firmwareMillis": 4294963246,
+      "kind": "weight",
+      "monotonicSeconds": 105.9,
+      "sequenceNumber": 4294967159,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.38
+    },
+    {
+      "firmwareMillis": 4294963296,
+      "kind": "weight",
+      "monotonicSeconds": 106.0,
+      "sequenceNumber": 4294967160,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.4
+    },
+    {
+      "firmwareMillis": 4294963346,
+      "kind": "weight",
+      "monotonicSeconds": 106.0,
+      "sequenceNumber": 4294967161,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.42
+    },
+    {
+      "firmwareMillis": 4294963396,
+      "kind": "weight",
+      "monotonicSeconds": 106.1,
+      "sequenceNumber": 4294967162,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.44
+    },
+    {
+      "firmwareMillis": 4294963446,
+      "kind": "weight",
+      "monotonicSeconds": 106.1,
+      "sequenceNumber": 4294967163,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.46
+    },
+    {
+      "firmwareMillis": 4294963496,
+      "kind": "weight",
+      "monotonicSeconds": 106.2,
+      "sequenceNumber": 4294967164,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.48
+    },
+    {
+      "firmwareMillis": 4294963546,
+      "kind": "weight",
+      "monotonicSeconds": 106.2,
+      "sequenceNumber": 4294967165,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.5
+    },
+    {
+      "firmwareMillis": 4294963596,
+      "kind": "weight",
+      "monotonicSeconds": 106.3,
+      "sequenceNumber": 4294967166,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.52
+    },
+    {
+      "firmwareMillis": 4294963646,
+      "kind": "weight",
+      "monotonicSeconds": 106.3,
+      "sequenceNumber": 4294967167,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.54
+    },
+    {
+      "firmwareMillis": 4294963696,
+      "kind": "weight",
+      "monotonicSeconds": 106.4,
+      "sequenceNumber": 4294967168,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.56
+    },
+    {
+      "firmwareMillis": 4294963746,
+      "kind": "weight",
+      "monotonicSeconds": 106.4,
+      "sequenceNumber": 4294967169,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.58
+    },
+    {
+      "firmwareMillis": 4294963796,
+      "kind": "weight",
+      "monotonicSeconds": 106.5,
+      "sequenceNumber": 4294967170,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.6
+    },
+    {
+      "firmwareMillis": 4294963846,
+      "kind": "weight",
+      "monotonicSeconds": 106.5,
+      "sequenceNumber": 4294967171,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.62
+    },
+    {
+      "firmwareMillis": 4294963896,
+      "kind": "weight",
+      "monotonicSeconds": 106.6,
+      "sequenceNumber": 4294967172,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.64
+    },
+    {
+      "firmwareMillis": 4294963946,
+      "kind": "weight",
+      "monotonicSeconds": 106.6,
+      "sequenceNumber": 4294967173,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.66
+    },
+    {
+      "firmwareMillis": 4294963996,
+      "kind": "weight",
+      "monotonicSeconds": 106.7,
+      "sequenceNumber": 4294967174,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.68
+    },
+    {
+      "firmwareMillis": 4294964046,
+      "kind": "weight",
+      "monotonicSeconds": 106.7,
+      "sequenceNumber": 4294967175,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.7
+    },
+    {
+      "firmwareMillis": 4294964096,
+      "kind": "weight",
+      "monotonicSeconds": 106.8,
+      "sequenceNumber": 4294967176,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.72
+    },
+    {
+      "firmwareMillis": 4294964146,
+      "kind": "weight",
+      "monotonicSeconds": 106.8,
+      "sequenceNumber": 4294967177,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.74
+    },
+    {
+      "firmwareMillis": 4294964196,
+      "kind": "weight",
+      "monotonicSeconds": 106.9,
+      "sequenceNumber": 4294967178,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.76
+    },
+    {
+      "firmwareMillis": 4294964246,
+      "kind": "weight",
+      "monotonicSeconds": 106.9,
+      "sequenceNumber": 4294967179,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.78
+    },
+    {
+      "firmwareMillis": 4294964296,
+      "kind": "weight",
+      "monotonicSeconds": 107.0,
+      "sequenceNumber": 4294967180,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.8
+    },
+    {
+      "firmwareMillis": 4294964346,
+      "kind": "weight",
+      "monotonicSeconds": 107.0,
+      "sequenceNumber": 4294967181,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.82
+    },
+    {
+      "firmwareMillis": 4294964396,
+      "kind": "weight",
+      "monotonicSeconds": 107.1,
+      "sequenceNumber": 4294967182,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.84
+    },
+    {
+      "firmwareMillis": 4294964446,
+      "kind": "weight",
+      "monotonicSeconds": 107.1,
+      "sequenceNumber": 4294967183,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.86
+    },
+    {
+      "firmwareMillis": 4294964496,
+      "kind": "weight",
+      "monotonicSeconds": 107.2,
+      "sequenceNumber": 4294967184,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.88
+    },
+    {
+      "firmwareMillis": 4294964546,
+      "kind": "weight",
+      "monotonicSeconds": 107.2,
+      "sequenceNumber": 4294967185,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.9
+    },
+    {
+      "firmwareMillis": 4294964596,
+      "kind": "weight",
+      "monotonicSeconds": 107.3,
+      "sequenceNumber": 4294967186,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.92
+    },
+    {
+      "firmwareMillis": 4294964646,
+      "kind": "weight",
+      "monotonicSeconds": 107.3,
+      "sequenceNumber": 4294967187,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.94
+    },
+    {
+      "firmwareMillis": 4294964696,
+      "kind": "weight",
+      "monotonicSeconds": 107.4,
+      "sequenceNumber": 4294967188,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.96
+    },
+    {
+      "firmwareMillis": 4294964746,
+      "kind": "weight",
+      "monotonicSeconds": 107.4,
+      "sequenceNumber": 4294967189,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 2.98
+    },
+    {
+      "firmwareMillis": 4294964796,
+      "kind": "weight",
+      "monotonicSeconds": 107.5,
+      "sequenceNumber": 4294967190,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.0
+    },
+    {
+      "firmwareMillis": 4294964846,
+      "kind": "weight",
+      "monotonicSeconds": 107.5,
+      "sequenceNumber": 4294967191,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.02
+    },
+    {
+      "firmwareMillis": 4294964896,
+      "kind": "weight",
+      "monotonicSeconds": 107.6,
+      "sequenceNumber": 4294967192,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.04
+    },
+    {
+      "firmwareMillis": 4294964946,
+      "kind": "weight",
+      "monotonicSeconds": 107.6,
+      "sequenceNumber": 4294967193,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.06
+    },
+    {
+      "firmwareMillis": 4294964996,
+      "kind": "weight",
+      "monotonicSeconds": 107.7,
+      "sequenceNumber": 4294967194,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.08
+    },
+    {
+      "firmwareMillis": 4294965046,
+      "kind": "weight",
+      "monotonicSeconds": 107.7,
+      "sequenceNumber": 4294967195,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.1
+    },
+    {
+      "firmwareMillis": 4294965096,
+      "kind": "weight",
+      "monotonicSeconds": 107.8,
+      "sequenceNumber": 4294967196,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.12
+    },
+    {
+      "firmwareMillis": 4294965146,
+      "kind": "weight",
+      "monotonicSeconds": 107.8,
+      "sequenceNumber": 4294967197,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.14
+    },
+    {
+      "firmwareMillis": 4294965196,
+      "kind": "weight",
+      "monotonicSeconds": 107.9,
+      "sequenceNumber": 4294967198,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.16
+    },
+    {
+      "firmwareMillis": 4294965246,
+      "kind": "weight",
+      "monotonicSeconds": 107.9,
+      "sequenceNumber": 4294967199,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.18
+    },
+    {
+      "firmwareMillis": 4294965296,
+      "kind": "weight",
+      "monotonicSeconds": 108.0,
+      "sequenceNumber": 4294967200,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.2
+    },
+    {
+      "firmwareMillis": 4294965346,
+      "kind": "weight",
+      "monotonicSeconds": 108.0,
+      "sequenceNumber": 4294967201,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.22
+    },
+    {
+      "firmwareMillis": 4294965396,
+      "kind": "weight",
+      "monotonicSeconds": 108.1,
+      "sequenceNumber": 4294967202,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.24
+    },
+    {
+      "firmwareMillis": 4294965446,
+      "kind": "weight",
+      "monotonicSeconds": 108.1,
+      "sequenceNumber": 4294967203,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.26
+    },
+    {
+      "firmwareMillis": 4294965496,
+      "kind": "weight",
+      "monotonicSeconds": 108.2,
+      "sequenceNumber": 4294967204,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.28
+    },
+    {
+      "firmwareMillis": 4294965546,
+      "kind": "weight",
+      "monotonicSeconds": 108.2,
+      "sequenceNumber": 4294967205,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.3
+    },
+    {
+      "firmwareMillis": 4294965596,
+      "kind": "weight",
+      "monotonicSeconds": 108.3,
+      "sequenceNumber": 4294967206,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.32
+    },
+    {
+      "firmwareMillis": 4294965646,
+      "kind": "weight",
+      "monotonicSeconds": 108.3,
+      "sequenceNumber": 4294967207,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.34
+    },
+    {
+      "firmwareMillis": 4294965696,
+      "kind": "weight",
+      "monotonicSeconds": 108.4,
+      "sequenceNumber": 4294967208,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.36
+    },
+    {
+      "firmwareMillis": 4294965746,
+      "kind": "weight",
+      "monotonicSeconds": 108.4,
+      "sequenceNumber": 4294967209,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.38
+    },
+    {
+      "firmwareMillis": 4294965796,
+      "kind": "weight",
+      "monotonicSeconds": 108.5,
+      "sequenceNumber": 4294967210,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.4
+    },
+    {
+      "firmwareMillis": 4294965846,
+      "kind": "weight",
+      "monotonicSeconds": 108.5,
+      "sequenceNumber": 4294967211,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.42
+    },
+    {
+      "firmwareMillis": 4294965896,
+      "kind": "weight",
+      "monotonicSeconds": 108.6,
+      "sequenceNumber": 4294967212,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.44
+    },
+    {
+      "firmwareMillis": 4294965946,
+      "kind": "weight",
+      "monotonicSeconds": 108.6,
+      "sequenceNumber": 4294967213,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.46
+    },
+    {
+      "firmwareMillis": 4294965996,
+      "kind": "weight",
+      "monotonicSeconds": 108.7,
+      "sequenceNumber": 4294967214,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.48
+    },
+    {
+      "firmwareMillis": 4294966046,
+      "kind": "weight",
+      "monotonicSeconds": 108.7,
+      "sequenceNumber": 4294967215,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.5
+    },
+    {
+      "firmwareMillis": 4294966096,
+      "kind": "weight",
+      "monotonicSeconds": 108.8,
+      "sequenceNumber": 4294967216,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.52
+    },
+    {
+      "firmwareMillis": 4294966146,
+      "kind": "weight",
+      "monotonicSeconds": 108.8,
+      "sequenceNumber": 4294967217,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.54
+    },
+    {
+      "firmwareMillis": 4294966196,
+      "kind": "weight",
+      "monotonicSeconds": 108.9,
+      "sequenceNumber": 4294967218,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.56
+    },
+    {
+      "firmwareMillis": 4294966246,
+      "kind": "weight",
+      "monotonicSeconds": 108.9,
+      "sequenceNumber": 4294967219,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.58
+    },
+    {
+      "firmwareMillis": 4294966296,
+      "kind": "weight",
+      "monotonicSeconds": 109.0,
+      "sequenceNumber": 4294967220,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.6
+    },
+    {
+      "firmwareMillis": 4294966346,
+      "kind": "weight",
+      "monotonicSeconds": 109.0,
+      "sequenceNumber": 4294967221,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.62
+    },
+    {
+      "firmwareMillis": 4294966396,
+      "kind": "weight",
+      "monotonicSeconds": 109.1,
+      "sequenceNumber": 4294967222,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.64
+    },
+    {
+      "firmwareMillis": 4294966446,
+      "kind": "weight",
+      "monotonicSeconds": 109.1,
+      "sequenceNumber": 4294967223,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.66
+    },
+    {
+      "firmwareMillis": 4294966496,
+      "kind": "weight",
+      "monotonicSeconds": 109.2,
+      "sequenceNumber": 4294967224,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.68
+    },
+    {
+      "firmwareMillis": 4294966546,
+      "kind": "weight",
+      "monotonicSeconds": 109.2,
+      "sequenceNumber": 4294967225,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.7
+    },
+    {
+      "firmwareMillis": 4294966596,
+      "kind": "weight",
+      "monotonicSeconds": 109.3,
+      "sequenceNumber": 4294967226,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.72
+    },
+    {
+      "firmwareMillis": 4294966646,
+      "kind": "weight",
+      "monotonicSeconds": 109.3,
+      "sequenceNumber": 4294967227,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.74
+    },
+    {
+      "firmwareMillis": 4294966696,
+      "kind": "weight",
+      "monotonicSeconds": 109.4,
+      "sequenceNumber": 4294967228,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.76
+    },
+    {
+      "firmwareMillis": 4294966746,
+      "kind": "weight",
+      "monotonicSeconds": 109.4,
+      "sequenceNumber": 4294967229,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.78
+    },
+    {
+      "firmwareMillis": 4294966796,
+      "kind": "weight",
+      "monotonicSeconds": 109.5,
+      "sequenceNumber": 4294967230,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.8
+    },
+    {
+      "firmwareMillis": 4294966846,
+      "kind": "weight",
+      "monotonicSeconds": 109.5,
+      "sequenceNumber": 4294967231,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.82
+    },
+    {
+      "firmwareMillis": 4294966896,
+      "kind": "weight",
+      "monotonicSeconds": 109.6,
+      "sequenceNumber": 4294967232,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.84
+    },
+    {
+      "firmwareMillis": 4294966946,
+      "kind": "weight",
+      "monotonicSeconds": 109.6,
+      "sequenceNumber": 4294967233,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.86
+    },
+    {
+      "firmwareMillis": 4294966996,
+      "kind": "weight",
+      "monotonicSeconds": 109.7,
+      "sequenceNumber": 4294967234,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.88
+    },
+    {
+      "firmwareMillis": 4294967046,
+      "kind": "weight",
+      "monotonicSeconds": 109.7,
+      "sequenceNumber": 4294967235,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.9
+    },
+    {
+      "firmwareMillis": 4294967096,
+      "kind": "weight",
+      "monotonicSeconds": 109.8,
+      "sequenceNumber": 4294967236,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.92
+    },
+    {
+      "firmwareMillis": 4294967146,
+      "kind": "weight",
+      "monotonicSeconds": 109.8,
+      "sequenceNumber": 4294967237,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.94
+    },
+    {
+      "firmwareMillis": 4294967196,
+      "kind": "weight",
+      "monotonicSeconds": 109.9,
+      "sequenceNumber": 4294967238,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.96
+    },
+    {
+      "firmwareMillis": 4294967246,
+      "kind": "weight",
+      "monotonicSeconds": 109.9,
+      "sequenceNumber": 4294967239,
+      "usbDroppedCumulative": 0,
+      "usbDroppedDelta": 0,
+      "weightGrams": 3.98
+    },
+    {
+      "firmwareMillis": 0,
+      "kind": "weight",
+      "monotonicSeconds": 110.0,
+      "sequenceNumber": 4294967250,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 10,
+      "weightGrams": 4.0
+    },
+    {
+      "firmwareMillis": 50,
+      "kind": "weight",
+      "monotonicSeconds": 110.0,
+      "sequenceNumber": 4294967251,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.02
+    },
+    {
+      "firmwareMillis": 100,
+      "kind": "weight",
+      "monotonicSeconds": 110.1,
+      "sequenceNumber": 4294967252,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.04
+    },
+    {
+      "firmwareMillis": 150,
+      "kind": "weight",
+      "monotonicSeconds": 110.1,
+      "sequenceNumber": 4294967253,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.06
+    },
+    {
+      "firmwareMillis": 200,
+      "kind": "weight",
+      "monotonicSeconds": 110.2,
+      "sequenceNumber": 4294967254,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.08
+    },
+    {
+      "firmwareMillis": 250,
+      "kind": "weight",
+      "monotonicSeconds": 110.2,
+      "sequenceNumber": 4294967255,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.1
+    },
+    {
+      "firmwareMillis": 300,
+      "kind": "weight",
+      "monotonicSeconds": 110.3,
+      "sequenceNumber": 4294967256,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.12
+    },
+    {
+      "firmwareMillis": 350,
+      "kind": "weight",
+      "monotonicSeconds": 110.3,
+      "sequenceNumber": 4294967257,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.14
+    },
+    {
+      "firmwareMillis": 400,
+      "kind": "weight",
+      "monotonicSeconds": 110.4,
+      "sequenceNumber": 4294967258,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.16
+    },
+    {
+      "firmwareMillis": 450,
+      "kind": "weight",
+      "monotonicSeconds": 110.4,
+      "sequenceNumber": 4294967259,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.18
+    },
+    {
+      "firmwareMillis": 500,
+      "kind": "weight",
+      "monotonicSeconds": 110.5,
+      "sequenceNumber": 4294967260,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.2
+    },
+    {
+      "firmwareMillis": 550,
+      "kind": "weight",
+      "monotonicSeconds": 110.5,
+      "sequenceNumber": 4294967261,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.22
+    },
+    {
+      "firmwareMillis": 600,
+      "kind": "weight",
+      "monotonicSeconds": 110.6,
+      "sequenceNumber": 4294967262,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.24
+    },
+    {
+      "firmwareMillis": 650,
+      "kind": "weight",
+      "monotonicSeconds": 110.6,
+      "sequenceNumber": 4294967263,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.26
+    },
+    {
+      "firmwareMillis": 700,
+      "kind": "weight",
+      "monotonicSeconds": 110.7,
+      "sequenceNumber": 4294967264,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.28
+    },
+    {
+      "firmwareMillis": 750,
+      "kind": "weight",
+      "monotonicSeconds": 110.7,
+      "sequenceNumber": 4294967265,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.3
+    },
+    {
+      "firmwareMillis": 800,
+      "kind": "weight",
+      "monotonicSeconds": 110.8,
+      "sequenceNumber": 4294967266,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.32
+    },
+    {
+      "firmwareMillis": 850,
+      "kind": "weight",
+      "monotonicSeconds": 110.8,
+      "sequenceNumber": 4294967267,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.34
+    },
+    {
+      "firmwareMillis": 900,
+      "kind": "weight",
+      "monotonicSeconds": 110.9,
+      "sequenceNumber": 4294967268,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.36
+    },
+    {
+      "firmwareMillis": 950,
+      "kind": "weight",
+      "monotonicSeconds": 110.9,
+      "sequenceNumber": 4294967269,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.38
+    },
+    {
+      "firmwareMillis": 1000,
+      "kind": "weight",
+      "monotonicSeconds": 111.0,
+      "sequenceNumber": 4294967270,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.4
+    },
+    {
+      "firmwareMillis": 1050,
+      "kind": "weight",
+      "monotonicSeconds": 111.0,
+      "sequenceNumber": 4294967271,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.42
+    },
+    {
+      "firmwareMillis": 1100,
+      "kind": "weight",
+      "monotonicSeconds": 111.1,
+      "sequenceNumber": 4294967272,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.44
+    },
+    {
+      "firmwareMillis": 1150,
+      "kind": "weight",
+      "monotonicSeconds": 111.1,
+      "sequenceNumber": 4294967273,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.46
+    },
+    {
+      "firmwareMillis": 1200,
+      "kind": "weight",
+      "monotonicSeconds": 111.2,
+      "sequenceNumber": 4294967274,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.48
+    },
+    {
+      "firmwareMillis": 1250,
+      "kind": "weight",
+      "monotonicSeconds": 111.2,
+      "sequenceNumber": 4294967275,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.5
+    },
+    {
+      "firmwareMillis": 1300,
+      "kind": "weight",
+      "monotonicSeconds": 111.3,
+      "sequenceNumber": 4294967276,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.52
+    },
+    {
+      "firmwareMillis": 1350,
+      "kind": "weight",
+      "monotonicSeconds": 111.3,
+      "sequenceNumber": 4294967277,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.54
+    },
+    {
+      "firmwareMillis": 1400,
+      "kind": "weight",
+      "monotonicSeconds": 111.4,
+      "sequenceNumber": 4294967278,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.56
+    },
+    {
+      "firmwareMillis": 1450,
+      "kind": "weight",
+      "monotonicSeconds": 111.4,
+      "sequenceNumber": 4294967279,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.58
+    },
+    {
+      "firmwareMillis": 1500,
+      "kind": "weight",
+      "monotonicSeconds": 111.5,
+      "sequenceNumber": 4294967280,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.6
+    },
+    {
+      "firmwareMillis": 1550,
+      "kind": "weight",
+      "monotonicSeconds": 111.5,
+      "sequenceNumber": 4294967281,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.62
+    },
+    {
+      "firmwareMillis": 1600,
+      "kind": "weight",
+      "monotonicSeconds": 111.6,
+      "sequenceNumber": 4294967282,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.64
+    },
+    {
+      "firmwareMillis": 1650,
+      "kind": "weight",
+      "monotonicSeconds": 111.6,
+      "sequenceNumber": 4294967283,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.66
+    },
+    {
+      "firmwareMillis": 1700,
+      "kind": "weight",
+      "monotonicSeconds": 111.7,
+      "sequenceNumber": 4294967284,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.68
+    },
+    {
+      "firmwareMillis": 1750,
+      "kind": "weight",
+      "monotonicSeconds": 111.7,
+      "sequenceNumber": 4294967285,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.7
+    },
+    {
+      "firmwareMillis": 1800,
+      "kind": "weight",
+      "monotonicSeconds": 111.8,
+      "sequenceNumber": 4294967286,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.72
+    },
+    {
+      "firmwareMillis": 1850,
+      "kind": "weight",
+      "monotonicSeconds": 111.8,
+      "sequenceNumber": 4294967287,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.74
+    },
+    {
+      "firmwareMillis": 1900,
+      "kind": "weight",
+      "monotonicSeconds": 111.9,
+      "sequenceNumber": 4294967288,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.76
+    },
+    {
+      "firmwareMillis": 1950,
+      "kind": "weight",
+      "monotonicSeconds": 111.9,
+      "sequenceNumber": 4294967289,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.78
+    },
+    {
+      "firmwareMillis": 2000,
+      "kind": "weight",
+      "monotonicSeconds": 112.0,
+      "sequenceNumber": 4294967290,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.8
+    },
+    {
+      "firmwareMillis": 2050,
+      "kind": "weight",
+      "monotonicSeconds": 112.0,
+      "sequenceNumber": 4294967291,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.82
+    },
+    {
+      "firmwareMillis": 2100,
+      "kind": "weight",
+      "monotonicSeconds": 112.1,
+      "sequenceNumber": 4294967292,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.84
+    },
+    {
+      "firmwareMillis": 2150,
+      "kind": "weight",
+      "monotonicSeconds": 112.1,
+      "sequenceNumber": 4294967293,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.86
+    },
+    {
+      "firmwareMillis": 2200,
+      "kind": "weight",
+      "monotonicSeconds": 112.2,
+      "sequenceNumber": 4294967294,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.88
+    },
+    {
+      "firmwareMillis": 2250,
+      "kind": "weight",
+      "monotonicSeconds": 112.2,
+      "sequenceNumber": 4294967295,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.9
+    },
+    {
+      "firmwareMillis": 2300,
+      "kind": "weight",
+      "monotonicSeconds": 112.3,
+      "sequenceNumber": 0,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.92
+    },
+    {
+      "firmwareMillis": 2350,
+      "kind": "weight",
+      "monotonicSeconds": 112.3,
+      "sequenceNumber": 1,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.94
+    },
+    {
+      "firmwareMillis": 2400,
+      "kind": "weight",
+      "monotonicSeconds": 112.4,
+      "sequenceNumber": 2,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.96
+    },
+    {
+      "firmwareMillis": 2450,
+      "kind": "weight",
+      "monotonicSeconds": 112.4,
+      "sequenceNumber": 3,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 4.98
+    },
+    {
+      "firmwareMillis": 2500,
+      "kind": "weight",
+      "monotonicSeconds": 112.5,
+      "sequenceNumber": 4,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.0
+    },
+    {
+      "firmwareMillis": 2550,
+      "kind": "weight",
+      "monotonicSeconds": 112.5,
+      "sequenceNumber": 5,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.02
+    },
+    {
+      "firmwareMillis": 2600,
+      "kind": "weight",
+      "monotonicSeconds": 112.6,
+      "sequenceNumber": 6,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.04
+    },
+    {
+      "firmwareMillis": 2650,
+      "kind": "weight",
+      "monotonicSeconds": 112.6,
+      "sequenceNumber": 7,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.06
+    },
+    {
+      "firmwareMillis": 2700,
+      "kind": "weight",
+      "monotonicSeconds": 112.7,
+      "sequenceNumber": 8,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.08
+    },
+    {
+      "firmwareMillis": 2750,
+      "kind": "weight",
+      "monotonicSeconds": 112.7,
+      "sequenceNumber": 9,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.1
+    },
+    {
+      "firmwareMillis": 2800,
+      "kind": "weight",
+      "monotonicSeconds": 112.8,
+      "sequenceNumber": 10,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.12
+    },
+    {
+      "firmwareMillis": 2850,
+      "kind": "weight",
+      "monotonicSeconds": 112.8,
+      "sequenceNumber": 11,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.14
+    },
+    {
+      "firmwareMillis": 2900,
+      "kind": "weight",
+      "monotonicSeconds": 112.9,
+      "sequenceNumber": 12,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.16
+    },
+    {
+      "firmwareMillis": 2950,
+      "kind": "weight",
+      "monotonicSeconds": 112.9,
+      "sequenceNumber": 13,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.18
+    },
+    {
+      "firmwareMillis": 3000,
+      "kind": "weight",
+      "monotonicSeconds": 113.0,
+      "sequenceNumber": 14,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.2
+    },
+    {
+      "firmwareMillis": 3050,
+      "kind": "weight",
+      "monotonicSeconds": 113.0,
+      "sequenceNumber": 15,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.22
+    },
+    {
+      "firmwareMillis": 3100,
+      "kind": "weight",
+      "monotonicSeconds": 113.1,
+      "sequenceNumber": 16,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.24
+    },
+    {
+      "firmwareMillis": 3150,
+      "kind": "weight",
+      "monotonicSeconds": 113.1,
+      "sequenceNumber": 17,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.26
+    },
+    {
+      "firmwareMillis": 3200,
+      "kind": "weight",
+      "monotonicSeconds": 113.2,
+      "sequenceNumber": 18,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.28
+    },
+    {
+      "firmwareMillis": 3250,
+      "kind": "weight",
+      "monotonicSeconds": 113.2,
+      "sequenceNumber": 19,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.3
+    },
+    {
+      "firmwareMillis": 3300,
+      "kind": "weight",
+      "monotonicSeconds": 113.3,
+      "sequenceNumber": 20,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.32
+    },
+    {
+      "firmwareMillis": 3350,
+      "kind": "weight",
+      "monotonicSeconds": 113.3,
+      "sequenceNumber": 21,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.34
+    },
+    {
+      "firmwareMillis": 3400,
+      "kind": "weight",
+      "monotonicSeconds": 113.4,
+      "sequenceNumber": 22,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.36
+    },
+    {
+      "firmwareMillis": 3450,
+      "kind": "weight",
+      "monotonicSeconds": 113.4,
+      "sequenceNumber": 23,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.38
+    },
+    {
+      "firmwareMillis": 3500,
+      "kind": "weight",
+      "monotonicSeconds": 113.5,
+      "sequenceNumber": 24,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.4
+    },
+    {
+      "firmwareMillis": 3550,
+      "kind": "weight",
+      "monotonicSeconds": 113.5,
+      "sequenceNumber": 25,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.42
+    },
+    {
+      "firmwareMillis": 3600,
+      "kind": "weight",
+      "monotonicSeconds": 113.6,
+      "sequenceNumber": 26,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.44
+    },
+    {
+      "firmwareMillis": 3650,
+      "kind": "weight",
+      "monotonicSeconds": 113.6,
+      "sequenceNumber": 27,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.46
+    },
+    {
+      "firmwareMillis": 3700,
+      "kind": "weight",
+      "monotonicSeconds": 113.7,
+      "sequenceNumber": 28,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.48
+    },
+    {
+      "firmwareMillis": 3750,
+      "kind": "weight",
+      "monotonicSeconds": 113.7,
+      "sequenceNumber": 29,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.5
+    },
+    {
+      "firmwareMillis": 3800,
+      "kind": "weight",
+      "monotonicSeconds": 113.8,
+      "sequenceNumber": 30,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.52
+    },
+    {
+      "firmwareMillis": 3850,
+      "kind": "weight",
+      "monotonicSeconds": 113.8,
+      "sequenceNumber": 31,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.54
+    },
+    {
+      "firmwareMillis": 3900,
+      "kind": "weight",
+      "monotonicSeconds": 113.9,
+      "sequenceNumber": 32,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.56
+    },
+    {
+      "firmwareMillis": 3950,
+      "kind": "weight",
+      "monotonicSeconds": 113.9,
+      "sequenceNumber": 33,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.58
+    },
+    {
+      "firmwareMillis": 4000,
+      "kind": "weight",
+      "monotonicSeconds": 114.0,
+      "sequenceNumber": 34,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.6
+    },
+    {
+      "firmwareMillis": 4050,
+      "kind": "weight",
+      "monotonicSeconds": 114.0,
+      "sequenceNumber": 35,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.62
+    },
+    {
+      "firmwareMillis": 4100,
+      "kind": "weight",
+      "monotonicSeconds": 114.1,
+      "sequenceNumber": 36,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.64
+    },
+    {
+      "firmwareMillis": 4150,
+      "kind": "weight",
+      "monotonicSeconds": 114.1,
+      "sequenceNumber": 37,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.66
+    },
+    {
+      "firmwareMillis": 4200,
+      "kind": "weight",
+      "monotonicSeconds": 114.2,
+      "sequenceNumber": 38,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.68
+    },
+    {
+      "firmwareMillis": 4250,
+      "kind": "weight",
+      "monotonicSeconds": 114.2,
+      "sequenceNumber": 39,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.7
+    },
+    {
+      "firmwareMillis": 4300,
+      "kind": "weight",
+      "monotonicSeconds": 114.3,
+      "sequenceNumber": 40,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.72
+    },
+    {
+      "firmwareMillis": 4350,
+      "kind": "weight",
+      "monotonicSeconds": 114.3,
+      "sequenceNumber": 41,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.74
+    },
+    {
+      "firmwareMillis": 4400,
+      "kind": "weight",
+      "monotonicSeconds": 114.4,
+      "sequenceNumber": 42,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.76
+    },
+    {
+      "firmwareMillis": 4450,
+      "kind": "weight",
+      "monotonicSeconds": 114.4,
+      "sequenceNumber": 43,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.78
+    },
+    {
+      "firmwareMillis": 4500,
+      "kind": "weight",
+      "monotonicSeconds": 114.5,
+      "sequenceNumber": 44,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.8
+    },
+    {
+      "firmwareMillis": 4550,
+      "kind": "weight",
+      "monotonicSeconds": 114.5,
+      "sequenceNumber": 45,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.82
+    },
+    {
+      "firmwareMillis": 4600,
+      "kind": "weight",
+      "monotonicSeconds": 114.6,
+      "sequenceNumber": 46,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.84
+    },
+    {
+      "firmwareMillis": 4650,
+      "kind": "weight",
+      "monotonicSeconds": 114.6,
+      "sequenceNumber": 47,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.86
+    },
+    {
+      "firmwareMillis": 4700,
+      "kind": "weight",
+      "monotonicSeconds": 114.7,
+      "sequenceNumber": 48,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.88
+    },
+    {
+      "firmwareMillis": 4750,
+      "kind": "weight",
+      "monotonicSeconds": 114.7,
+      "sequenceNumber": 49,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.9
+    },
+    {
+      "firmwareMillis": 4800,
+      "kind": "weight",
+      "monotonicSeconds": 114.8,
+      "sequenceNumber": 50,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.92
+    },
+    {
+      "firmwareMillis": 4850,
+      "kind": "weight",
+      "monotonicSeconds": 114.8,
+      "sequenceNumber": 51,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.94
+    },
+    {
+      "firmwareMillis": 4900,
+      "kind": "weight",
+      "monotonicSeconds": 114.9,
+      "sequenceNumber": 52,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.96
+    },
+    {
+      "firmwareMillis": 4950,
+      "kind": "weight",
+      "monotonicSeconds": 114.9,
+      "sequenceNumber": 53,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 5.98
+    },
+    {
+      "firmwareMillis": 5000,
+      "kind": "weight",
+      "monotonicSeconds": 115.0,
+      "sequenceNumber": 54,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.0
+    },
+    {
+      "firmwareMillis": 5050,
+      "kind": "weight",
+      "monotonicSeconds": 115.0,
+      "sequenceNumber": 55,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.02
+    },
+    {
+      "firmwareMillis": 5100,
+      "kind": "weight",
+      "monotonicSeconds": 115.1,
+      "sequenceNumber": 56,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.04
+    },
+    {
+      "firmwareMillis": 5150,
+      "kind": "weight",
+      "monotonicSeconds": 115.1,
+      "sequenceNumber": 57,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.06
+    },
+    {
+      "firmwareMillis": 5200,
+      "kind": "weight",
+      "monotonicSeconds": 115.2,
+      "sequenceNumber": 58,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.08
+    },
+    {
+      "firmwareMillis": 5250,
+      "kind": "weight",
+      "monotonicSeconds": 115.2,
+      "sequenceNumber": 59,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.1
+    },
+    {
+      "firmwareMillis": 5300,
+      "kind": "weight",
+      "monotonicSeconds": 115.3,
+      "sequenceNumber": 60,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.12
+    },
+    {
+      "firmwareMillis": 5350,
+      "kind": "weight",
+      "monotonicSeconds": 115.3,
+      "sequenceNumber": 61,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.14
+    },
+    {
+      "firmwareMillis": 5400,
+      "kind": "weight",
+      "monotonicSeconds": 115.4,
+      "sequenceNumber": 62,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.16
+    },
+    {
+      "firmwareMillis": 5450,
+      "kind": "weight",
+      "monotonicSeconds": 115.4,
+      "sequenceNumber": 63,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.18
+    },
+    {
+      "firmwareMillis": 5500,
+      "kind": "weight",
+      "monotonicSeconds": 115.5,
+      "sequenceNumber": 64,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.2
+    },
+    {
+      "firmwareMillis": 5550,
+      "kind": "weight",
+      "monotonicSeconds": 115.5,
+      "sequenceNumber": 65,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.22
+    },
+    {
+      "firmwareMillis": 5600,
+      "kind": "weight",
+      "monotonicSeconds": 115.6,
+      "sequenceNumber": 66,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.24
+    },
+    {
+      "firmwareMillis": 5650,
+      "kind": "weight",
+      "monotonicSeconds": 115.6,
+      "sequenceNumber": 67,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.26
+    },
+    {
+      "firmwareMillis": 5700,
+      "kind": "weight",
+      "monotonicSeconds": 115.7,
+      "sequenceNumber": 68,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.28
+    },
+    {
+      "firmwareMillis": 5750,
+      "kind": "weight",
+      "monotonicSeconds": 115.7,
+      "sequenceNumber": 69,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.3
+    },
+    {
+      "firmwareMillis": 5800,
+      "kind": "weight",
+      "monotonicSeconds": 115.8,
+      "sequenceNumber": 70,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.32
+    },
+    {
+      "firmwareMillis": 5850,
+      "kind": "weight",
+      "monotonicSeconds": 115.8,
+      "sequenceNumber": 71,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.34
+    },
+    {
+      "firmwareMillis": 5900,
+      "kind": "weight",
+      "monotonicSeconds": 115.9,
+      "sequenceNumber": 72,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.36
+    },
+    {
+      "firmwareMillis": 5950,
+      "kind": "weight",
+      "monotonicSeconds": 115.9,
+      "sequenceNumber": 73,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.38
+    },
+    {
+      "firmwareMillis": 6000,
+      "kind": "weight",
+      "monotonicSeconds": 116.0,
+      "sequenceNumber": 74,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.4
+    },
+    {
+      "firmwareMillis": 6050,
+      "kind": "weight",
+      "monotonicSeconds": 116.0,
+      "sequenceNumber": 75,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.42
+    },
+    {
+      "firmwareMillis": 6100,
+      "kind": "weight",
+      "monotonicSeconds": 116.1,
+      "sequenceNumber": 76,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.44
+    },
+    {
+      "firmwareMillis": 6150,
+      "kind": "weight",
+      "monotonicSeconds": 116.1,
+      "sequenceNumber": 77,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.46
+    },
+    {
+      "firmwareMillis": 6200,
+      "kind": "weight",
+      "monotonicSeconds": 116.2,
+      "sequenceNumber": 78,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.48
+    },
+    {
+      "firmwareMillis": 6250,
+      "kind": "weight",
+      "monotonicSeconds": 116.2,
+      "sequenceNumber": 79,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.5
+    },
+    {
+      "firmwareMillis": 6300,
+      "kind": "weight",
+      "monotonicSeconds": 116.3,
+      "sequenceNumber": 80,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.52
+    },
+    {
+      "firmwareMillis": 6350,
+      "kind": "weight",
+      "monotonicSeconds": 116.3,
+      "sequenceNumber": 81,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.54
+    },
+    {
+      "firmwareMillis": 6400,
+      "kind": "weight",
+      "monotonicSeconds": 116.4,
+      "sequenceNumber": 82,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.56
+    },
+    {
+      "firmwareMillis": 6450,
+      "kind": "weight",
+      "monotonicSeconds": 116.4,
+      "sequenceNumber": 83,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.58
+    },
+    {
+      "firmwareMillis": 6500,
+      "kind": "weight",
+      "monotonicSeconds": 116.5,
+      "sequenceNumber": 84,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.6
+    },
+    {
+      "firmwareMillis": 6550,
+      "kind": "weight",
+      "monotonicSeconds": 116.5,
+      "sequenceNumber": 85,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.62
+    },
+    {
+      "firmwareMillis": 6600,
+      "kind": "weight",
+      "monotonicSeconds": 116.6,
+      "sequenceNumber": 86,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.64
+    },
+    {
+      "firmwareMillis": 6650,
+      "kind": "weight",
+      "monotonicSeconds": 116.6,
+      "sequenceNumber": 87,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.66
+    },
+    {
+      "firmwareMillis": 6700,
+      "kind": "weight",
+      "monotonicSeconds": 116.7,
+      "sequenceNumber": 88,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.68
+    },
+    {
+      "firmwareMillis": 6750,
+      "kind": "weight",
+      "monotonicSeconds": 116.7,
+      "sequenceNumber": 89,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.7
+    },
+    {
+      "firmwareMillis": 6800,
+      "kind": "weight",
+      "monotonicSeconds": 116.8,
+      "sequenceNumber": 90,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.72
+    },
+    {
+      "firmwareMillis": 6850,
+      "kind": "weight",
+      "monotonicSeconds": 116.8,
+      "sequenceNumber": 91,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.74
+    },
+    {
+      "firmwareMillis": 6900,
+      "kind": "weight",
+      "monotonicSeconds": 116.9,
+      "sequenceNumber": 92,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.76
+    },
+    {
+      "firmwareMillis": 6950,
+      "kind": "weight",
+      "monotonicSeconds": 116.9,
+      "sequenceNumber": 93,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.78
+    },
+    {
+      "firmwareMillis": 7000,
+      "kind": "weight",
+      "monotonicSeconds": 117.0,
+      "sequenceNumber": 94,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.8
+    },
+    {
+      "firmwareMillis": 7050,
+      "kind": "weight",
+      "monotonicSeconds": 117.0,
+      "sequenceNumber": 95,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.82
+    },
+    {
+      "firmwareMillis": 7100,
+      "kind": "weight",
+      "monotonicSeconds": 117.1,
+      "sequenceNumber": 96,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.84
+    },
+    {
+      "firmwareMillis": 7150,
+      "kind": "weight",
+      "monotonicSeconds": 117.1,
+      "sequenceNumber": 97,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.86
+    },
+    {
+      "firmwareMillis": 7200,
+      "kind": "weight",
+      "monotonicSeconds": 117.2,
+      "sequenceNumber": 98,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.88
+    },
+    {
+      "firmwareMillis": 7250,
+      "kind": "weight",
+      "monotonicSeconds": 117.2,
+      "sequenceNumber": 99,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.9
+    },
+    {
+      "firmwareMillis": 7300,
+      "kind": "weight",
+      "monotonicSeconds": 117.3,
+      "sequenceNumber": 100,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.92
+    },
+    {
+      "firmwareMillis": 7350,
+      "kind": "weight",
+      "monotonicSeconds": 117.3,
+      "sequenceNumber": 101,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.94
+    },
+    {
+      "firmwareMillis": 7400,
+      "kind": "weight",
+      "monotonicSeconds": 117.4,
+      "sequenceNumber": 102,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.96
+    },
+    {
+      "firmwareMillis": 7450,
+      "kind": "weight",
+      "monotonicSeconds": 117.4,
+      "sequenceNumber": 103,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 6.98
+    },
+    {
+      "firmwareMillis": 7500,
+      "kind": "weight",
+      "monotonicSeconds": 117.5,
+      "sequenceNumber": 104,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.0
+    },
+    {
+      "firmwareMillis": 7550,
+      "kind": "weight",
+      "monotonicSeconds": 117.5,
+      "sequenceNumber": 105,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.02
+    },
+    {
+      "firmwareMillis": 7600,
+      "kind": "weight",
+      "monotonicSeconds": 117.6,
+      "sequenceNumber": 106,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.04
+    },
+    {
+      "firmwareMillis": 7650,
+      "kind": "weight",
+      "monotonicSeconds": 117.6,
+      "sequenceNumber": 107,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.06
+    },
+    {
+      "firmwareMillis": 7700,
+      "kind": "weight",
+      "monotonicSeconds": 117.7,
+      "sequenceNumber": 108,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.08
+    },
+    {
+      "firmwareMillis": 7750,
+      "kind": "weight",
+      "monotonicSeconds": 117.7,
+      "sequenceNumber": 109,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.1
+    },
+    {
+      "firmwareMillis": 7800,
+      "kind": "weight",
+      "monotonicSeconds": 117.8,
+      "sequenceNumber": 110,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.12
+    },
+    {
+      "firmwareMillis": 7850,
+      "kind": "weight",
+      "monotonicSeconds": 117.8,
+      "sequenceNumber": 111,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.14
+    },
+    {
+      "firmwareMillis": 7900,
+      "kind": "weight",
+      "monotonicSeconds": 117.9,
+      "sequenceNumber": 112,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.16
+    },
+    {
+      "firmwareMillis": 7950,
+      "kind": "weight",
+      "monotonicSeconds": 117.9,
+      "sequenceNumber": 113,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.18
+    },
+    {
+      "firmwareMillis": 8000,
+      "kind": "weight",
+      "monotonicSeconds": 118.0,
+      "sequenceNumber": 114,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.2
+    },
+    {
+      "firmwareMillis": 8050,
+      "kind": "weight",
+      "monotonicSeconds": 118.0,
+      "sequenceNumber": 115,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.22
+    },
+    {
+      "firmwareMillis": 8100,
+      "kind": "weight",
+      "monotonicSeconds": 118.1,
+      "sequenceNumber": 116,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.24
+    },
+    {
+      "firmwareMillis": 8150,
+      "kind": "weight",
+      "monotonicSeconds": 118.1,
+      "sequenceNumber": 117,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.26
+    },
+    {
+      "firmwareMillis": 8200,
+      "kind": "weight",
+      "monotonicSeconds": 118.2,
+      "sequenceNumber": 118,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.28
+    },
+    {
+      "firmwareMillis": 8250,
+      "kind": "weight",
+      "monotonicSeconds": 118.2,
+      "sequenceNumber": 119,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.3
+    },
+    {
+      "firmwareMillis": 8300,
+      "kind": "weight",
+      "monotonicSeconds": 118.3,
+      "sequenceNumber": 120,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.32
+    },
+    {
+      "firmwareMillis": 8350,
+      "kind": "weight",
+      "monotonicSeconds": 118.3,
+      "sequenceNumber": 121,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.34
+    },
+    {
+      "firmwareMillis": 8400,
+      "kind": "weight",
+      "monotonicSeconds": 118.4,
+      "sequenceNumber": 122,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.36
+    },
+    {
+      "firmwareMillis": 8450,
+      "kind": "weight",
+      "monotonicSeconds": 118.4,
+      "sequenceNumber": 123,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.38
+    },
+    {
+      "firmwareMillis": 8500,
+      "kind": "weight",
+      "monotonicSeconds": 118.5,
+      "sequenceNumber": 124,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.4
+    },
+    {
+      "firmwareMillis": 8550,
+      "kind": "weight",
+      "monotonicSeconds": 118.5,
+      "sequenceNumber": 125,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.42
+    },
+    {
+      "firmwareMillis": 8600,
+      "kind": "weight",
+      "monotonicSeconds": 118.6,
+      "sequenceNumber": 126,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.44
+    },
+    {
+      "firmwareMillis": 8650,
+      "kind": "weight",
+      "monotonicSeconds": 118.6,
+      "sequenceNumber": 127,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.46
+    },
+    {
+      "firmwareMillis": 8700,
+      "kind": "weight",
+      "monotonicSeconds": 118.7,
+      "sequenceNumber": 128,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.48
+    },
+    {
+      "firmwareMillis": 8750,
+      "kind": "weight",
+      "monotonicSeconds": 118.7,
+      "sequenceNumber": 129,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.5
+    },
+    {
+      "firmwareMillis": 8800,
+      "kind": "weight",
+      "monotonicSeconds": 118.8,
+      "sequenceNumber": 130,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.52
+    },
+    {
+      "firmwareMillis": 8850,
+      "kind": "weight",
+      "monotonicSeconds": 118.8,
+      "sequenceNumber": 131,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.54
+    },
+    {
+      "firmwareMillis": 8900,
+      "kind": "weight",
+      "monotonicSeconds": 118.9,
+      "sequenceNumber": 132,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.56
+    },
+    {
+      "firmwareMillis": 8950,
+      "kind": "weight",
+      "monotonicSeconds": 118.9,
+      "sequenceNumber": 133,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.58
+    },
+    {
+      "firmwareMillis": 9000,
+      "kind": "weight",
+      "monotonicSeconds": 119.0,
+      "sequenceNumber": 134,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.6
+    },
+    {
+      "firmwareMillis": 9050,
+      "kind": "weight",
+      "monotonicSeconds": 119.0,
+      "sequenceNumber": 135,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.62
+    },
+    {
+      "firmwareMillis": 9100,
+      "kind": "weight",
+      "monotonicSeconds": 119.1,
+      "sequenceNumber": 136,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.64
+    },
+    {
+      "firmwareMillis": 9150,
+      "kind": "weight",
+      "monotonicSeconds": 119.1,
+      "sequenceNumber": 137,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.66
+    },
+    {
+      "firmwareMillis": 9200,
+      "kind": "weight",
+      "monotonicSeconds": 119.2,
+      "sequenceNumber": 138,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.68
+    },
+    {
+      "firmwareMillis": 9250,
+      "kind": "weight",
+      "monotonicSeconds": 119.2,
+      "sequenceNumber": 139,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.7
+    },
+    {
+      "firmwareMillis": 9300,
+      "kind": "weight",
+      "monotonicSeconds": 119.3,
+      "sequenceNumber": 140,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.72
+    },
+    {
+      "firmwareMillis": 9350,
+      "kind": "weight",
+      "monotonicSeconds": 119.3,
+      "sequenceNumber": 141,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.74
+    },
+    {
+      "firmwareMillis": 9400,
+      "kind": "weight",
+      "monotonicSeconds": 119.4,
+      "sequenceNumber": 142,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.76
+    },
+    {
+      "firmwareMillis": 9450,
+      "kind": "weight",
+      "monotonicSeconds": 119.4,
+      "sequenceNumber": 143,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.78
+    },
+    {
+      "firmwareMillis": 9500,
+      "kind": "weight",
+      "monotonicSeconds": 119.5,
+      "sequenceNumber": 144,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.8
+    },
+    {
+      "firmwareMillis": 9550,
+      "kind": "weight",
+      "monotonicSeconds": 119.5,
+      "sequenceNumber": 145,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.82
+    },
+    {
+      "firmwareMillis": 9600,
+      "kind": "weight",
+      "monotonicSeconds": 119.6,
+      "sequenceNumber": 146,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.84
+    },
+    {
+      "firmwareMillis": 9650,
+      "kind": "weight",
+      "monotonicSeconds": 119.6,
+      "sequenceNumber": 147,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.86
+    },
+    {
+      "firmwareMillis": 9700,
+      "kind": "weight",
+      "monotonicSeconds": 119.7,
+      "sequenceNumber": 148,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.88
+    },
+    {
+      "firmwareMillis": 9750,
+      "kind": "weight",
+      "monotonicSeconds": 119.7,
+      "sequenceNumber": 149,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.9
+    },
+    {
+      "firmwareMillis": 9800,
+      "kind": "weight",
+      "monotonicSeconds": 119.8,
+      "sequenceNumber": 150,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.92
+    },
+    {
+      "firmwareMillis": 9850,
+      "kind": "weight",
+      "monotonicSeconds": 119.8,
+      "sequenceNumber": 151,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.94
+    },
+    {
+      "firmwareMillis": 9900,
+      "kind": "weight",
+      "monotonicSeconds": 119.9,
+      "sequenceNumber": 152,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.96
+    },
+    {
+      "firmwareMillis": 9950,
+      "kind": "weight",
+      "monotonicSeconds": 119.9,
+      "sequenceNumber": 153,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 7.98
+    },
+    {
+      "firmwareMillis": 10000,
+      "kind": "weight",
+      "monotonicSeconds": 120.0,
+      "sequenceNumber": 154,
+      "usbDroppedCumulative": 10,
+      "usbDroppedDelta": 0,
+      "weightGrams": 8.0
+    }
+  ],
+  "mode": "shot",
+  "protocolCapabilities": {
+    "deviceClockModulus": 4294967296,
+    "deviceClockSemantics": "freeRunning",
+    "hasChecksum": false,
+    "hasDeviceClock": true,
+    "hasSequence": true,
+    "sequenceModulus": 4294967296
+  },
+  "recordingEndMonotonicSeconds": 120.05,
+  "recordingStartMonotonicSeconds": 100.0,
+  "source": "usbSerial",
+  "vectorId": "shot-usb-device-cadence-dropped"
+}

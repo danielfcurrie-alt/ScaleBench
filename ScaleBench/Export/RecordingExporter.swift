@@ -8,7 +8,7 @@ enum RecordingExporter {
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
 
-        let data = try SharedRecordingCodec.exportData(from: finalized)
+        let data = try SharedRecordingCodec.exportData(from: finalized, recalculateMetrics: false)
         let timestamp = ISO8601DateFormatter()
             .string(from: finalized.startedAt)
             .replacingOccurrences(of: ":", with: "-")
@@ -29,6 +29,7 @@ final class SavedRecordingStore: ObservableObject {
     private let directoryURL: URL
     private let fileManager: FileManager
     private let seedExamples: Bool
+    private let workQueue = DispatchQueue(label: "app.scalebench.saved-recordings", qos: .userInitiated)
 
     init(
         directoryURL: URL? = nil,
@@ -37,20 +38,38 @@ final class SavedRecordingStore: ObservableObject {
     ) {
         self.fileManager = fileManager
         self.directoryURL = directoryURL ?? Self.defaultDirectoryURL(fileManager: fileManager)
-        self.seedExamples = seedExamples ?? (directoryURL == nil)
-        load()
-        seedExampleRecordingsIfNeeded()
+        let usesDefaultDirectory = directoryURL == nil
+        self.seedExamples = seedExamples ?? usesDefaultDirectory
+        if usesDefaultDirectory {
+            loadInBackground(seedWhenFinished: true)
+        } else {
+            load()
+            seedExampleRecordingsIfNeeded()
+        }
     }
 
     @discardableResult
-    func save(recording: ScaleRecording, notes: String, title: String? = nil) -> SavedScaleRecording? {
+    func save(
+        recording: ScaleRecording,
+        notes: String,
+        title: String? = nil,
+        metricsAreCurrent: Bool = false
+    ) -> SavedScaleRecording? {
         do {
             try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            let saved = SavedScaleRecording.make(recording: recording, title: title, notes: notes)
+            let saved = SavedScaleRecording.make(
+                recording: recording,
+                title: title,
+                notes: notes,
+                recalculateMetrics: !metricsAreCurrent
+            )
             let url = fileURL(for: saved.id)
 
             try backupExistingFileIfNeeded(at: url)
-            try SharedRecordingCodec.exportData(from: saved.recording).write(to: url, options: [.atomic])
+            try SharedRecordingCodec.exportData(
+                from: saved.recording,
+                recalculateMetrics: false
+            ).write(to: url, options: [.atomic])
 
             recordings.removeAll { $0.id == saved.id }
             recordings.insert(saved, at: 0)
@@ -63,12 +82,66 @@ final class SavedRecordingStore: ObservableObject {
         }
     }
 
+    func saveInBackground(
+        recording: ScaleRecording,
+        notes: String,
+        title: String? = nil,
+        metricsAreCurrent: Bool = false,
+        completion: @escaping (Result<SavedScaleRecording, Error>) -> Void
+    ) {
+        workQueue.async { [weak self] in
+            do {
+                let saved = SavedScaleRecording.make(
+                    recording: recording,
+                    title: title,
+                    notes: notes,
+                    recalculateMetrics: !metricsAreCurrent
+                )
+                guard let self else { return }
+                try self.persistPreparedRecording(saved)
+                DispatchQueue.main.async {
+                    self.insertPreparedRecording(saved)
+                    self.lastErrorMessage = nil
+                    completion(.success(saved))
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self?.lastErrorMessage = error.localizedDescription
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
     func load() {
+        let result = Self.loadRecordings(from: directoryURL, fileManager: fileManager)
+        recordings = result.recordings
+        lastErrorMessage = result.errorMessage
+    }
+
+    private func loadInBackground(seedWhenFinished: Bool) {
+        let directoryURL = directoryURL
+        let fileManager = fileManager
+        workQueue.async { [weak self] in
+            let result = Self.loadRecordings(from: directoryURL, fileManager: fileManager)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.recordings = result.recordings
+                self.lastErrorMessage = result.errorMessage
+                if seedWhenFinished {
+                    self.seedExampleRecordingsIfNeeded()
+                }
+            }
+        }
+    }
+
+    private static func loadRecordings(
+        from directoryURL: URL,
+        fileManager: FileManager
+    ) -> (recordings: [SavedScaleRecording], errorMessage: String?) {
         do {
             guard fileManager.fileExists(atPath: directoryURL.path) else {
-                recordings = []
-                lastErrorMessage = nil
-                return
+                return ([], nil)
             }
 
             let recordingFiles = try fileManager.contentsOfDirectory(
@@ -95,14 +168,15 @@ final class SavedRecordingStore: ObservableObject {
                 winnersByID[entry.saved.id] = entry
             }
 
-            recordings = winnersByID.values
+            let recordings = winnersByID.values
                 .map { $0.saved }
             .sorted { $0.savedAt > $1.savedAt }
-            lastErrorMessage = failedFileCount == 0
+            let errorMessage = failedFileCount == 0
                 ? nil
                 : "\(failedFileCount) saved recording file\(failedFileCount == 1 ? "" : "s") could not be read. Files were left in place."
+            return (recordings, errorMessage)
         } catch {
-            lastErrorMessage = error.localizedDescription
+            return ([], error.localizedDescription)
         }
     }
 
@@ -122,6 +196,16 @@ final class SavedRecordingStore: ObservableObject {
 
     @discardableResult
     func importRecording(from url: URL) -> SavedScaleRecording? {
+        do {
+            return try importRecordingOrThrow(from: url)
+        } catch {
+            lastErrorMessage = "Import failed: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    @discardableResult
+    func importRecordingOrThrow(from url: URL) throws -> SavedScaleRecording {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
             if didStartAccessing {
@@ -129,17 +213,79 @@ final class SavedRecordingStore: ObservableObject {
             }
         }
 
+        let data = try Data(contentsOf: url)
+        return try importRecordingDataOrThrow(
+            data,
+            fallbackTitle: "Imported \(url.deletingPathExtension().lastPathComponent)"
+        )
+    }
+
+    @discardableResult
+    func importRecordingData(_ data: Data, fallbackTitle: String) -> SavedScaleRecording? {
         do {
-            let data = try Data(contentsOf: url)
-            let imported = try Self.decodeImportedRecording(from: data)
-            let embeddedTitle = imported.title?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let title = embeddedTitle?.isEmpty == false
-                ? embeddedTitle
-                : "Imported \(url.deletingPathExtension().lastPathComponent)"
-            return save(recording: imported, notes: imported.notes, title: title)
+            return try importRecordingDataOrThrow(data, fallbackTitle: fallbackTitle)
         } catch {
             lastErrorMessage = "Import failed: \(error.localizedDescription)"
             return nil
+        }
+    }
+
+    @discardableResult
+    func importRecordingDataOrThrow(_ data: Data, fallbackTitle: String) throws -> SavedScaleRecording {
+        let saved = try Self.preparedImportedRecording(from: data, fallbackTitle: fallbackTitle)
+        try persistPreparedRecording(saved)
+        insertPreparedRecording(saved)
+        lastErrorMessage = nil
+        return saved
+    }
+
+    func importRecordingInBackground(
+        from url: URL,
+        completion: @escaping (Result<SavedScaleRecording, Error>) -> Void
+    ) {
+        workQueue.async { [weak self] in
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            do {
+                let data = try Data(contentsOf: url)
+                guard let self else { return }
+                try self.importPreparedRecordingInBackground(
+                    data,
+                    fallbackTitle: "Imported \(url.deletingPathExtension().lastPathComponent)",
+                    completion: completion
+                )
+            } catch {
+                DispatchQueue.main.async {
+                    self?.lastErrorMessage = "Import failed: \(error.localizedDescription)"
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    func importRecordingDataInBackground(
+        _ data: Data,
+        fallbackTitle: String,
+        completion: @escaping (Result<SavedScaleRecording, Error>) -> Void
+    ) {
+        workQueue.async { [weak self] in
+            do {
+                guard let self else { return }
+                try self.importPreparedRecordingInBackground(
+                    data,
+                    fallbackTitle: fallbackTitle,
+                    completion: completion
+                )
+            } catch {
+                DispatchQueue.main.async {
+                    self?.lastErrorMessage = "Import failed: \(error.localizedDescription)"
+                    completion(.failure(error))
+                }
+            }
         }
     }
 
@@ -245,6 +391,49 @@ final class SavedRecordingStore: ObservableObject {
         )
     }
 
+    private static func preparedImportedRecording(from data: Data, fallbackTitle: String) throws -> SavedScaleRecording {
+        let imported = try decodeImportedRecording(from: data)
+        let embeddedTitle = imported.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = embeddedTitle?.isEmpty == false ? embeddedTitle : fallbackTitle
+        return SavedScaleRecording.make(
+            recording: imported,
+            title: title,
+            notes: imported.notes,
+            recalculateMetrics: true
+        )
+    }
+
+    private func importPreparedRecordingInBackground(
+        _ data: Data,
+        fallbackTitle: String,
+        completion: @escaping (Result<SavedScaleRecording, Error>) -> Void
+    ) throws {
+        let saved = try Self.preparedImportedRecording(from: data, fallbackTitle: fallbackTitle)
+        try persistPreparedRecording(saved)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.insertPreparedRecording(saved)
+            self.lastErrorMessage = nil
+            completion(.success(saved))
+        }
+    }
+
+    private func persistPreparedRecording(_ saved: SavedScaleRecording) throws {
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let url = fileURL(for: saved.id)
+        try backupExistingFileIfNeeded(at: url)
+        try SharedRecordingCodec.exportData(
+            from: saved.recording,
+            recalculateMetrics: false
+        ).write(to: url, options: [.atomic])
+    }
+
+    private func insertPreparedRecording(_ saved: SavedScaleRecording) {
+        recordings.removeAll { $0.id == saved.id }
+        recordings.insert(saved, at: 0)
+        recordings = recordings.sorted { $0.savedAt > $1.savedAt }
+    }
+
     private static func decodeSavedRecordingFile(at url: URL) -> SavedScaleRecording? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let recording = try? SharedRecordingCodec.decodeRecording(from: data) else { return nil }
@@ -273,5 +462,16 @@ final class SavedRecordingStore: ObservableObject {
     private static func savedAt(for url: URL) -> Date {
         let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
         return values?.creationDate ?? values?.contentModificationDate ?? Date()
+    }
+}
+
+enum SavedRecordingImportError: LocalizedError {
+    case saveFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .saveFailed(message):
+            return message
+        }
     }
 }

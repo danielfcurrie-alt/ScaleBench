@@ -133,6 +133,13 @@ final class GoldenVectorSmokeTest {
         RecordingMode mode = mode(string(input.get("mode")));
         ScaleKind scaleKind = scaleKind(stringOrNull(input.get("deviceKind")));
         ScaleRecording recording = ScaleRecording.empty(mode);
+        String source = stringOrNull(input.get("source"));
+        recording.source = "usbSerial".equals(source)
+                ? RecordingSource.USB_SERIAL : RecordingSource.BLUETOOTH;
+        if (recording.source == RecordingSource.USB_SERIAL) {
+            recording.protocolName = "WMB+ USB Serial";
+            recording.serialBaud = 115200;
+        }
         recording.device = new ScaleDeviceIdentity();
         recording.device.name = "Vector";
         recording.device.identifier = "vector";
@@ -170,8 +177,12 @@ final class GoldenVectorSmokeTest {
             packet.bytesHex = "";
             packet.rejectionReason = parseFailed && "weight".equals(kind) ? ParseRejectionReason.INVALID_CHECKSUM : null;
             packet.weightGrams = weightGrams;
-            packet.sequence = nullableInt(frame.get("sequence"));
-            packet.deviceTimestampMilliseconds = nullableLong(frame.get("deviceTimestampMs"));
+            packet.sequence = recording.source == RecordingSource.USB_SERIAL
+                    ? null : nullableInt(frame.get("sequence"));
+            packet.deviceTimestampMilliseconds = frame.get("firmwareMillis") != null
+                    ? nullableLong(frame.get("firmwareMillis"))
+                    : nullableLong(frame.get("deviceTimestampMs"));
+            packet.usbSerial = usbMetadata(frame, recording.source);
             recording.rawPackets.add(packet);
 
             if ("weight".equals(kind) && !parseFailed && weightGrams != null) {
@@ -183,10 +194,32 @@ final class GoldenVectorSmokeTest {
                 sample.sequence = packet.sequence;
                 sample.deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds;
                 sample.flowGramsPerSecond = nullableDouble(frame.get("flowGramsPerSecond"));
+                sample.usbSerial = packet.usbSerial;
                 recording.samples.add(sample);
             }
         }
         return recording;
+    }
+
+    private static USBSerialSampleMetadata usbMetadata(
+            Map<String, Object> frame,
+            RecordingSource source
+    ) {
+        if (source != RecordingSource.USB_SERIAL || frame.get("firmwareMillis") == null
+                || frame.get("sequenceNumber") == null) return null;
+        USBSerialSampleMetadata metadata = new USBSerialSampleMetadata();
+        metadata.firmwareMillis = nullableLong(frame.get("firmwareMillis"));
+        metadata.sequenceNumber = nullableLong(frame.get("sequenceNumber"));
+        metadata.usbStatusRaw = 0x0001;
+        metadata.usbStatusLabels.add("HX711 connected");
+        metadata.firmwareQuality = 100;
+        metadata.hx711Hz = 20;
+        Long cumulative = nullableLong(frame.get("usbDroppedCumulative"));
+        Long delta = nullableLong(frame.get("usbDroppedDelta"));
+        metadata.usbDroppedCumulative = cumulative == null ? 0 : cumulative;
+        metadata.usbDroppedDelta = delta == null ? 0 : delta;
+        metadata.hostReceivedAtMillis = Math.round(doubleValue(frame.get("monotonicSeconds")) * 1000.0);
+        return metadata;
     }
 
     private static RecordingEventType recordingEventType(String value) {

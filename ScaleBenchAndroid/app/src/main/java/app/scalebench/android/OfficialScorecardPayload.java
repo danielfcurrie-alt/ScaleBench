@@ -25,6 +25,8 @@ final class OfficialScorecardPayload {
     Double coverage;
     Double purity;
     Double sampleRateHz;
+    Double deviceCadenceHz;
+    Double receivedSampleRateHz;
     Double p95IntervalMilliseconds;
     Double maxGapMilliseconds;
     int longGapCount;
@@ -61,6 +63,8 @@ final class OfficialScorecardPayload {
         payload.coverage = metrics.delivery == null ? null : metrics.delivery.coverage;
         payload.purity = metrics.delivery == null ? null : metrics.delivery.purity;
         payload.sampleRateHz = metrics.effectiveSampleRateHz;
+        payload.deviceCadenceHz = usbDeviceCadenceHz(recording);
+        payload.receivedSampleRateHz = usbReceivedSampleRateHz(recording);
         payload.p95IntervalMilliseconds = metrics.packetIntervalP95Milliseconds;
         payload.maxGapMilliseconds = metrics.packetIntervalMaxMilliseconds;
         payload.longGapCount = metrics.longGapCount;
@@ -70,5 +74,27 @@ final class OfficialScorecardPayload {
         payload.rawPacketCount = recording.rawPackets.size();
         payload.notes = recording.notes;
         return payload;
+    }
+
+    private static Double usbDeviceCadenceHz(ScaleRecording recording) {
+        if (recording.source != RecordingSource.USB_SERIAL) return null;
+        double sum = 0;
+        int count = 0;
+        for (ScaleSample sample : recording.samples) {
+            if (sample.usbSerial == null) continue;
+            double hz = sample.usbSerial.hx711Hz;
+            if (!Double.isFinite(hz) || hz <= 0) continue;
+            sum += hz;
+            count += 1;
+        }
+        return count == 0 ? null : sum / count;
+    }
+
+    private static Double usbReceivedSampleRateHz(ScaleRecording recording) {
+        if (recording.source != RecordingSource.USB_SERIAL || recording.samples.size() < 2) return null;
+        double first = recording.samples.get(0).monotonicSeconds;
+        double last = recording.samples.get(recording.samples.size() - 1).monotonicSeconds;
+        double span = last - first;
+        return span > 0 && Double.isFinite(span) ? recording.samples.size() / span : null;
     }
 }

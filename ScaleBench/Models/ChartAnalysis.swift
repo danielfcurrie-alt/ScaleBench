@@ -13,15 +13,16 @@ struct ChartAnalysis: Equatable {
     static func make(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> ChartAnalysis {
         let referenceTime = chartReferenceTime(recording: recording)
         let timeline = PacketTimeline.make(recording: recording, metrics: metrics, referenceTime: referenceTime)
-        let weightPoints = chartPoints(samples: recording.samples, referenceTime: referenceTime)
-        let flowPoints = flowChartPoints(samples: recording.samples, referenceTime: referenceTime)
+        let samples = ScaleQualityAnalyzer.canonicalWeightSamples(recording)
+        let weightPoints = chartPoints(samples: samples, referenceTime: referenceTime)
+        let flowPoints = flowChartPoints(samples: samples, referenceTime: referenceTime)
         return ChartAnalysis(
             weightPoints: weightPoints,
             flowPoints: flowPoints,
             packetTimeline: timeline,
             problemWindows: makeProblemWindows(points: weightPoints, timeline: timeline),
             deductionBreakdown: deductions(metrics: metrics),
-            signalDiagnostics: makeSignalDiagnostics(recording: recording, metrics: metrics)
+            signalDiagnostics: makeSignalDiagnostics(recording: recording, samples: samples, metrics: metrics)
         )
     }
 }
@@ -114,9 +115,10 @@ struct PacketTimeline: Equatable {
         referenceTime: Double
     ) -> PacketTimeline {
         let packets = recording.rawPackets.sorted { $0.monotonicSeconds < $1.monotonicSeconds }
-        let threshold = packetLongGapThresholdMilliseconds(recording: recording)
+        let samples = ScaleQualityAnalyzer.canonicalWeightSamples(recording)
+        let threshold = packetLongGapThresholdMilliseconds(samples: samples, profile: recording.scoringProfile)
         let sampleIntervals = sampleIntervalEntries(
-            samples: recording.samples,
+            samples: samples,
             firstReferenceTime: referenceTime,
             thresholdMilliseconds: threshold,
             recordingStartTime: recording.recordingStartMonotonicSeconds,
@@ -224,6 +226,9 @@ struct PacketTimelineEntry: Identifiable, Equatable {
 
     var lane: PacketLane {
         if severity == .penalty { return .penalty }
+        if packet.isWMBFloat32CompatibilityPacket {
+            return .metadata
+        }
         switch packet.role {
         case .weight:
             return .weight
@@ -418,12 +423,12 @@ private func deductions(metrics: ScaleQualityMetrics) -> [ChartDeduction] {
     return result
 }
 
-private func packetLongGapThresholdMilliseconds(recording: ScaleRecording) -> Double {
-    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(recording.samples)
+private func packetLongGapThresholdMilliseconds(samples: [ScaleSample], profile: ScoringProfile) -> Double {
+    let intervals = ScaleQualityAnalyzer.sampleIntervalsMilliseconds(samples)
     let typicalInterval = percentile(intervals, 0.50)
     return ScaleQualityAnalyzer.longGapThresholdMilliseconds(
         forTypicalIntervalMilliseconds: typicalInterval,
-        profile: recording.scoringProfile.normalized
+        profile: profile.normalized
     )
 }
 
@@ -502,6 +507,9 @@ private func packetSeverity(
     if packet.rejectionReason != nil {
         return .penalty
     }
+    if packet.isWMBFloat32CompatibilityPacket {
+        return .info
+    }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
         return .warning
     }
@@ -530,7 +538,11 @@ private func packetEvidence(
         evidence.append("Near-threshold raw packet interval before this packet: \(formatAnalysisMilliseconds(intervalMilliseconds)). Warning only.")
     }
     if packet.role == .unknown {
-        evidence.append("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.")
+        if packet.isWMBFloat32CompatibilityPacket {
+            evidence.append("Compatibility weight packet. Preserved for diagnostics, but excluded from the official benchmark stream because WMB+ 20-byte packets are also present.")
+        } else {
+            evidence.append("Unknown packet role. Kept for diagnostics; may indicate unsupported protocol traffic.")
+        }
     }
     if packet.role == .battery {
         evidence.append("Battery/metadata packet. This can improve metadata coverage when parsed.")
@@ -547,6 +559,15 @@ private func packetEvidence(
     return evidence
 }
 
+private extension RawScalePacket {
+    var isWMBFloat32CompatibilityPacket: Bool {
+        role == .unknown
+            && rejectionReason == nil
+            && characteristicUUID.uppercased() == WeighMyBruParser.float32UUID
+            && fields?.contains { $0.semantic == .weight } == true
+    }
+}
+
 private func percentile(_ values: [Double], _ p: Double) -> Double? {
     guard !values.isEmpty else { return nil }
     let sorted = values.sorted()
@@ -558,12 +579,12 @@ private func formatAnalysisMilliseconds(_ value: Double?) -> String {
     value.map { String(format: "%.0f ms", $0) } ?? "--"
 }
 
-private func makeSignalDiagnostics(recording: ScaleRecording, metrics: ScaleQualityMetrics) -> SignalDiagnostics {
+private func makeSignalDiagnostics(recording: ScaleRecording, samples: [ScaleSample], metrics: ScaleQualityMetrics) -> SignalDiagnostics {
     guard recording.recordingEndMonotonicSeconds != nil else {
         return SignalDiagnostics(flowValidation: nil, clockSkew: nil, packetCoalescing: nil)
     }
     return SignalDiagnostics(
-        flowValidation: flowValidation(samples: recording.samples),
+        flowValidation: flowValidation(samples: samples),
         clockSkew: clockSkew(recording: recording),
         packetCoalescing: packetCoalescing(metrics: metrics)
     )

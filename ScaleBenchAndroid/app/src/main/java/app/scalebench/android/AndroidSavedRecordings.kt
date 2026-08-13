@@ -576,7 +576,7 @@ internal fun SavedRecordingDetailsDialog(
                             Text(details.validityReasons, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         ScoreExplanationBlock(details.scoreExplanationLines)
-                        SwiftMetricRow("Effective rate", details.effectiveRate)
+                        SwiftMetricRow(details.effectiveRateTitle, details.effectiveRate)
                         SwiftMetricRow("Interval p50", details.intervalP50)
                         SwiftMetricRow("Interval p95", details.intervalP95)
                         SwiftMetricRow("Max gap", details.maxGap)
@@ -586,6 +586,13 @@ internal fun SavedRecordingDetailsDialog(
                         SwiftMetricRow("Idle noise", details.idleNoise)
                         SwiftMetricRow("Idle std dev", details.idleStdDev)
                         SwiftMetricRow("Drift", details.drift)
+                    }
+                }
+                if (details.transportComparison.isVisible) {
+                    item {
+                        SavedDetailPanel("Transport comparison") {
+                            TransportComparisonPanel(details.transportComparison)
+                        }
                     }
                 }
                 if (details.samplePoints.size >= 2 || details.packetIntervals.isNotEmpty()) {
@@ -611,7 +618,7 @@ internal fun SavedRecordingDetailsDialog(
                                 points = details.samplePoints,
                                 flowPoints = details.flowPoints,
                                 timeline = details.packetTimeline,
-                                windows = ChartAnalysis.problemWindows(details.samplePoints, details.packetTimeline)
+                                windows = details.problemWindows
                             )
                             Text("Packet cadence", fontWeight = FontWeight.SemiBold)
                             ChartPacketCadence(
@@ -751,6 +758,7 @@ internal data class SavedRecordingDetails(
     val purityTitle: String,
     val purity: String,
     val verification: String,
+    val effectiveRateTitle: String,
     val effectiveRate: String,
     val intervalP50: String,
     val intervalP95: String,
@@ -771,6 +779,8 @@ internal data class SavedRecordingDetails(
     val packetIntervals: List<Double>,
     val rejectedPacketIndexes: Set<Int>,
     val packetTimeline: AndroidPacketTimeline,
+    val problemWindows: List<ChartWindow>,
+    val transportComparison: AndroidTransportComparison,
     val rawPreview: List<String>,
     val canShareScorecard: Boolean
 )
@@ -779,7 +789,7 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
     return try {
         val recording = store.recordingForAnalysis(summary)
         val analysis = ChartAnalysis.create(recording, recording.metrics)
-        val objectJson = store.recordingObject(summary)
+        val objectJson = store.recordingObject(recording)
         val metrics = objectJson.optJSONObject("metrics") ?: JSONObject()
         val samples = objectJson.optJSONArray("samples")
         val packets = objectJson.optJSONArray("rawPackets")
@@ -844,6 +854,7 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
                         (it.optJSONArray("unverifiableClasses")?.length() ?: 0)
                 )
             } ?: "--" else "--",
+            effectiveRateTitle = if (objectJson.optString("source") == "usbSerial") "Received rate" else "Effective rate",
             effectiveRate = number(metrics, "effectiveSampleRateHz", "%.1f Hz"),
             intervalP50 = number(metrics, "packetIntervalP50Milliseconds", "%.0f ms"),
             intervalP95 = number(metrics, "packetIntervalP95Milliseconds", "%.0f ms"),
@@ -864,6 +875,8 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
             packetIntervals = analysis.packetTimeline.sampleIntervals.map { it.intervalMs },
             rejectedPacketIndexes = rejectedPacketIndexes(packets),
             packetTimeline = analysis.packetTimeline,
+            problemWindows = analysis.problemWindows,
+            transportComparison = AndroidTransportComparison.from(recording),
             rawPreview = rawPreview(packets),
             canShareScorecard = canShareOfficialScorecard(summary.mode, recording.metrics)
         )
@@ -888,6 +901,7 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
             purityTitle = "Usable readings",
             purity = "--",
             verification = "--",
+            effectiveRateTitle = "Effective rate",
             effectiveRate = "--",
             intervalP50 = "--",
             intervalP95 = "--",
@@ -908,6 +922,8 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
             packetIntervals = emptyList(),
             rejectedPacketIndexes = emptySet(),
             packetTimeline = AndroidPacketTimeline(emptyList(), emptyList(), 300.0),
+            problemWindows = emptyList(),
+            transportComparison = AndroidTransportComparison(emptyList()),
             rawPreview = listOf("Could not open saved JSON: ${error.message ?: "unknown error"}"),
             canShareScorecard = false
         )
