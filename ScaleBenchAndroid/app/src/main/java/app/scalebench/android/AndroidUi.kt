@@ -92,6 +92,8 @@ import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
@@ -650,6 +652,8 @@ internal fun nextStepDetail(
 internal fun ScaleBenchHelpDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val content = remember { SharedHelpContent.load(context) }
+    val scope = rememberCoroutineScope()
+    var releaseCheck by remember { mutableStateOf<ReleaseCheckState>(ReleaseCheckState.Idle) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(content.title) },
@@ -669,12 +673,125 @@ internal fun ScaleBenchHelpDialog(onDismiss: () -> Unit) {
                 }
             }
         },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    val available = releaseCheck as? ReleaseCheckState.Available
+                    if (available != null) {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(available.releaseUrl)))
+                        }
+                        return@TextButton
+                    }
+
+                    releaseCheck = ReleaseCheckState.Checking
+                    scope.launch {
+                        releaseCheck = checkLatestGitHubRelease(context)
+                    }
+                },
+                enabled = releaseCheck !is ReleaseCheckState.Checking
+            ) {
+                Text(releaseCheck.buttonTitle)
+            }
+        },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done")
+            Column(horizontalAlignment = Alignment.End) {
+                releaseCheck.message?.let { message ->
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (releaseCheck is ReleaseCheckState.Failed) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Done")
+                }
             }
         }
     )
+}
+
+private sealed class ReleaseCheckState {
+    data object Idle : ReleaseCheckState()
+    data object Checking : ReleaseCheckState()
+    data class UpToDate(val current: String) : ReleaseCheckState()
+    data class Available(val current: String, val latest: String, val releaseUrl: String) : ReleaseCheckState()
+    data class Failed(val reason: String) : ReleaseCheckState()
+
+    val buttonTitle: String
+        get() = when (this) {
+            Idle, is UpToDate, is Failed -> "Check for New Release"
+            Checking -> "Checking..."
+            is Available -> "Open Latest Release"
+        }
+
+    val message: String?
+        get() = when (this) {
+            Idle, Checking -> null
+            is UpToDate -> "You are up to date on ScaleBench $current."
+            is Available -> "ScaleBench $latest is available. You are running $current."
+            is Failed -> reason
+        }
+}
+
+private suspend fun checkLatestGitHubRelease(context: Context): ReleaseCheckState = withContext(Dispatchers.IO) {
+    val current = currentVersionName(context)
+    runCatching {
+        val connection = (URL("https://api.github.com/repos/danielfcurrie-alt/ScaleBench/releases/latest").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", "ScaleBench")
+        }
+        connection.use {
+            if (responseCode !in 200..299) {
+                return@withContext ReleaseCheckState.Failed("Could not check GitHub Releases right now.")
+            }
+            val json = inputStream.bufferedReader().use { reader -> reader.readText() }
+            val release = JSONObject(json)
+            val tag = release.optString("tag_name").trim().trimStart('v', 'V')
+            val url = release.optString("html_url", "https://github.com/danielfcurrie-alt/ScaleBench/releases/latest")
+            if (isNewerVersion(tag, current)) {
+                ReleaseCheckState.Available(current, tag, url)
+            } else {
+                ReleaseCheckState.UpToDate(current)
+            }
+        }
+    }.getOrElse {
+        ReleaseCheckState.Failed("Could not check GitHub Releases right now.")
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun currentVersionName(context: Context): String {
+    return runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
+    }.getOrDefault("0")
+}
+
+private fun isNewerVersion(latest: String, current: String): Boolean {
+    val left = latest.split(".").map { it.toIntOrNull() ?: 0 }
+    val right = current.split(".").map { it.toIntOrNull() ?: 0 }
+    val count = max(left.size, right.size)
+    for (index in 0 until count) {
+        val l = left.getOrElse(index) { 0 }
+        val r = right.getOrElse(index) { 0 }
+        if (l != r) return l > r
+    }
+    return false
+}
+
+private inline fun <T : HttpURLConnection, R> T.use(block: T.() -> R): R {
+    return try {
+        block()
+    } finally {
+        disconnect()
+    }
 }
 
 @Composable

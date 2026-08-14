@@ -1,4 +1,5 @@
 import Charts
+import Foundation
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -375,6 +376,8 @@ struct ContentView: View {
                 case .help:
                     ScaleBenchHelpView()
 #if targetEnvironment(macCatalyst)
+                case .about:
+                    AboutScaleBenchView()
                 case .deviceUtility:
                     DeviceUtilityView(
                         bluetooth: bluetooth,
@@ -405,6 +408,11 @@ struct ContentView: View {
             .onChange(of: appCommands.helpRequestID) { _, _ in
                 activeSheet = .help
             }
+#if targetEnvironment(macCatalyst)
+            .onChange(of: appCommands.aboutRequestID) { _, _ in
+                activeSheet = .about
+            }
+#endif
             .modifier(AppCommandRequestModifier(
                 commands: appCommands,
                 startRecording: startRecordingAndShowTimer,
@@ -989,6 +997,7 @@ private var resetToolbarPlacement: ToolbarItemPlacement {
 private enum ActiveSheet: Identifiable {
     case help
 #if targetEnvironment(macCatalyst)
+    case about
     case deviceUtility
 #endif
     case recordingTimer
@@ -1000,6 +1009,7 @@ private enum ActiveSheet: Identifiable {
         switch self {
         case .help: "help"
 #if targetEnvironment(macCatalyst)
+        case .about: "about"
         case .deviceUtility: "device-utility"
 #endif
         case .recordingTimer: "recording-timer"
@@ -1285,6 +1295,186 @@ private struct ScaleBenchHelpView: View {
         }
     }
 }
+
+#if targetEnvironment(macCatalyst)
+private struct AboutScaleBenchView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var releaseCheckState = ReleaseCheckState.idle
+
+    private var currentVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("ScaleBench", systemImage: "scalemass")
+                            .font(.title2.weight(.semibold))
+                        Text("Version \(currentVersion) (\(buildNumber))")
+                            .foregroundStyle(.secondary)
+                        Text("Open-source scale benchmarking for Bluetooth and USB scale recordings.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                Section("Updates") {
+                    Button(action: handleReleaseCheck) {
+                        Label(releaseCheckState.buttonTitle, systemImage: releaseCheckState.buttonIcon)
+                    }
+                    .disabled(releaseCheckState.isChecking)
+
+                    if let message = releaseCheckState.message {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(releaseCheckState.isError ? .red : .secondary)
+                    }
+                }
+
+                Section("Links") {
+                    Link(destination: URL(string: "https://github.com/danielfcurrie-alt/ScaleBench")!) {
+                        Label("GitHub Repository", systemImage: "link")
+                    }
+                    Link(destination: URL(string: "https://github.com/danielfcurrie-alt/ScaleBench/releases")!) {
+                        Label("GitHub Releases", systemImage: "arrow.down.circle")
+                    }
+                }
+            }
+            .navigationTitle("About ScaleBench")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleReleaseCheck() {
+        if case let .available(_, _, url) = releaseCheckState {
+            UIApplication.shared.open(url)
+            return
+        }
+
+        releaseCheckState = .checking
+        Task {
+            let result = await GitHubReleaseChecker.checkLatestRelease()
+            await MainActor.run {
+                releaseCheckState = result
+            }
+        }
+    }
+}
+
+private enum ReleaseCheckState {
+    case idle
+    case checking
+    case upToDate(current: String)
+    case available(current: String, latest: String, url: URL)
+    case failed(String)
+
+    var buttonTitle: String {
+        switch self {
+        case .idle, .upToDate, .failed:
+            return "Check for New Release"
+        case .checking:
+            return "Checking..."
+        case .available:
+            return "Open Latest Release"
+        }
+    }
+
+    var buttonIcon: String {
+        switch self {
+        case .checking:
+            return "arrow.triangle.2.circlepath"
+        case .available:
+            return "arrow.up.circle"
+        default:
+            return "sparkle.magnifyingglass"
+        }
+    }
+
+    var isChecking: Bool {
+        if case .checking = self { return true }
+        return false
+    }
+
+    var isError: Bool {
+        if case .failed = self { return true }
+        return false
+    }
+
+    var message: String? {
+        switch self {
+        case .idle, .checking:
+            return nil
+        case let .upToDate(current):
+            return "You are up to date on ScaleBench \(current)."
+        case let .available(current, latest, _):
+            return "ScaleBench \(latest) is available. You are running \(current)."
+        case let .failed(message):
+            return message
+        }
+    }
+}
+
+private enum GitHubReleaseChecker {
+    private static let latestReleaseURL = URL(string: "https://api.github.com/repos/danielfcurrie-alt/ScaleBench/releases/latest")!
+
+    static func checkLatestRelease() async -> ReleaseCheckState {
+        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        do {
+            var request = URLRequest(url: latestReleaseURL)
+            request.timeoutInterval = 10
+            request.setValue("ScaleBench", forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return .failed("Could not check GitHub Releases right now.")
+            }
+            let release = try JSONDecoder().decode(GitHubLatestRelease.self, from: data)
+            let latestVersion = release.tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+            let releaseURL = URL(string: release.htmlURL) ?? URL(string: "https://github.com/danielfcurrie-alt/ScaleBench/releases/latest")!
+            if version(latestVersion, isNewerThan: currentVersion) {
+                return .available(current: currentVersion, latest: latestVersion, url: releaseURL)
+            }
+            return .upToDate(current: currentVersion)
+        } catch {
+            return .failed("Could not check GitHub Releases right now.")
+        }
+    }
+
+    private static func version(_ lhs: String, isNewerThan rhs: String) -> Bool {
+        let left = lhs.split(separator: ".").map { Int($0) ?? 0 }
+        let right = rhs.split(separator: ".").map { Int($0) ?? 0 }
+        let count = max(left.count, right.count)
+        for index in 0..<count {
+            let l = index < left.count ? left[index] : 0
+            let r = index < right.count ? right[index] : 0
+            if l != r { return l > r }
+        }
+        return false
+    }
+}
+
+private struct GitHubLatestRelease: Decodable {
+    let tagName: String
+    let htmlURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case tagName = "tag_name"
+        case htmlURL = "html_url"
+    }
+}
+#endif
 
 private struct SharedHelpItemRow: View {
     let item: SharedHelpItem

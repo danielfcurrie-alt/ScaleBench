@@ -1,6 +1,7 @@
 import SwiftUI
 
 final class AppCommandRouter: ObservableObject {
+    @Published var aboutRequestID = UUID()
     @Published var helpRequestID = UUID()
     @Published var startRecordingRequestID = UUID()
     @Published var stopRecordingRequestID = UUID()
@@ -51,6 +52,12 @@ struct ScaleBenchApp: App {
         }
         .commands {
 #if targetEnvironment(macCatalyst)
+            CommandGroup(replacing: .appInfo) {
+                Button("About ScaleBench") {
+                    appCommands.aboutRequestID = UUID()
+                }
+            }
+
             CommandGroup(after: .newItem) {
                 Button("Import Recording...") {
                     appCommands.importRecordingRequestID = UUID()
