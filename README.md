@@ -21,7 +21,7 @@ For recording procedures, scoring explanations, diagnostics, and troubleshooting
 - **Android**: live BLE recording, WMB+ USB Serial recording at 115200 baud, Standard v1 scoring, dark/light theme, richer diagnostic overlays, packet inspection, saved-recording details, JSON import/export through the Android file picker, scorecard sharing, Nordic DFU support, USB device detection, and first-run examples.
 - Saved recordings use a shared recording format. Exports from iOS/macOS can be imported by Android and Android exports can be imported by iOS/macOS.
 
-## What's new in 1.1.0
+## What's new in 1.1.1
 
 - Added WMB+ USB Serial recording on macOS and Android.
 - Split USB rate reporting into device cadence and received sample rate, so high-rate captures do not hide serial batching.
@@ -43,9 +43,9 @@ For recording procedures, scoring explanations, diagnostics, and troubleshooting
 
 Published builds are attached to [GitHub Releases](https://github.com/danielfcurrie-alt/ScaleBench/releases):
 
-- **macOS**: download `ScaleBench-1.1.0-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is Developer ID signed and Apple-notarized.
+- **macOS**: download `ScaleBench-1.1.1-macOS.zip`, expand it, and move `ScaleBench.app` to Applications. The GitHub build is Developer ID signed and Apple-notarized.
 - **Android**: download the release-signed APK and allow installation from your browser or file manager when Android asks.
-- **iOS/iPadOS**: download `ScaleBench-1.1.0-iOS-unsigned.ipa` for self-signing, or build the `v1.1.0` source tag in Xcode with your own signing team. The IPA is not directly installable: sign it with your own Apple ID using a third-party tool such as [Sideloadly](https://sideloadly.io/) or [AltStore Classic](https://faq.altstore.io/), then install it with Developer Mode enabled. With a free Personal Team, Apple limits the provisioning profile to seven days, after which the app must be refreshed or reinstalled. See [Apple's Personal Team documentation](https://developer.apple.com/help/account/basics/about-your-developer-account). TestFlight will be the normal public installation route when available.
+- **iOS/iPadOS**: download `ScaleBench-1.1.1-iOS-unsigned.ipa` for self-signing, or build the `v1.1.1` source tag in Xcode with your own signing team. The IPA is not directly installable: sign it with your own Apple ID using a third-party tool such as [Sideloadly](https://sideloadly.io/) or [AltStore Classic](https://faq.altstore.io/), then install it with Developer Mode enabled. With a free Personal Team, Apple limits the provisioning profile to seven days, after which the app must be refreshed or reinstalled. See [Apple's Personal Team documentation](https://developer.apple.com/help/account/basics/about-your-developer-account). TestFlight will be the normal public installation route when available.
 
 Every release also includes SHA-256 checksums. GitHub automatically provides source archives for the exact tagged revision.
 

@@ -1,17 +1,37 @@
 import Foundation
 
 enum SharedRecordingCodec {
+    enum EncodingStyle {
+        case exported
+        case storage
+    }
+
     static func exportData(
         from recording: ScaleRecording,
-        recalculateMetrics: Bool = true
+        recalculateMetrics: Bool = true,
+        style: EncodingStyle = .exported
     ) throws -> Data {
         let payload = SharedRecordingPayload(
             recording: recording,
-            recalculateMetrics: recalculateMetrics
+            recalculateMetrics: recalculateMetrics,
+            includeFieldAnnotations: style == .exported
         )
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        switch style {
+        case .exported:
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        case .storage:
+            encoder.outputFormatting = []
+        }
         return try encoder.encode(payload)
+    }
+
+    static func storageData(from recording: ScaleRecording, recalculateMetrics: Bool = false) throws -> Data {
+        try exportData(
+            from: recording,
+            recalculateMetrics: recalculateMetrics,
+            style: .storage
+        )
     }
 
     static func decodeRecording(from data: Data) throws -> ScaleRecording {
@@ -48,7 +68,7 @@ private struct SharedRecordingPayload: Codable {
     var events: [SharedRecordingEventPayload]
     var rawPackets: [SharedRawPacketPayload]
 
-    init(recording: ScaleRecording, recalculateMetrics: Bool) {
+    init(recording: ScaleRecording, recalculateMetrics: Bool, includeFieldAnnotations: Bool) {
         var finalized = recording
         finalized.schemaVersion = ScaleRecording.schemaVersion
         if recalculateMetrics {
@@ -80,7 +100,9 @@ private struct SharedRecordingPayload: Codable {
         samples = finalized.samples.map(SharedSamplePayload.init)
         batteryEvents = finalized.batteryEvents.map(SharedBatteryEventPayload.init)
         events = finalized.events.map(SharedRecordingEventPayload.init)
-        rawPackets = finalized.rawPackets.map(SharedRawPacketPayload.init)
+        rawPackets = finalized.rawPackets.map {
+            SharedRawPacketPayload(packet: $0, includeFieldAnnotations: includeFieldAnnotations)
+        }
     }
 
     func recording() throws -> ScaleRecording {
@@ -342,7 +364,7 @@ private struct SharedRawPacketPayload: Codable {
     var usbDroppedDelta: UInt32?
     var hostReceivedAt: Int64?
 
-    init(packet: RawScalePacket) {
+    init(packet: RawScalePacket, includeFieldAnnotations: Bool = true) {
         arrivalTimeMillis = milliseconds(packet.arrivalTime)
         monotonicSeconds = packet.monotonicSeconds
         scaleKind = packet.scaleKind.rawValue
@@ -353,7 +375,7 @@ private struct SharedRawPacketPayload: Codable {
         weightGrams = packet.weightGrams
         sequence = packet.sequence
         deviceTimestampMilliseconds = packet.deviceTimestampMilliseconds
-        fields = PacketFieldDecoder.annotations(for: packet)
+        fields = includeFieldAnnotations ? PacketFieldDecoder.annotations(for: packet) : nil
         firmwareMillis = packet.usbSerial?.firmwareMillis
         sequenceNumber = packet.usbSerial?.sequenceNumber
         usbStatusRaw = packet.usbSerial?.usbStatusRaw

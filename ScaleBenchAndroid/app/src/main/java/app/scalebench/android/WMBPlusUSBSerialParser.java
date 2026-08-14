@@ -87,7 +87,6 @@ final class WMBPlusUSBSerialParser {
             packet.sequence = null;
             packet.deviceTimestampMilliseconds = firmwareMillis;
             packet.usbSerial = metadata;
-            packet.fields.addAll(annotations(values));
 
             return ParseResult.sample(sample, packet);
         } catch (IllegalArgumentException error) {

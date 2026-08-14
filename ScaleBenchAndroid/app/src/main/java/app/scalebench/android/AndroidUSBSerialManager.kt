@@ -433,6 +433,7 @@ internal class AndroidUSBSerialManager(
             return
         }
         lastLiveMetricsRefreshSeconds = monotonicSeconds
+        if (currentRecording.samples.size > MAX_SAMPLES_FOR_FULL_LIVE_METRICS) return
         liveMetricsAnalysisInFlight = true
         val snapshot = liveAnalysisSnapshot(currentRecording)
         val generation = recordingGeneration
@@ -488,6 +489,7 @@ internal class AndroidUSBSerialManager(
     companion object {
         private const val LIVE_UI_REFRESH_INTERVAL_SECONDS = 0.2
         private const val LIVE_METRICS_REFRESH_INTERVAL_SECONDS = 2.0
+        private const val MAX_SAMPLES_FOR_FULL_LIVE_METRICS = 2_000
         private const val USB_DRAIN_INTERVAL_MILLIS = 50L
 
         private fun liveAnalysisSnapshot(source: ScaleRecording): ScaleRecording {

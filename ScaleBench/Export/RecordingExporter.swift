@@ -66,7 +66,7 @@ final class SavedRecordingStore: ObservableObject {
             let url = fileURL(for: saved.id)
 
             try backupExistingFileIfNeeded(at: url)
-            try SharedRecordingCodec.exportData(
+            try SharedRecordingCodec.storageData(
                 from: saved.recording,
                 recalculateMetrics: false
             ).write(to: url, options: [.atomic])
@@ -422,7 +422,7 @@ final class SavedRecordingStore: ObservableObject {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let url = fileURL(for: saved.id)
         try backupExistingFileIfNeeded(at: url)
-        try SharedRecordingCodec.exportData(
+        try SharedRecordingCodec.storageData(
             from: saved.recording,
             recalculateMetrics: false
         ).write(to: url, options: [.atomic])

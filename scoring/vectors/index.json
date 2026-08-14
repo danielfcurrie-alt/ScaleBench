@@ -24,14 +24,14 @@
       "vectorId": "shot-usb-device-cadence-dropped"
     },
     {
-      "coverage": 1.0,
-      "deliveryScore": 100,
+      "coverage": 0.9575,
+      "deliveryScore": 92,
       "description": "Shared numerical oracle for reported-flow validation, free-running device-clock skew, and packet coalescing. The reported flow trails the centered weight derivative by 200 ms and the device clock runs approximately 100 ppm fast.",
       "frameCount": 400,
       "idleStabilityScore": null,
       "isValid": true,
       "mode": "shot",
-      "purity": 1.0,
+      "purity": 0.9575,
       "vectorId": "shot-signal-diagnostics"
     },
     {

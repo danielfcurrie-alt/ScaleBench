@@ -9,6 +9,7 @@ enum ScaleQualityAnalyzer {
     private static let maxPhysicalFlowGramsPerSecond = 25.0
     private static let flowWindowSeconds = 1.0
     private static let minimumResolutionGrams = 0.01
+    private static let minimumDuplicateToleranceGrams = 0.005
     private static let idleSettlingSeconds = 5.0
     private static let stepBaselineWindowSeconds = 2.0
     private static let stepFinalWindowSeconds = 2.0
@@ -61,7 +62,8 @@ enum ScaleQualityAnalyzer {
         var resolutionGrams: Double?
     }
 
-    static func analyze(_ recording: ScaleRecording, profile _: ScoringProfile? = nil) -> ScaleQualityMetrics {
+    static func analyze(_ recording: ScaleRecording, profile overrideProfile: ScoringProfile? = nil) -> ScaleQualityMetrics {
+        let scoringProfile = (overrideProfile ?? recording.scoringProfile).normalized
         let allFrames = scoringFrames(recording)
         let explicitStart = recording.recordingStartMonotonicSeconds
         let explicitEnd = recording.recordingEndMonotonicSeconds
@@ -149,7 +151,10 @@ enum ScaleQualityAnalyzer {
             recording.samples.compactMap(\.batteryPercent) + recording.batteryEvents.map(\.percent)
         ).filter { (0...100).contains($0) }
         let firmwareQuality = recording.samples.compactMap(\.firmwareQualityScore).filter { (0...100).contains($0) }
-        let longGapThreshold = max(300, (p50 ?? 0) * 3)
+        let longGapThreshold = longGapThresholdMilliseconds(
+            forTypicalIntervalMilliseconds: p50,
+            profile: scoringProfile
+        )
         let longGapCount = intervals.filter { $0 >= longGapThreshold }.count
 
         var metrics = ScaleQualityMetrics(
@@ -177,7 +182,7 @@ enum ScaleQualityAnalyzer {
             firmwareBumpCount: firmwareBumpEventCount(recording.samples)
         )
         metrics.scoringModelVersion = scoringModelVersion
-        metrics.scoringProfileName = ScoringProfile.standardBenchmarkName
+        metrics.scoringProfileName = scoringProfile.name
         metrics.validity = validity
         metrics.delivery = DeliveryQualityMetrics(
             applicable: isDeliveryMode,
@@ -245,10 +250,10 @@ enum ScaleQualityAnalyzer {
 
     private static func scoringFrames(_ recording: ScaleRecording) -> [ScoringFrame] {
         if !recording.rawPackets.isEmpty {
-            let samplesByTimestamp = Dictionary(grouping: recording.samples, by: \.monotonicSeconds)
+            let samplesByTime = samplesSortedByTime(recording.samples)
             let hasWMBPlus20WeightStream = hasWMBCompatibilityPair(recording)
             let frames = recording.rawPackets.map { packet in
-                let sample = samplesByTimestamp[packet.monotonicSeconds]?.first
+                let sample = sample(matching: packet.monotonicSeconds, in: samplesByTime)
                 let isCompatibilityFloat32 = hasWMBPlus20WeightStream
                     && isWMBFloat32Packet(packet)
                 return ScoringFrame(
@@ -313,11 +318,11 @@ enum ScaleQualityAnalyzer {
 
     static func canonicalWeightSamples(_ recording: ScaleRecording) -> [ScaleSample] {
         if hasWMBCompatibilityPair(recording) {
-            let samplesByTimestamp = Dictionary(grouping: recording.samples, by: \.monotonicSeconds)
+            let samplesByTime = samplesSortedByTime(recording.samples)
             let repaired = recording.rawPackets
                 .filter { $0.role == .weight && isWMB20BytePacket($0) }
                 .compactMap { packet -> ScaleSample? in
-                    let sample = samplesByTimestamp[packet.monotonicSeconds]?.first
+                    let sample = sample(matching: packet.monotonicSeconds, in: samplesByTime)
                     guard let weight = packet.weightGrams ?? sample?.weightGrams else { return nil }
                     return ScaleSample(
                         arrivalTime: packet.arrivalTime,
@@ -347,6 +352,37 @@ enum ScaleQualityAnalyzer {
             }
         guard hasWMBPlusStream else { return recording.samples }
         return recording.samples.filter { $0.scaleKind != .weighMyBru }
+    }
+
+    private static func samplesSortedByTime(_ samples: [ScaleSample]) -> [ScaleSample] {
+        samples
+            .filter { $0.monotonicSeconds.isFinite }
+            .sorted { $0.monotonicSeconds < $1.monotonicSeconds }
+    }
+
+    private static func sample(matching monotonicSeconds: Double, in sortedSamples: [ScaleSample]) -> ScaleSample? {
+        guard monotonicSeconds.isFinite, !sortedSamples.isEmpty else { return nil }
+        let tolerance = 0.001
+        var low = 0
+        var high = sortedSamples.count
+        while low < high {
+            let mid = (low + high) / 2
+            if sortedSamples[mid].monotonicSeconds < monotonicSeconds {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        var best: ScaleSample?
+        var bestDelta = Double.greatestFiniteMagnitude
+        for index in [low - 1, low] where sortedSamples.indices.contains(index) {
+            let delta = abs(sortedSamples[index].monotonicSeconds - monotonicSeconds)
+            if delta < bestDelta {
+                best = sortedSamples[index]
+                bestDelta = delta
+            }
+        }
+        return bestDelta <= tolerance ? best : nil
     }
 
     private static func hasWMBCompatibilityPair(_ recording: ScaleRecording) -> Bool {
@@ -542,7 +578,7 @@ enum ScaleQualityAnalyzer {
 
             if checksDuplicates, let lastUsableIndex,
                let previousWeight = frames[lastUsableIndex].weightGrams,
-               weight == previousWeight {
+               abs(weight - previousWeight) <= duplicateTolerance(forResolution: resolution) {
                 let deltaSeconds = frame.monotonicSeconds - frames[lastUsableIndex].monotonicSeconds
                 if let baseIndex = usableBaseIndex(atLeast: frame.monotonicSeconds - flowWindowSeconds),
                    let baseWeight = frames[baseIndex].weightGrams,
@@ -606,6 +642,10 @@ enum ScaleQualityAnalyzer {
     private static func parseableWeight(_ frame: ScoringFrame) -> Double? {
         guard !frame.parseFailed, let weight = frame.weightGrams, weight.isFinite else { return nil }
         return weight
+    }
+
+    private static func duplicateTolerance(forResolution resolution: Double) -> Double {
+        max(minimumDuplicateToleranceGrams, resolution * 0.25)
     }
 
     private static func estimateResolution(_ weights: [Double]) -> Double {

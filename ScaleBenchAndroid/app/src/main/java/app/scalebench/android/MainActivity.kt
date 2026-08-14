@@ -86,6 +86,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -215,6 +216,7 @@ class MainActivity : ComponentActivity() {
                     usbSerial = appState.usbSerial,
                     savedRecordingStore = savedRecordingStore,
                     renderTick = renderTick,
+                    fileWorkMessage = appState.fileWorkMessage,
                     onSave = ::saveRecording,
                     onLoadExamples = ::loadExampleRecordings,
                     onImportRecording = ::chooseRecordingImport,
@@ -329,15 +331,14 @@ class MainActivity : ComponentActivity() {
         val export = pendingJsonExport ?: return
         pendingJsonExport = null
         fileWorkExecutor.execute {
+            appState.updateFileWorkMessage("Saving ${export.fileName}...")
             try {
-                val output = contentResolver.openOutputStream(uri, "w")
+                val bytes = buildJsonExportBytes(export)
+                val output = contentResolver.openOutputStream(uri, "wt")
                     ?: throw IllegalStateException("The selected location could not be opened")
                 output.use {
-                    when (export) {
-                        is PendingJsonExport.Current -> JsonExporter.writeRecording(export.recording, it)
-                        is PendingJsonExport.Saved -> savedRecordingStore.writeRecording(export.summary, it)
-                        is PendingJsonExport.UtilityReport -> it.write(export.json.toByteArray(Charsets.UTF_8))
-                    }
+                    it.write(bytes)
+                    it.flush()
                 }
                 runOnUiThread {
                     Toast.makeText(this, "Saved ${export.fileName}", Toast.LENGTH_LONG).show()
@@ -346,8 +347,26 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     Toast.makeText(this, "Save failed: ${error.message}", Toast.LENGTH_LONG).show()
                 }
+            } finally {
+                appState.updateFileWorkMessage(null)
             }
         }
+    }
+
+    private fun buildJsonExportBytes(export: PendingJsonExport): ByteArray {
+        val bytes = when (export) {
+            is PendingJsonExport.Current -> ByteArrayOutputStream().use {
+                JsonExporter.writeRecording(export.recording, it)
+                it.toByteArray()
+            }
+            is PendingJsonExport.Saved -> ByteArrayOutputStream().use {
+                savedRecordingStore.writeRecording(export.summary, it)
+                it.toByteArray()
+            }
+            is PendingJsonExport.UtilityReport -> export.json.toByteArray(Charsets.UTF_8)
+        }
+        JSONObject(bytes.toString(Charsets.UTF_8))
+        return bytes
     }
 
     private fun saveRecording(notes: String): RecordingSaveResult {
@@ -402,6 +421,7 @@ class MainActivity : ComponentActivity() {
     private fun importRecording(uri: Uri) {
         val fallbackTitle = displayName(uri)
         fileWorkExecutor.execute {
+            appState.updateFileWorkMessage("Importing recording...")
             try {
                 val input = contentResolver.openInputStream(uri)
                     ?: throw IllegalStateException("The selected file could not be opened")
@@ -415,6 +435,8 @@ class MainActivity : ComponentActivity() {
                 runOnUiThread {
                     Toast.makeText(this, "Import failed: ${error.message}", Toast.LENGTH_LONG).show()
                 }
+            } finally {
+                appState.updateFileWorkMessage(null)
             }
         }
     }

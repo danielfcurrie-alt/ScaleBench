@@ -166,7 +166,7 @@ struct PacketTimeline: Equatable {
             )
             let packetScorerEvidence = scorerEvidence[packet.id] ?? []
             let evidence = timelineEvidence + packetScorerEvidence
-            let severity = packetScorerEvidence.isEmpty ? timelineSeverity : .penalty
+            let severity = packet.isUnsupportedCharacteristicMetadata ? .info : (packetScorerEvidence.isEmpty ? timelineSeverity : .penalty)
 
             entries.append(
                 PacketTimelineEntry(
@@ -237,7 +237,7 @@ struct PacketTimelineEntry: Identifiable, Equatable {
         case .capabilities, .commandAck:
             return .control
         case .unknown:
-            return .unknown
+            return .metadata
         }
     }
 }
@@ -504,6 +504,9 @@ private func packetSeverity(
     intervalMilliseconds: Double?,
     longGapThresholdMilliseconds: Double
 ) -> PacketSeverity {
+    if packet.isUnsupportedCharacteristicMetadata {
+        return .info
+    }
     if packet.rejectionReason != nil {
         return .penalty
     }
@@ -515,7 +518,7 @@ private func packetSeverity(
     }
     switch packet.role {
     case .unknown:
-        return .warning
+        return .info
     case .battery, .capabilities, .commandAck:
         return .info
     case .weight:
@@ -529,7 +532,7 @@ private func packetEvidence(
     longGapThresholdMilliseconds: Double
 ) -> [String] {
     var evidence: [String] = []
-    if let rejectionReason = packet.rejectionReason {
+    if let rejectionReason = packet.rejectionReason, !packet.isUnsupportedCharacteristicMetadata {
         evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
     }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
@@ -560,11 +563,14 @@ private func packetEvidence(
 }
 
 private extension RawScalePacket {
+    var isUnsupportedCharacteristicMetadata: Bool {
+        role == .unknown && rejectionReason == .unsupportedCharacteristic
+    }
+
     var isWMBFloat32CompatibilityPacket: Bool {
         role == .unknown
             && rejectionReason == nil
             && characteristicUUID.uppercased() == WeighMyBruParser.float32UUID
-            && fields?.contains { $0.semantic == .weight } == true
     }
 }
 

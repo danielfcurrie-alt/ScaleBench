@@ -289,7 +289,7 @@ final class WMBPlusUSBSerialManager: ObservableObject {
                 weightGrams: row.weightGrams,
                 sequence: nil,
                 deviceTimestampMilliseconds: row.firmwareMillis,
-                fields: row.fields,
+                fields: nil,
                 usbSerial: row.metadata
             ))
             if sensorConnected {
@@ -340,6 +340,7 @@ final class WMBPlusUSBSerialManager: ObservableObject {
     private func refreshMetricsIfNeeded(monotonicSeconds: Double) {
         guard monotonicSeconds - lastMetricsRefreshSeconds >= 2, !metricsAnalysisInFlight else { return }
         lastMetricsRefreshSeconds = monotonicSeconds
+        guard recording.samples.count <= 2_000 else { return }
         metricsAnalysisInFlight = true
         let snapshot = recording
         let currentGeneration = generation

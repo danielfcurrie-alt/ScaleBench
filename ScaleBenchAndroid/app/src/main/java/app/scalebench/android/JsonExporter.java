@@ -17,10 +17,18 @@ final class JsonExporter {
     }
 
     static void writeRecording(ScaleRecording recording, File file) throws IOException {
+        writeRecording(recording, file, true);
+    }
+
+    static void writeRecordingForStorage(ScaleRecording recording, File file) throws IOException {
+        writeRecording(recording, file, false);
+    }
+
+    private static void writeRecording(ScaleRecording recording, File file, boolean prettyPrinted) throws IOException {
         File temporary = temporaryFileFor(file);
         try {
             try (OutputStream output = new FileOutputStream(temporary)) {
-                writeRecording(recording, output);
+                writeRecording(recording, output, prettyPrinted);
             }
             replaceAtomically(temporary, file);
         } finally {
@@ -76,8 +84,14 @@ final class JsonExporter {
     }
 
     static void writeRecording(ScaleRecording recording, OutputStream output) throws IOException {
+        writeRecording(recording, output, true);
+    }
+
+    private static void writeRecording(ScaleRecording recording, OutputStream output, boolean prettyPrinted) throws IOException {
         try (JsonWriter writer = new JsonWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8))) {
-            writer.setIndent("  ");
+            if (prettyPrinted) {
+                writer.setIndent("  ");
+            }
             writer.beginObject();
             writer.name("id").value(recording.id);
             writer.name("schemaVersion").value(recording.schemaVersion);
@@ -150,7 +164,7 @@ final class JsonExporter {
             }
             writer.endArray();
             writer.name("rawPackets").beginArray();
-            for (RawScalePacket packet : recording.rawPackets) writeRawPacket(writer, packet);
+            for (RawScalePacket packet : recording.rawPackets) writeRawPacket(writer, packet, prettyPrinted);
             writer.endArray();
             writer.endObject();
         }
@@ -476,7 +490,7 @@ final class JsonExporter {
         writer.endObject();
     }
 
-    private static void writeRawPacket(JsonWriter writer, RawScalePacket packet) throws IOException {
+    private static void writeRawPacket(JsonWriter writer, RawScalePacket packet, boolean includeFieldAnnotations) throws IOException {
         writer.beginObject();
         writer.name("arrivalTimeMillis").value(packet.arrivalTimeMillis);
         writer.name("monotonicSeconds").value(packet.monotonicSeconds);
@@ -488,7 +502,9 @@ final class JsonExporter {
         nullable(writer, "weightGrams", packet.weightGrams);
         nullable(writer, "sequence", packet.sequence);
         nullable(writer, "deviceTimestampMilliseconds", packet.deviceTimestampMilliseconds);
-        writePacketFields(writer, ScaleParsers.packetFields(packet));
+        if (includeFieldAnnotations) {
+            writePacketFields(writer, ScaleParsers.packetFields(packet));
+        }
         writeUSBSerialMetadata(writer, packet.usbSerial);
         writer.endObject();
     }

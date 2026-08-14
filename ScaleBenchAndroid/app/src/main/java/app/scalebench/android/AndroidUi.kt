@@ -173,6 +173,7 @@ internal fun ScaleBenchApp(
     usbSerial: AndroidUSBSerialManager,
     savedRecordingStore: SavedRecordingStore,
     renderTick: Int,
+    fileWorkMessage: String?,
     onSave: (String) -> RecordingSaveResult,
     onLoadExamples: () -> Unit,
     onImportRecording: () -> Unit,
@@ -529,7 +530,29 @@ internal fun ScaleBenchApp(
         if (showHelp) {
             ScaleBenchHelpDialog(onDismiss = { showHelp = false })
         }
+
+        if (fileWorkMessage != null) {
+            FileWorkDialog(message = fileWorkMessage)
+        }
     }
+}
+
+@Composable
+private fun FileWorkDialog(message: String) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(message) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Large recordings can take a moment.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {}
+    )
 }
 
 @Composable

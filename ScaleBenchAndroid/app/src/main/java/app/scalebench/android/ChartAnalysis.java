@@ -56,7 +56,7 @@ final class ChartAnalysis {
                     && packet.characteristicUuid != null
                     && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_FLOAT32_UUID);
             String roleLabel = compatibilityFloat32 ? "compatibility" : packetRoleLabel(role);
-            String rejection = packet.rejectionReason == null ? null : packet.rejectionReason.name();
+            String rejection = displayedRejection(role, packet.rejectionReason);
             AndroidPacketSeverity severity = packetSeverity(roleLabel, rejection, intervalMs, threshold);
             entries.add(new AndroidPacketTimelineEntry(
                     index,
@@ -182,12 +182,19 @@ final class ChartAnalysis {
             case "capabilities":
             case "commandack":
             case "compatibility":
-                return AndroidPacketSeverity.INFO;
             case "unknown":
-                return AndroidPacketSeverity.WARNING;
+                return AndroidPacketSeverity.INFO;
             default:
                 return AndroidPacketSeverity.NORMAL;
         }
+    }
+
+    private static String displayedRejection(PacketRole role, ParseRejectionReason rejectionReason) {
+        if (rejectionReason == null) return null;
+        if (role == PacketRole.UNKNOWN && rejectionReason == ParseRejectionReason.UNSUPPORTED_CHARACTERISTIC) {
+            return null;
+        }
+        return rejectionReason.name();
     }
 
     static AndroidPacketLane packetLane(String role, AndroidPacketSeverity severity) {
@@ -196,6 +203,7 @@ final class ChartAnalysis {
             case "weight": return AndroidPacketLane.WEIGHT;
             case "battery": return AndroidPacketLane.METADATA;
             case "compatibility": return AndroidPacketLane.METADATA;
+            case "unknown": return AndroidPacketLane.METADATA;
             case "capabilities":
             case "commandack":
                 return AndroidPacketLane.CONTROL;

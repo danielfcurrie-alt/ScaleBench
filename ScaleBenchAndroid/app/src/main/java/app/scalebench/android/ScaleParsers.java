@@ -780,12 +780,10 @@ final class AcaiaCodec {
                 byte last = buffer.get(buffer.size() - 1);
                 buffer.clear();
                 if ((last & 0xFF) == 0xEF) buffer.add(last);
-                results.add(ParserResult.rejected(ParseRejectionReason.INVALID_HEADER));
                 return results;
             }
             if (start > 0) {
                 for (int i = 0; i < start; i++) buffer.remove(0);
-                results.add(ParserResult.rejected(ParseRejectionReason.INVALID_HEADER));
             }
             if (buffer.size() < 4) return results;
             int payloadLength = buffer.get(3) & 0xFF;

@@ -26,6 +26,9 @@ internal class ScaleBenchViewModel(application: Application) : AndroidViewModel(
     var deviceUtilityState by mutableStateOf(DeviceUtilityState())
         private set
 
+    var fileWorkMessage by mutableStateOf<String?>(null)
+        private set
+
     var pendingJsonExport: PendingJsonExport? = null
 
     init {
@@ -48,6 +51,18 @@ internal class ScaleBenchViewModel(application: Application) : AndroidViewModel(
     fun updateDeviceUtilityState(state: DeviceUtilityState) {
         deviceUtilityState = state
         invalidate()
+    }
+
+    fun updateFileWorkMessage(message: String?) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            fileWorkMessage = message
+            renderTick++
+        } else {
+            mainHandler.post {
+                fileWorkMessage = message
+                renderTick++
+            }
+        }
     }
 
     override fun onCleared() {

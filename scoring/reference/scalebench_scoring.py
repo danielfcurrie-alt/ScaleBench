@@ -38,6 +38,7 @@ FLOW_WINDOW_S = 1.0
 
 # Duplicate resolution gate
 MIN_RESOLUTION_G = 0.01
+MIN_DUPLICATE_TOLERANCE_G = 0.005
 
 # Idle Stability constants (PROVISIONAL)
 IDLE_SETTLING_SECONDS = 5.0
@@ -206,6 +207,17 @@ def estimate_resolution(weights):
     return max(MIN_RESOLUTION_G, percentile(nonzero, 0.10))
 
 
+def duplicate_tolerance(resolution):
+    return max(MIN_DUPLICATE_TOLERANCE_G, resolution * 0.25)
+
+
+def parseable_weight(frame):
+    weight = frame.get("weightGrams")
+    if frame.get("parseFailed") or weight is None or not math.isfinite(weight):
+        return None
+    return weight
+
+
 def forward_delta(previous, current, modulus=None):
     """Return a forward delta, or None for duplicate/backward movement."""
     if modulus is not None and modulus > 0:
@@ -325,12 +337,14 @@ def classify_frames(frames, mode, capabilities=None):
         implausible = False
 
         if checks_impulse:
-            # (a) impulse: disagrees with both parseable neighbours
-            if 0 < i < n - 1 and not weight_frames[i - 1].get("parseFailed") \
-                    and not weight_frames[i + 1].get("parseFailed") \
-                    and weight_frames[i - 1].get("weightGrams") is not None \
-                    and weight_frames[i + 1].get("weightGrams") is not None:
-                med = median3(weight_frames[i - 1]["weightGrams"], w, weight_frames[i + 1]["weightGrams"])
+            # (a) impulse: disagrees with both adjacent parseable neighbours
+            if 0 < i < n - 1:
+                previous_weight = parseable_weight(weight_frames[i - 1])
+                next_weight = parseable_weight(weight_frames[i + 1])
+                med = median3(previous_weight, w, next_weight) if previous_weight is not None and next_weight is not None else None
+            else:
+                med = None
+            if med is not None:
                 if abs(w - med) > IMPULSE_DEVIATION_G:
                     implausible = True
 
@@ -349,7 +363,7 @@ def classify_frames(frames, mode, capabilities=None):
         # duplicate, but only when a distinct value was ACHIEVABLE
         if checks_duplicates and last_usable is not None:
             prev = weight_frames[last_usable]
-            if w == prev["weightGrams"]:
+            if abs(w - prev["weightGrams"]) <= duplicate_tolerance(resolution):
                 dt = f["monotonicSeconds"] - prev["monotonicSeconds"]
                 base = None
                 for j in reversed(usable_indices):

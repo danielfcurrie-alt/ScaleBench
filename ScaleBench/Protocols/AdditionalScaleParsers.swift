@@ -51,12 +51,10 @@ enum AcaiaParser {
                 guard buffer.count >= 2 else { return events }
                 guard let start = (0..<(buffer.count - 1)).first(where: { buffer[$0] == 0xEF && buffer[$0 + 1] == 0xDD }) else {
                     buffer = buffer.last == 0xEF ? [0xEF] : []
-                    events.append(.rejected(.invalidHeader))
                     return events
                 }
                 if start > 0 {
                     buffer.removeFirst(start)
-                    events.append(.rejected(.invalidHeader))
                 }
                 guard buffer.count >= 4 else { return events }
                 let payloadLength = Int(buffer[3])

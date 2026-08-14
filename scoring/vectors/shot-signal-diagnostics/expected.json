@@ -1,9 +1,9 @@
 {
   "delivery": {
     "applicable": true,
-    "coverage": 1.0,
-    "deliveryScore": 100,
-    "purity": 1.0,
+    "coverage": 0.9575,
+    "deliveryScore": 92,
+    "purity": 0.9575,
     "purityIsUpperBound": false
   },
   "diagnostics": {
@@ -13,23 +13,23 @@
     "frameRateHz": 20.0,
     "intervalMaxMs": 50.0,
     "intervalP50Ms": 50.0,
-    "longestUnservedRunMs": 0.0,
+    "longestUnservedRunMs": 200.0,
     "recordingBoundaryInferred": false,
     "relevantWeightFrames": 400,
     "robustCoefficientOfVariation": 0.0,
-    "servedSlots": 400,
+    "servedSlots": 383,
     "slotCount": 400,
     "spanSeconds": 20.0,
-    "usableRateHz": 20.050125,
-    "usableSampleCount": 400
+    "usableRateHz": 19.197995,
+    "usableSampleCount": 383
   },
   "frameClassification": {
-    "duplicate": 0,
+    "duplicate": 17,
     "implausible": 0,
     "outOfOrder": 0,
     "parseFailure": 0,
     "stale": 0,
-    "usable": 400
+    "usable": 383
   },
   "mode": "shot",
   "protocolVerification": {
@@ -58,9 +58,9 @@
       "sampleCount": 379
     },
     "packetCoalescing": {
-      "framesPerServedSlot": 1.0,
+      "framesPerServedSlot": 1.044386,
       "observedFrameRateHz": 20.0,
-      "servedSlotRateHz": 20.0
+      "servedSlotRateHz": 19.15
     }
   },
   "signalUnreconstructable": false,

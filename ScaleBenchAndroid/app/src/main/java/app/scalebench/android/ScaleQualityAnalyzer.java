@@ -17,6 +17,7 @@ final class ScaleQualityAnalyzer {
     private static final double MAX_PHYSICAL_FLOW_GRAMS_PER_SECOND = 25.0;
     private static final double FLOW_WINDOW_SECONDS = 1.0;
     private static final double MINIMUM_RESOLUTION_GRAMS = 0.01;
+    private static final double MINIMUM_DUPLICATE_TOLERANCE_GRAMS = 0.005;
     private static final double IDLE_SETTLING_SECONDS = 5.0;
     private static final double STEP_BASELINE_WINDOW_SECONDS = 2.0;
     private static final double STEP_FINAL_WINDOW_SECONDS = 2.0;
@@ -74,6 +75,9 @@ final class ScaleQualityAnalyzer {
     }
 
     static ScaleQualityMetrics analyze(ScaleRecording recording) {
+        ScoringProfile scoringProfile = recording.scoringProfile == null
+                ? ScoringProfile.standard()
+                : recording.scoringProfile.normalized();
         List<ScoringFrame> allFrames = scoringFrames(recording);
         Double explicitStart = recording.recordingStartMonotonicSeconds;
         Double explicitEnd = recording.recordingEndMonotonicSeconds;
@@ -159,7 +163,7 @@ final class ScaleQualityAnalyzer {
         for (ScaleBatteryEvent event : recording.batteryEvents) {
             if (event.percent >= 0 && event.percent <= 100) batteryValues.add(event.percent);
         }
-        double longGapThreshold = Math.max(300, p50 == null ? 0 : p50 * 3);
+        double longGapThreshold = longGapThresholdMilliseconds(p50, scoringProfile);
         int longGapCount = 0;
         for (double interval : intervals) if (interval >= longGapThreshold) longGapCount++;
 
@@ -187,7 +191,7 @@ final class ScaleQualityAnalyzer {
         metrics.firmwareQualityAverage = average(firmwareQuality);
         metrics.firmwareBumpCount = firmwareBumpEventCount(recording.samples);
         metrics.scoringModelVersion = SCORING_MODEL_VERSION;
-        metrics.scoringProfileName = ScoringProfile.STANDARD_BENCHMARK_NAME;
+        metrics.scoringProfileName = scoringProfile.name;
         metrics.validity = validity;
         metrics.delivery = new DeliveryQualityMetrics();
         metrics.delivery.applicable = deliveryMode;
@@ -234,6 +238,10 @@ final class ScaleQualityAnalyzer {
             intervals.add(Math.max(0, (sorted.get(index).monotonicSeconds - sorted.get(index - 1).monotonicSeconds) * 1000.0));
         }
         Double typicalInterval = percentile(intervals, 0.50);
+        return longGapThresholdMilliseconds(typicalInterval, profile);
+    }
+
+    private static double longGapThresholdMilliseconds(Double typicalInterval, ScoringProfile profile) {
         double minimum = profile == null ? 300.0 : profile.minimumLongGapMilliseconds;
         double multiplier = profile == null ? 3.0 : profile.longGapMultiplier;
         return typicalInterval == null || typicalInterval <= 0
@@ -244,13 +252,10 @@ final class ScaleQualityAnalyzer {
     private static List<ScoringFrame> scoringFrames(ScaleRecording recording) {
         List<ScoringFrame> result = new ArrayList<>();
         if (!recording.rawPackets.isEmpty()) {
-            Map<Double, ScaleSample> samplesByTimestamp = new HashMap<>();
-            for (ScaleSample sample : recording.samples) {
-                samplesByTimestamp.putIfAbsent(sample.monotonicSeconds, sample);
-            }
+            List<ScaleSample> samplesByTime = samplesSortedByTime(recording.samples);
             boolean hasWmbPlus20WeightStream = hasWmbCompatibilityPair(recording);
             for (RawScalePacket packet : recording.rawPackets) {
-                ScaleSample sample = samplesByTimestamp.get(packet.monotonicSeconds);
+                ScaleSample sample = sampleMatching(packet.monotonicSeconds, samplesByTime);
                 boolean compatibilityFloat32 = hasWmbPlus20WeightStream
                         && packet.characteristicUuid != null
                         && ScaleParsers.uuidMatches(packet.characteristicUuid, ScaleParsers.WMB_FLOAT32_UUID);
@@ -327,14 +332,11 @@ final class ScaleQualityAnalyzer {
 
     static List<ScaleSample> canonicalWeightSamples(ScaleRecording recording) {
         if (hasWmbCompatibilityPair(recording)) {
-            Map<Double, ScaleSample> samplesByTimestamp = new HashMap<>();
-            for (ScaleSample sample : recording.samples) {
-                samplesByTimestamp.putIfAbsent(sample.monotonicSeconds, sample);
-            }
+            List<ScaleSample> samplesByTime = samplesSortedByTime(recording.samples);
             List<ScaleSample> repaired = new ArrayList<>();
             for (RawScalePacket packet : recording.rawPackets) {
                 if (packet.role != PacketRole.WEIGHT || !isWmb20BytePacket(packet)) continue;
-                ScaleSample existing = samplesByTimestamp.get(packet.monotonicSeconds);
+                ScaleSample existing = sampleMatching(packet.monotonicSeconds, samplesByTime);
                 Double weight = packet.weightGrams != null
                         ? packet.weightGrams
                         : existing == null ? null : existing.weightGrams;
@@ -385,6 +387,41 @@ final class ScaleQualityAnalyzer {
             if (sample.scaleKind != ScaleKind.WEIGH_MY_BRU) result.add(sample);
         }
         return result;
+    }
+
+    private static List<ScaleSample> samplesSortedByTime(List<ScaleSample> samples) {
+        List<ScaleSample> result = new ArrayList<>();
+        for (ScaleSample sample : samples) {
+            if (Double.isFinite(sample.monotonicSeconds)) result.add(sample);
+        }
+        result.sort(Comparator.comparingDouble(sample -> sample.monotonicSeconds));
+        return result;
+    }
+
+    private static ScaleSample sampleMatching(double monotonicSeconds, List<ScaleSample> sortedSamples) {
+        if (!Double.isFinite(monotonicSeconds) || sortedSamples.isEmpty()) return null;
+        double tolerance = 0.001;
+        int low = 0;
+        int high = sortedSamples.size();
+        while (low < high) {
+            int mid = (low + high) / 2;
+            if (sortedSamples.get(mid).monotonicSeconds < monotonicSeconds) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        ScaleSample best = null;
+        double bestDelta = Double.MAX_VALUE;
+        for (int index = low - 1; index <= low; index++) {
+            if (index < 0 || index >= sortedSamples.size()) continue;
+            double delta = Math.abs(sortedSamples.get(index).monotonicSeconds - monotonicSeconds);
+            if (delta < bestDelta) {
+                best = sortedSamples.get(index);
+                bestDelta = delta;
+            }
+        }
+        return bestDelta <= tolerance ? best : null;
     }
 
     private static boolean hasWmbCompatibilityPair(ScaleRecording recording) {
@@ -533,7 +570,8 @@ final class ScaleQualityAnalyzer {
 
             if (checksDuplicates && lastUsableIndex != null
                     && frames.get(lastUsableIndex).weightGrams != null
-                    && weight == frames.get(lastUsableIndex).weightGrams) {
+                    && Math.abs(weight - frames.get(lastUsableIndex).weightGrams)
+                    <= duplicateTolerance(resolution)) {
                 double deltaSeconds = frame.monotonicSeconds - frames.get(lastUsableIndex).monotonicSeconds;
                 Integer baseIndex = latestFlowBase(usableIndices, frames,
                         frame.monotonicSeconds - FLOW_WINDOW_SECONDS);
@@ -572,6 +610,10 @@ final class ScaleQualityAnalyzer {
 
     private static Double parseableWeight(ScoringFrame frame) {
         return !frame.parseFailed && finite(frame.weightGrams) ? frame.weightGrams : null;
+    }
+
+    private static double duplicateTolerance(double resolution) {
+        return Math.max(MINIMUM_DUPLICATE_TOLERANCE_GRAMS, resolution * 0.25);
     }
 
     private static double estimateResolution(List<Double> weights) {

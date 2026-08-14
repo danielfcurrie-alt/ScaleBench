@@ -163,7 +163,7 @@ parseFailure → outOfOrder → stale → implausible → duplicate → usable
 | `outOfOrder` | sequence delta from the accepted high-water value is 0 or exceeds half the declared modulus |
 | `stale` | free-running device-clock delta from the accepted high-water value is 0 or exceeds half the declared modulus |
 | `implausible` | fails a physics test — §4.2 |
-| `duplicate` | weight identical to the last usable frame **and** a distinct value was achievable — §4.3 |
+| `duplicate` | weight unchanged within tolerance from the last usable frame **and** a distinct value was achievable — §4.3 |
 | `usable` | none of the above |
 
 **`implausible` is evaluated before `duplicate`** because a corrupted value is never a duplicate.
@@ -189,7 +189,7 @@ Structural checks (`parseFailure`, `outOfOrder`, `stale`) apply in every mode. W
 
 This prevents the intended pour, vessel settling, mass step, tare, scale movement, or transport-stress disturbance from being labelled corrupt.
 
-1. **Impulse.** With both neighbours parseable, `|w[i] − median3(w[i−1], w[i], w[i+1])| > 0.5 g`.
+1. **Impulse.** With both adjacent neighbours parseable, `|w[i] − median3(w[i−1], w[i], w[i+1])| > 0.5 g`.
 2. **Non-physical idle rate.** In `idleStability` only, `|Δw| / Δt > 25 g/s` against the last usable frame.
 
 For an official Shot / Pour run, tare and settle the vessel before pressing Start, and stop before removing it. Sustained motion inside the shot/pour window is user/test behavior, not packet corruption. Isolated impulses are still classified as implausible.
@@ -200,6 +200,7 @@ A repeated value is a defect only when a distinct one was **achievable**:
 
 ```
 resolution   = max(0.01, p10(non-zero |Δw| across parseable frames))
+sameWeight   = |w[i] − lastUsableWeight| <= max(0.005 g, resolution × 0.25)
 achievable   = trailingFlow × (time since last usable frame) >= resolution
 ```
 

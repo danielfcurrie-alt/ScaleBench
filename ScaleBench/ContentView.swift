@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var deviceUtilityReportURL: URL?
     @State private var activeSheet: ActiveSheet?
     @State private var isImportingRecording = false
+    @State private var isImportOperationInProgress = false
     @State private var importStatusMessage: String?
     @State private var importAlertMessage: String?
     @State private var isRecordingsExpanded = true
@@ -444,16 +445,11 @@ struct ContentView: View {
                 RecordingImportDocumentPicker(
                     onPick: { result in
                         isImportingRecording = false
-                        DispatchQueue.main.async {
-                            switch result {
-                            case let .success(selection):
-                                importRecordingData(
-                                    selection.data,
-                                    fallbackTitle: selection.fallbackTitle
-                                )
-                            case let .failure(error):
-                                setImportStatus("Import failed: \(error.localizedDescription)")
-                            }
+                        switch result {
+                        case let .success(selection):
+                            importRecording(from: selection.url, deferredStart: true)
+                        case let .failure(error):
+                            setImportStatus("Import failed: \(error.localizedDescription)")
                         }
                     },
                     onCancel: {
@@ -488,6 +484,10 @@ struct ContentView: View {
                 }
             } message: {
                 Text(commandErrorMessage ?? "Unknown error")
+            }
+            .sheet(isPresented: $isImportOperationInProgress) {
+                ImportProgressSheet()
+                    .interactiveDismissDisabled(true)
             }
             .alert(
                 "Import Result",
@@ -616,21 +616,41 @@ struct ContentView: View {
         )
     }
 
-    private func importRecording(from url: URL) {
-        setImportStatus("Importing \(url.lastPathComponent)…", showAlert: false)
-        savedStore.importRecordingInBackground(from: url) { result in
-            switch result {
-            case let .success(saved):
-                setImportStatus(importSuccessMessage(for: saved))
-            case let .failure(error):
-                setImportStatus("Import failed: \(error.localizedDescription)")
+    private func importRecording(from url: URL, deferredStart: Bool = false) {
+        func startImport() {
+            savedStore.importRecordingInBackground(from: url) { result in
+                let message: String
+                switch result {
+                case let .success(saved):
+                    message = importSuccessMessage(for: saved)
+                case let .failure(error):
+                    message = "Import failed: \(error.localizedDescription)"
+                }
+                isImportOperationInProgress = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    setImportStatus(message)
+                }
             }
+        }
+
+        let showProgressAndStartImport = {
+            isImportOperationInProgress = true
+            setImportStatus("Importing \(url.lastPathComponent)…", showAlert: false)
+            startImport()
+        }
+
+        if deferredStart {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: showProgressAndStartImport)
+        } else {
+            showProgressAndStartImport()
         }
     }
 
     private func importRecordingData(_ data: Data, fallbackTitle: String) {
+        isImportOperationInProgress = true
         setImportStatus("Importing \(fallbackTitle)…", showAlert: false)
         savedStore.importRecordingDataInBackground(data, fallbackTitle: fallbackTitle) { result in
+            isImportOperationInProgress = false
             switch result {
             case let .success(saved):
                 setImportStatus(importSuccessMessage(for: saved))
@@ -681,6 +701,24 @@ private struct AppCommandRequestModifier: ViewModifier {
             .onChange(of: commands.resetRequestID) { _, _ in
                 reset()
             }
+    }
+}
+
+private struct ImportProgressSheet: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.large)
+            Text("Importing recording")
+                .font(.title3.bold())
+            Text("Large recordings can take a moment while ScaleBench reads the JSON, recalculates the score, and prepares charts.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+        }
+        .padding(32)
+        .presentationDetents([.height(240)])
     }
 }
 
@@ -757,8 +795,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
 
 #if targetEnvironment(macCatalyst)
 private struct RecordingImportSelection {
-    let data: Data
-    let fallbackTitle: String
+    let url: URL
 }
 
 private struct RecordingImportDocumentPicker: UIViewControllerRepresentable {
@@ -799,22 +836,7 @@ private struct RecordingImportDocumentPicker: UIViewControllerRepresentable {
                 onCancel()
                 return
             }
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            do {
-                let selection = RecordingImportSelection(
-                    data: try Data(contentsOf: url),
-                    fallbackTitle: "Imported \(url.deletingPathExtension().lastPathComponent)"
-                )
-                onPick(.success(selection))
-            } catch {
-                onPick(.failure(error))
-            }
+            onPick(.success(RecordingImportSelection(url: url)))
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {

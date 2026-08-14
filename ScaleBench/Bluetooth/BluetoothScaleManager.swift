@@ -33,6 +33,8 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     private var recordingAppIsForeground = true
     private let liveUIRefreshIntervalSeconds: Double = 0.2
     private let liveMetricsRefreshIntervalSeconds: Double = 2.0
+    private let maxSamplesForFullLiveMetrics = 2_000
+    private let maxDiscoveredScales = 40
     private let liveMetricsQueue = DispatchQueue(label: "com.scalebench.live-metrics", qos: .utility)
     private var liveUIRefreshWorkItem: DispatchWorkItem?
     private var liveMetricsAnalysisInFlight = false
@@ -46,6 +48,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func startScanning() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.startScanning() }
+            return
+        }
         guard centralManager.state == .poweredOn else {
             statusMessage = "Bluetooth is not powered on"
             return
@@ -60,12 +66,20 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func stopScanning() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.stopScanning() }
+            return
+        }
         centralManager.stopScan()
         isScanning = false
         statusMessage = "Scan stopped"
     }
 
     func disconnect() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.disconnect() }
+            return
+        }
         guard let device = connectedDevice else {
             statusMessage = "No Bluetooth scale connected"
             return
@@ -99,6 +113,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func connect(to device: DiscoveredScale) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.connect(to: device) }
+            return
+        }
         guard let peripheral = peripheralsByID[device.id] else {
             statusMessage = "Peripheral no longer available"
             return
@@ -123,6 +141,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func startRecording(mode: RecordingMode, scoringProfile: ScoringProfile = .standard) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.startRecording(mode: mode, scoringProfile: scoringProfile) }
+            return
+        }
         guard isConnectionReady else {
             statusMessage = "Wait for the scale to finish connecting"
             return
@@ -163,6 +185,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func stopRecording(atMonotonicSeconds recordingEnd: Double = CACurrentMediaTime()) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.stopRecording(atMonotonicSeconds: recordingEnd) }
+            return
+        }
         guard isRecording else { return }
         recordingGeneration &+= 1
         let generation = recordingGeneration
@@ -194,6 +220,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func noteAppEnteredBackground(atMonotonicSeconds timestamp: Double = CACurrentMediaTime()) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.noteAppEnteredBackground(atMonotonicSeconds: timestamp) }
+            return
+        }
         guard isRecording, recordingAppIsForeground else { return }
         recordingAppIsForeground = false
         currentRecording.events.append(ScaleRecordingEvent(
@@ -204,6 +234,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func noteAppBecameForeground(atMonotonicSeconds timestamp: Double = CACurrentMediaTime()) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.noteAppBecameForeground(atMonotonicSeconds: timestamp) }
+            return
+        }
         guard isRecording, !recordingAppIsForeground else {
             recordingAppIsForeground = true
             return
@@ -217,6 +251,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func resetRecording() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.resetRecording() }
+            return
+        }
         recordingGeneration &+= 1
         recordingAppIsForeground = true
         completedRecording = nil
@@ -232,6 +270,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func takeCompletedRecording() -> ScaleRecording? {
+        guard Thread.isMainThread else { return nil }
         defer { completedRecording = nil }
         return completedRecording
     }
@@ -242,12 +281,21 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func applyScoringProfile(_ profile: ScoringProfile) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.applyScoringProfile(profile) }
+            return
+        }
         currentRecording.scoringProfile = profile
-        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording)
+        currentRecording.metrics = ScaleQualityAnalyzer.analyze(currentRecording, profile: profile)
         currentMetrics = currentRecording.metrics
     }
 
     func finalizedCurrentRecording(notes: String = "") -> ScaleRecording {
+        if !Thread.isMainThread {
+            return DispatchQueue.main.sync {
+                finalizedCurrentRecording(notes: notes)
+            }
+        }
         var finalized = currentRecording
         finalized.endedAt = finalized.endedAt ?? Date()
         if finalized.recordingEndMonotonicSeconds == nil {
@@ -259,6 +307,11 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func exportCurrentRecording(notes: String = "") -> URL? {
+        guard Thread.isMainThread else {
+            return DispatchQueue.main.sync {
+                exportCurrentRecording(notes: notes)
+            }
+        }
         do {
             let finalized = finalizedCurrentRecording(notes: notes)
             currentRecording = finalized
@@ -271,6 +324,10 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
     }
 
     func sendAtomicTareAndStart() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.sendAtomicTareAndStart() }
+            return
+        }
         guard let peripheral = connectedPeripheral(), let writeCharacteristic else {
             statusMessage = "No writable command characteristic"
             return
@@ -339,11 +396,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             weightGrams: sample?.weightGrams,
             sequence: sample?.sequence,
             deviceTimestampMilliseconds: sample?.deviceTimestampMilliseconds,
-            fields: PacketFieldDecoder.annotations(
-                scaleKind: packetKind,
-                characteristicUUID: characteristicUUID,
-                bytes: [UInt8](data)
-            )
+            fields: nil
         ))
 
         if let sample {
@@ -388,6 +441,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         guard !liveMetricsAnalysisInFlight else { return }
 
         lastLiveMetricsRefreshSeconds = monotonicSeconds
+        guard currentRecording.samples.count <= maxSamplesForFullLiveMetrics else { return }
         liveMetricsAnalysisInFlight = true
         let snapshot = currentRecording
         let generation = recordingGeneration
@@ -487,7 +541,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         return ProtocolScoringCapabilities(
             hasChecksum: hasChecksum,
             hasSequence: false,
-            sequenceModulus: 256,
+            sequenceModulus: nil,
             hasDeviceClock: false,
             deviceClockSemantics: clockSemantics,
             deviceClockModulus: nil
@@ -500,6 +554,9 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             capabilities.hasChecksum = true
         }
         capabilities.hasSequence = capabilities.hasSequence || sample.sequence != nil
+        if sample.sequence != nil, capabilities.sequenceModulus == nil {
+            capabilities.sequenceModulus = 256
+        }
         capabilities.hasDeviceClock = capabilities.hasDeviceClock || sample.deviceTimestampMilliseconds != nil
         if sample.deviceTimestampMilliseconds != nil {
             switch sample.scaleKind {
@@ -552,7 +609,11 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
         } else if device.kind != .unknown {
             discoveredScales.append(device)
             discoveredScales.sort { lhs, rhs in
-                lhs.kind.displayName == rhs.kind.displayName ? lhs.name < rhs.name : lhs.kind.displayName < rhs.kind.displayName
+                if lhs.rssi != rhs.rssi { return lhs.rssi > rhs.rssi }
+                return lhs.kind.displayName == rhs.kind.displayName ? lhs.name < rhs.name : lhs.kind.displayName < rhs.kind.displayName
+            }
+            if discoveredScales.count > maxDiscoveredScales {
+                discoveredScales.removeSubrange(maxDiscoveredScales...)
             }
         }
     }
@@ -653,7 +714,7 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             }
 
         default:
-            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: .unsupportedCharacteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
+            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: nil, arrivalTime: arrival, monotonicSeconds: monotonic)
         }
     }
 

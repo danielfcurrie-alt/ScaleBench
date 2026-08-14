@@ -94,7 +94,7 @@ final class SavedRecordingStore {
 
         File recordingFile = new File(directory, summary.recordingFileName);
         backupExistingFileIfNeeded(recordingFile);
-        JsonExporter.writeRecording(recording, recordingFile);
+        JsonExporter.writeRecordingForStorage(recording, recordingFile);
         writeSummary(summary);
         replaceSummary(summary);
         sort();
@@ -816,7 +816,6 @@ final class SavedRecordingStore {
             packet.deviceTimestampMilliseconds = nullableLong(object, "deviceTimestampMilliseconds");
             packet.usbSerial = readUSBSerialMetadata(object);
             readPacketFields(object.optJSONArray("fields"), packet.fields);
-            if (packet.fields.isEmpty()) packet.fields.addAll(ScaleParsers.packetFields(packet));
             rawPackets.add(packet);
         }
     }

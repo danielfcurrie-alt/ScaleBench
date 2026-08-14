@@ -30,6 +30,8 @@ final class BluetoothScaleManager {
     private static final long TRANSPORT_RECONNECT_DELAY_MILLIS = 750;
     private static final long LIVE_UI_REFRESH_INTERVAL_MILLIS = 200;
     private static final double LIVE_METRICS_REFRESH_INTERVAL_SECONDS = 2.0;
+    private static final int MAX_SAMPLES_FOR_FULL_LIVE_METRICS = 2_000;
+    private static final int MAX_DISCOVERED_SCALES = 40;
 
     interface Listener {
         void onStateChanged();
@@ -479,8 +481,26 @@ final class BluetoothScaleManager {
         ScaleKind kind = ScaleParsers.identify(name, services);
         if (kind == ScaleKind.UNKNOWN) return;
         discovered.put(device.getAddress(), new DiscoveredScale(device.getAddress(), name, kind, result.getRssi(), services));
+        trimDiscoveredScales();
         status = "Found " + discovered.size() + " scale(s)";
         notifyChanged();
+    }
+
+    private void trimDiscoveredScales() {
+        if (discovered.size() <= MAX_DISCOVERED_SCALES) return;
+        List<DiscoveredScale> strongest = new ArrayList<>(discovered.values());
+        strongest.sort((left, right) -> {
+            int rssi = Integer.compare(right.rssi, left.rssi);
+            if (rssi != 0) return rssi;
+            int kind = left.kind.displayName.compareTo(right.kind.displayName);
+            return kind != 0 ? kind : left.name.compareTo(right.name);
+        });
+        discovered.clear();
+        int count = Math.min(MAX_DISCOVERED_SCALES, strongest.size());
+        for (int index = 0; index < count; index++) {
+            DiscoveredScale scale = strongest.get(index);
+            discovered.put(scale.address, scale);
+        }
     }
 
     private void handleValue(String uuid, byte[] value, long arrival, double monotonic) {
@@ -551,7 +571,7 @@ final class BluetoothScaleManager {
             notifyRecordingProgressChanged();
             return;
         } else {
-            recordRaw(value, uuid, PacketRole.UNKNOWN, ParseRejectionReason.UNSUPPORTED_CHARACTERISTIC, arrival, monotonic);
+            recordRaw(value, uuid, PacketRole.UNKNOWN, null, arrival, monotonic);
             refreshLiveMetricsIfNeeded(monotonic);
             notifyRecordingProgressChanged();
             return;
@@ -627,6 +647,9 @@ final class BluetoothScaleManager {
             return;
         }
         lastLiveMetricsRefreshSeconds = monotonicSeconds;
+        if (currentRecording.samples.size() > MAX_SAMPLES_FOR_FULL_LIVE_METRICS) {
+            return;
+        }
         liveMetricsAnalysisInFlight = true;
         ScaleRecording snapshot = liveAnalysisSnapshot(currentRecording);
         long generation = recordingGeneration;
@@ -714,7 +737,6 @@ final class BluetoothScaleManager {
         packet.weightGrams = sample == null ? null : sample.weightGrams;
         packet.sequence = sample == null ? null : sample.sequence;
         packet.deviceTimestampMilliseconds = sample == null ? null : sample.deviceTimestampMilliseconds;
-        packet.fields.addAll(ScaleParsers.packetFields(packet.scaleKind, packet.characteristicUuid, value));
         currentRecording.rawPackets.add(packet);
         if (sample != null) updateScoringCapabilities(sample, uuid);
     }
@@ -730,7 +752,7 @@ final class BluetoothScaleManager {
                 || kind == ScaleKind.DIFLUID_TI
                 || kind == ScaleKind.TIMEMORE_DOT;
         result.hasSequence = false;
-        result.sequenceModulus = 256L;
+        result.sequenceModulus = null;
         result.hasDeviceClock = false;
         result.deviceClockSemantics = kind == ScaleKind.DECENT || kind == ScaleKind.ESPRESSI
                 ? DeviceClockSemantics.SHOT_TIMER : DeviceClockSemantics.NONE;
@@ -742,6 +764,9 @@ final class BluetoothScaleManager {
                 ? currentRecording.protocolCapabilities : baseScoringCapabilities(sample.scaleKind);
         if (ScaleParsers.uuidMatches(uuid, ScaleParsers.WMB_WEIGHT20_UUID)) scoring.hasChecksum = true;
         scoring.hasSequence |= sample.sequence != null;
+        if (sample.sequence != null && scoring.sequenceModulus == null) {
+            scoring.sequenceModulus = 256L;
+        }
         scoring.hasDeviceClock |= sample.deviceTimestampMilliseconds != null;
         if (sample.deviceTimestampMilliseconds != null) {
             if (sample.scaleKind == ScaleKind.DECENT || sample.scaleKind == ScaleKind.ESPRESSI) {
