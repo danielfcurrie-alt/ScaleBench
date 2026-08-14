@@ -2450,8 +2450,11 @@ private func packetSeverity(
     intervalMilliseconds: Double?,
     longGapThresholdMilliseconds: Double
 ) -> PacketSeverity {
-    if packet.rejectionReason != nil {
+    if packet.rejectionReason?.impactsTransportScore == true {
         return .penalty
+    }
+    if packet.rejectionReason == .unsupportedCharacteristic {
+        return .warning
     }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds * 0.66 {
         return .warning
@@ -2473,7 +2476,11 @@ private func packetEvidence(
 ) -> [String] {
     var evidence: [String] = []
     if let rejectionReason = packet.rejectionReason {
-        evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
+        if rejectionReason.impactsTransportScore {
+            evidence.append("Rejected by parser: \(rejectionReason.rawValue). This directly lowers transport quality.")
+        } else {
+            evidence.append("Unsupported characteristic. Kept for diagnostics, but not counted as a transport-quality penalty.")
+        }
     }
     if let intervalMilliseconds, intervalMilliseconds >= longGapThresholdMilliseconds {
         evidence.append("Raw packet interval before this packet: \(formatMilliseconds(intervalMilliseconds)). Scoring uses parsed sample intervals; see the cadence chart for direct gap penalties.")
@@ -2490,7 +2497,7 @@ private func packetEvidence(
         evidence.append("Capability packet. Useful context for WMB+ features and parser behavior.")
     }
     if packet.role == .commandAck {
-        evidence.append("Command acknowledgement packet. Useful context around tare/start/stop actions.")
+        evidence.append("Command/control packet. Useful context around tare/start/stop actions and legacy WMB heartbeat traffic.")
     }
     if evidence.isEmpty {
         evidence.append("Normal parsed packet. No direct score penalty attached.")

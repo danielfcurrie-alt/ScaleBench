@@ -388,7 +388,11 @@ final class BluetoothScaleManager: NSObject, ObservableObject {
             }
 
         default:
-            recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: .unsupportedCharacteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
+            if WeighMyBruParser.isSystemOrCommandFrame(data) {
+                recordRawPacket(data: data, characteristic: characteristic, role: .commandAck, rejectionReason: nil, arrivalTime: arrival, monotonicSeconds: monotonic)
+            } else {
+                recordRawPacket(data: data, characteristic: characteristic, role: .unknown, rejectionReason: .unsupportedCharacteristic, arrivalTime: arrival, monotonicSeconds: monotonic)
+            }
         }
     }
 

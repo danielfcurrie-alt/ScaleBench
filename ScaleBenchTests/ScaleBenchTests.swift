@@ -52,6 +52,13 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(sample.diagnosticFlags?.detected80SPS, true)
     }
 
+    func testWMBLegacyHeartbeatIsRecognizedAsControlTraffic() {
+        XCTAssertTrue(WeighMyBruParser.isSystemOrCommandFrame(Data([0x02, 0x00, 0x02])))
+        XCTAssertTrue(WeighMyBruParser.isSystemOrCommandFrame(Data([0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06])))
+        XCTAssertTrue(WeighMyBruParser.isSystemOrCommandFrame(Data([0x03, 0x0A, 0x07, 0x00, 0x00, 0x0E])))
+        XCTAssertFalse(WeighMyBruParser.isSystemOrCommandFrame(Data([0x02, 0x00, 0x03])))
+    }
+
     func testBookooPacketParse() throws {
         var packet: [UInt8] = [
             0x03, 0x0B,
@@ -386,6 +393,27 @@ final class ScaleBenchTests: XCTestCase {
         }
 
         XCTAssertEqual(ScaleQualityAnalyzer.analyze(recording).transportScore, 90)
+    }
+
+    func testUnsupportedCharacteristicDiagnosticsDoNotLowerTransportScore() {
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.samples = (0..<90).map { makeSample(seconds: Double($0) * 0.1, weight: Double($0) * 0.1) }
+        recording.rawPackets = (0..<10).map { index in
+            RawScalePacket(
+                arrivalTime: Date(timeIntervalSince1970: Double(index)),
+                monotonicSeconds: Double(index),
+                scaleKind: .weighMyBruPlus,
+                characteristicUUID: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF",
+                role: .unknown,
+                bytesHex: "02 00 02",
+                rejectionReason: .unsupportedCharacteristic
+            )
+        }
+
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+
+        XCTAssertEqual(metrics.rejectedPacketCount, 0)
+        XCTAssertEqual(metrics.transportScore, 100)
     }
 
     func testCadenceJitterPenalizesTransportBeforeLongGapThreshold() throws {

@@ -21,6 +21,30 @@ enum WeighMyBruParser {
     static let atomicTareAndStartCommand: [UInt8] = [0x03, 0x0A, 0x07, 0x00, 0x00, 0x0E]
     static let bookooStyleAtomicTareAndStartCommand: [UInt8] = [0x03, 0x0A, 0x07, 0x00, 0x00, 0x00]
 
+    static func isSystemOrCommandFrame(_ data: Data) -> Bool {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 3 else { return false }
+        guard xorChecksum(bytes.dropLast()) == bytes.last else { return false }
+
+        // Legacy WeighMyBru heartbeat emitted by WMB+ every ~2 seconds:
+        // payload 02 00 + XOR checksum 02.
+        if bytes == [0x02, 0x00, 0x02] {
+            return true
+        }
+
+        // Legacy notification/setup request:
+        // payload 06 00 00 00 00 00 + XOR checksum 06.
+        if bytes == [0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06] {
+            return true
+        }
+
+        // Command acknowledgement/status frames use the documented WMB product
+        // and system bytes. Current firmware sends examples such as:
+        // 03 0A 01 00 00 08 for tare accepted
+        // 03 0A 07 00 00 0E for atomic tare/start accepted
+        return bytes.count == 6 && bytes[0] == productNumber && bytes[1] == 0x0A
+    }
+
     static func parseCapabilities(_ data: Data) -> WMBPlusCapabilities? {
         let bytes = [UInt8](data)
         guard bytes.count == 16 else { return nil }

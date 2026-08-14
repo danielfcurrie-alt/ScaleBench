@@ -4,7 +4,7 @@ enum ScaleQualityAnalyzer {
     static func analyze(_ recording: ScaleRecording, profile inputProfile: ScoringProfile? = nil) -> ScaleQualityMetrics {
         let profile = (inputProfile ?? recording.scoringProfile).normalized
         let samples = recording.samples
-        let rejected = recording.rawPackets.filter { $0.rejectionReason != nil }.count
+        let rejected = recording.rawPackets.filter { $0.rejectionReason?.impactsTransportScore == true }.count
         let batteryValues = (
             samples.compactMap(\.batteryPercent) + recording.batteryEvents.map(\.percent)
         ).filter { (0...100).contains($0) }

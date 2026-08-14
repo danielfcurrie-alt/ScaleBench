@@ -278,6 +278,12 @@ enum ParseRejectionReason: String, Codable, Equatable, Error {
     case unsupportedCharacteristic
 }
 
+extension ParseRejectionReason {
+    var impactsTransportScore: Bool {
+        self != .unsupportedCharacteristic
+    }
+}
+
 enum ScaleParserEvent: Equatable {
     case sample(ScaleSample)
     case battery(percent: Int)
