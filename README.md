@@ -28,6 +28,8 @@ For recording procedures, scoring explanations, diagnostics, and troubleshooting
 - Fixed WMB+ compatibility captures so the 20-byte stream and Bean Conqueror Float32 stream are not combined into one official benchmark stream.
 - Improved Android saved-recording analysis, charts, packet timeline, packet inspector, scorecards, imports, examples, and USB support.
 - Improved macOS importing, saved-recording layout, packet-check explanations, Bluetooth disconnect control, and high-rate recording performance.
+- Added compressed `.json.gz` recording exports for smaller files and easier sharing across platforms.
+- Added multi-file recording import on iOS, macOS, and Android, with per-file failure reporting when a batch contains an invalid file.
 - Expanded shared JSON exports, scorecard payloads, schemas, fixtures, and cross-platform conformance checks for USB and signal diagnostics.
 - Kept ScaleBench Standard v1 as the public scoring contract, with the scoring model still identified as `standard-1.0.0`.
 
@@ -119,6 +121,8 @@ iOS and Android BLE connection controls differ, so their Delivery results are di
 WMB+ USB Serial is a separate transport condition and should be labelled and compared separately from BLE. BLE cadence is measured when packets arrive at the app; USB cadence is measured from the scale's firmware time and sequence because serial drivers can batch rows. USB results show both device cadence and received sample rate, and firmware-reported dropped rows count as USB backpressure loss.
 
 ## Exports
+
+Recording exports use gzip-compressed `.json.gz` files for smaller transfers while retaining the shared JSON payload. iOS, macOS, and Android can import multiple `.json`, `.json.gz`, or supported saved-recording files in one selection and report any files that fail without discarding successful imports.
 
 JSON exports include platform/app build identity, transport source, raw packets, decoded packet field maps, parsed samples, explicit recording boundaries, disconnect/reconnect and app-state events, link setup, protocol scoring capabilities, Standard v1 validity, frame classifications, mode-specific results, and diagnostics. USB exports also preserve firmware time and sequence, raw and decoded status, firmware quality, HX711 cadence, cumulative and per-row drops, serial baud, and host receive time. The schema version describes the container; `scoringModelVersion` identifies the mathematics.
 
