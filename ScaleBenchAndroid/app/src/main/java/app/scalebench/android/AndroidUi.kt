@@ -201,7 +201,7 @@ internal fun ScaleBenchApp(
     val savedRecordings = savedRecordingStore.recordings()
     var selectedModeName by rememberSaveable { mutableStateOf(RecordingMode.SHOT.name) }
     val selectedMode = RecordingMode.valueOf(selectedModeName)
-    var recordingNotes by rememberSaveable { mutableStateOf(bluetooth.currentRecording().notes ?: "") }
+    var recordingNotes by rememberSaveable { mutableStateOf(bluetooth.currentRecordingSnapshot().notes ?: "") }
     var showRecordingResults by rememberSaveable { mutableStateOf(false) }
     var handledCompletionKey by rememberSaveable { mutableStateOf<String?>(null) }
     var recordingSaveMessage by rememberSaveable { mutableStateOf("") }
@@ -214,6 +214,7 @@ internal fun ScaleBenchApp(
     val saveScope = rememberCoroutineScope()
     val isConnected = bluetooth.isConnected
     val connectedScaleAddress = bluetooth.connectedDevice()?.address?.takeIf { isConnected }
+    val currentRecordingSnapshot = bluetooth.currentRecordingSnapshot()
     val usbCompletionKey = usbSerial.completedRecording?.id
     val bluetoothCompletionKey = bluetooth.completedRecordingId()
 
@@ -310,8 +311,8 @@ internal fun ScaleBenchApp(
                         Text(
                             nextStepTitle(
                                 isConnected = isConnected,
-                                hasRecordingData = bluetooth.currentRecording().samples.isNotEmpty()
-                                        || bluetooth.currentRecording().rawPackets.isNotEmpty(),
+                                hasRecordingData = currentRecordingSnapshot.samples.isNotEmpty()
+                                        || currentRecordingSnapshot.rawPackets.isNotEmpty(),
                                 savedCount = savedRecordings.size
                             ),
                             style = MaterialTheme.typography.bodySmall,
@@ -370,12 +371,12 @@ internal fun ScaleBenchApp(
                     recordingNotes = recordingNotes,
                     onRecordingNotesChanged = {
                         recordingNotes = it
-                        bluetooth.currentRecording().notes = it
+                        bluetooth.updateCurrentRecordingNotes(it)
                     },
                     onRecord = {
                         if (!bluetooth.isRecording) {
                             bluetooth.startRecording(selectedMode)
-                            bluetooth.currentRecording().notes = recordingNotes
+                            bluetooth.updateCurrentRecordingNotes(recordingNotes)
                         }
                     },
                     onTare = bluetooth::sendAtomicTareAndStart,
@@ -392,14 +393,14 @@ internal fun ScaleBenchApp(
             if (!bluetooth.isRecording &&
                 !showRecordingResults &&
                 selectedSavedSummary == null &&
-                (bluetooth.currentRecording().samples.size >= 2 || bluetooth.currentRecording().rawPackets.size >= 2)
+                (currentRecordingSnapshot.samples.size >= 2 || currentRecordingSnapshot.rawPackets.size >= 2)
             ) {
                 item {
-                    ScorecardSection(recording = bluetooth.currentRecording(), metrics = bluetooth.currentMetrics())
+                    ScorecardSection(recording = currentRecordingSnapshot, metrics = bluetooth.currentMetrics())
                 }
                 item {
                     VisualizerSection(
-                        recording = bluetooth.currentRecording(),
+                        recording = currentRecordingSnapshot,
                         metrics = bluetooth.currentMetrics()
                     )
                 }
@@ -452,7 +453,7 @@ internal fun ScaleBenchApp(
         }
 
         if (showRecordingResults && !bluetooth.isRecording && !bluetooth.isFinalizing && !usbSerial.isRecording && !usbSerial.isFinalizing) {
-            val resultRecording = completedResultRecording ?: bluetooth.currentRecording()
+            val resultRecording = completedResultRecording ?: bluetooth.currentRecordingSnapshot()
             RecordingResultsDialog(
                 recording = resultRecording,
                 metrics = resultRecording.metrics,
@@ -1017,7 +1018,7 @@ internal fun WiredUSBSection(
             SwiftMetricRow("Live weight", usbSerial.latestSample?.let { String.format(Locale.US, "%.3f g", it.weightGrams) } ?: "--")
             SwiftMetricRow("Device cadence", usbSerial.latestSample?.usbSerial?.let { String.format(Locale.US, "%.2f Hz", it.hx711Hz) } ?: "--")
             SwiftMetricRow("Received rate", usbSerial.hostReceiveRateHz?.let { String.format(Locale.US, "%.1f Hz", it) } ?: "--")
-            SwiftMetricRow("Samples", usbSerial.currentRecording.samples.size.toString())
+            SwiftMetricRow("Samples", usbSerial.currentRecordingSnapshot().samples.size.toString())
             SwiftMetricRow("USB dropped", usbSerial.droppedCount.toString())
             SwiftMetricRow("Battery", usbSerial.latestSample?.batteryPercent?.let { "$it%" } ?: "Unavailable")
         }
@@ -1203,8 +1204,9 @@ internal fun RecordingSection(
     onTare: () -> Unit,
     onExport: () -> Unit
 ) {
-    val hasRecordingData = bluetooth.currentRecording().samples.isNotEmpty()
-            || bluetooth.currentRecording().rawPackets.isNotEmpty()
+    val recording = bluetooth.currentRecordingSnapshot()
+    val hasRecordingData = recording.samples.isNotEmpty()
+            || recording.rawPackets.isNotEmpty()
     val metrics = bluetooth.currentMetrics()
     SectionCard("Recording") {
         var menuExpanded by remember { mutableStateOf(false) }
@@ -1291,7 +1293,7 @@ internal fun RecordingSection(
                 Text("Tare + Start")
             }
             OutlinedButton(onClick = onExport, enabled = !bluetooth.isRecording && hasRecordingData) {
-                Text("Save JSON...")
+                Text("Save JSON.gz...")
             }
         }
     }
@@ -1311,7 +1313,7 @@ internal fun RecordingTimerDialog(
     }
     timerTick.hashCode()
 
-    val recording = bluetooth.currentRecording()
+    val recording = bluetooth.currentRecordingSnapshot()
     val metrics = bluetooth.currentMetrics()
     val sample = bluetooth.latestSample()
     val elapsedMillis = (System.currentTimeMillis() - recording.startedAtMillis).coerceAtLeast(0)
@@ -1368,7 +1370,7 @@ internal fun USBRecordingTimerDialog(
     }
     timerTick.hashCode()
 
-    val recording = usbSerial.currentRecording
+    val recording = usbSerial.currentRecordingSnapshot()
     val sample = usbSerial.latestSample
     val elapsedMillis = (System.currentTimeMillis() - recording.startedAtMillis).coerceAtLeast(0)
     AlertDialog(
@@ -1519,7 +1521,7 @@ internal fun RecordingResultsDialog(
                             Text("Share Scorecard")
                         }
                         OutlinedButton(onClick = onExport, enabled = hasRecordingData) {
-                            Text("Save JSON...")
+                            Text("Save JSON.gz...")
                         }
                     }
                 }
@@ -1550,13 +1552,14 @@ internal fun usbHostReceiveRate(recording: ScaleRecording): String {
 @Composable
 internal fun LiveSection(bluetooth: BluetoothScaleManager) {
     val sample = bluetooth.latestSample()
+    val recording = bluetooth.currentRecordingSnapshot()
     SectionCard("Live") {
         SwiftMetricRow("Weight", sample?.weightGrams?.let { String.format(Locale.US, "%.2f g", it) } ?: "--")
         SwiftMetricRow("Flow", sample?.flowGramsPerSecond?.let { String.format(Locale.US, "%.2f g/s", it) } ?: "--")
         SwiftMetricRow("Battery", sample?.batteryPercent?.let { "$it%" } ?: bluetooth.latestBatteryPercent()?.let { "$it%" } ?: "--")
         SwiftMetricRow("Protocol", sample?.scaleKind?.displayName ?: bluetooth.connectedDevice()?.kind?.displayName ?: "Unknown")
-        SwiftMetricRow("Packets", bluetooth.currentRecording().rawPackets.size.toString())
-        SwiftMetricRow("Samples", bluetooth.currentRecording().samples.size.toString())
+        SwiftMetricRow("Packets", recording.rawPackets.size.toString())
+        SwiftMetricRow("Samples", recording.samples.size.toString())
         RecordingDiagnosticsRows(bluetooth.currentMetrics())
     }
 }

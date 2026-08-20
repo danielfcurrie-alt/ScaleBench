@@ -98,6 +98,8 @@ internal class AndroidUSBSerialManager(
     var hostReceiveRateHz: Double? = null
         private set
 
+    fun currentRecordingSnapshot(): ScaleRecording = liveAnalysisSnapshot(currentRecording)
+
     init {
         val filter = IntentFilter(actionPermission).apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -516,6 +518,7 @@ internal class AndroidUSBSerialManager(
             snapshot.protocolCapabilities = copyProtocolCapabilities(source.protocolCapabilities)
             snapshot.link = source.link
             snapshot.scoringProfile = source.scoringProfile
+            snapshot.metrics = source.metrics
             return snapshot
         }
 

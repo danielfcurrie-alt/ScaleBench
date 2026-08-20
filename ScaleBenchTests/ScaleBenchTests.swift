@@ -488,7 +488,7 @@ final class ScaleBenchTests: XCTestCase {
 
         XCTAssertEqual(metrics.missingSequenceCount, 0)
         XCTAssertEqual(metrics.duplicateOrOutOfOrderTimestampCount, 0)
-        XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 10, accuracy: 0.01)
+        XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 40.0 / 3.0, accuracy: 0.01)
         XCTAssertEqual(metrics.metadataScore, 100)
     }
 
@@ -572,7 +572,7 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertEqual(metrics.packetIntervalMaxMilliseconds ?? 0, 800, accuracy: 0.001)
     }
 
-    func testSeparateBatteryEventsCountTowardMetadataAndBatteryRange() {
+    func testSeparateBatteryEventsReportBatteryRangeWithoutInventingProtocolVerification() {
         var recording = ScaleRecording.empty(mode: .batteryStability)
         recording.samples = [
             makeSample(seconds: 0.0, weight: 0.0),
@@ -588,7 +588,7 @@ final class ScaleBenchTests: XCTestCase {
 
         XCTAssertEqual(metrics.batteryMinPercent, 84)
         XCTAssertEqual(metrics.batteryMaxPercent, 86)
-        XCTAssertGreaterThanOrEqual(metrics.metadataScore ?? 0, 20)
+        XCTAssertEqual(metrics.metadataScore, 0)
     }
 
     func testBatteryOnlyRecordingStillReportsBatteryRange() {
@@ -813,7 +813,7 @@ final class ScaleBenchTests: XCTestCase {
         let analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
 
         XCTAssertEqual(metrics.usableSampleCount, 300)
-        XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 10, accuracy: 0.01)
+        XCTAssertEqual(metrics.effectiveSampleRateHz ?? 0, 300.0 / 29.9, accuracy: 0.01)
         XCTAssertEqual(analysis.weightPoints.count, 300)
     }
 
@@ -845,10 +845,8 @@ final class ScaleBenchTests: XCTestCase {
             )
         )
 
-        let analysis = ChartAnalysis.make(
-            recording: recording,
-            metrics: ScaleQualityAnalyzer.analyze(recording)
-        )
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+        let analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
 
         XCTAssertEqual(analysis.weightPoints[0].seconds, 1, accuracy: 0.0001)
         XCTAssertEqual(analysis.packetTimeline.entries[0].relativeSeconds, 0.25, accuracy: 0.0001)
@@ -894,17 +892,20 @@ final class ScaleBenchTests: XCTestCase {
             )
         }
 
-        let analysis = ChartAnalysis.make(
-            recording: recording,
-            metrics: ScaleQualityAnalyzer.analyze(recording)
-        )
+        let metrics = ScaleQualityAnalyzer.analyze(recording)
+        let analysis = ChartAnalysis.make(recording: recording, metrics: metrics)
         let flow = try XCTUnwrap(analysis.signalDiagnostics.flowValidation)
         XCTAssertLessThan(flow.medianAbsoluteErrorGramsPerSecond, 0.08)
         XCTAssertEqual(try XCTUnwrap(flow.lagMilliseconds), 200, accuracy: 51)
         let clock = try XCTUnwrap(analysis.signalDiagnostics.clockSkew)
         XCTAssertEqual(clock.skewPartsPerMillion, 100, accuracy: 20)
         let packet = try XCTUnwrap(analysis.signalDiagnostics.packetCoalescing)
-        XCTAssertEqual(packet.framesPerServedSlot, 1, accuracy: 0.01)
+        let delivery = try XCTUnwrap(metrics.delivery)
+        let coverage = try XCTUnwrap(delivery.coverage)
+        let expectedFramesPerServedSlot = try XCTUnwrap(metrics.frameRateHz)
+            / (coverage * 20)
+        XCTAssertEqual(packet.framesPerServedSlot, expectedFramesPerServedSlot, accuracy: 0.000001)
+        XCTAssertGreaterThanOrEqual(packet.framesPerServedSlot, 1)
 
         recording.device?.kind = .decent
         recording.protocolCapabilities?.deviceClockSemantics = .shotTimer
@@ -1286,7 +1287,7 @@ final class ScaleBenchTests: XCTestCase {
         XCTAssertNotNil(saved.scoreSnapshot.effectiveSampleRateHz)
     }
 
-    func testSavedRecordingStoreRoundTripsJSON() throws {
+    func testSavedRecordingStoreRoundTripsCompressedJSON() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ScaleBenchTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1300,18 +1301,145 @@ final class ScaleBenchTests: XCTestCase {
 
         let store = SavedRecordingStore(directoryURL: directory)
         let saved = try XCTUnwrap(store.save(recording: recording, notes: "quiet table"))
-        let savedFile = directory.appendingPathComponent("\(saved.id.uuidString).json")
-        let savedObject = try JSONSerialization.jsonObject(with: Data(contentsOf: savedFile)) as? [String: Any]
-        XCTAssertNotNil(savedObject?["startedAtMillis"])
-        XCTAssertNil(savedObject?["recording"])
-        XCTAssertEqual(savedObject?["id"] as? String, saved.id.uuidString)
-        XCTAssertEqual(savedObject?["title"] as? String, saved.title)
+        let savedFile = directory.appendingPathComponent("\(saved.id.uuidString).json.z")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: savedFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(saved.id.uuidString).json").path))
+
+        let decoded = try SharedRecordingCodec.decodeRecording(from: Data(contentsOf: savedFile))
+        XCTAssertEqual(decoded.id, saved.id)
+        XCTAssertEqual(decoded.title, saved.title)
+        XCTAssertEqual(decoded.notes, "quiet table")
 
         let reloaded = SavedRecordingStore(directoryURL: directory)
         XCTAssertEqual(reloaded.recordings.count, 1)
         XCTAssertEqual(reloaded.recordings.first?.id, saved.id)
         XCTAssertEqual(reloaded.recordings.first?.notes, "quiet table")
         XCTAssertEqual(reloaded.recordings.first?.scoreSnapshot.overallScore, saved.scoreSnapshot.overallScore)
+    }
+
+    func testSavedRecordingStoreImportsGzipJSON() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchGzipImportTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var recording = ScaleRecording.empty(mode: .shot)
+        recording.title = nil
+        recording.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.1, weight: 0.2)
+        ]
+
+        let data = try SharedRecordingCodec.gzipExportData(from: recording, recalculateMetrics: true)
+        let store = SavedRecordingStore(directoryURL: directory)
+        let imported = try store.importRecordingDataOrThrow(data, fallbackTitle: "Imported Shot")
+
+        XCTAssertEqual(imported.title, "Imported Shot")
+        XCTAssertEqual(store.recordings.count, 1)
+        XCTAssertEqual(store.recordings.first?.id, recording.id)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(recording.id.uuidString).json.z").path))
+    }
+
+    func testSavedRecordingStoreRejectsEmptyImportWithReadableError() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchEmptyImportTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = SavedRecordingStore(directoryURL: directory)
+        XCTAssertThrowsError(
+            try store.importRecordingDataOrThrow(Data(), fallbackTitle: "Empty Shot")
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.localizedCaseInsensitiveContains("empty"))
+        }
+    }
+
+    func testSavedRecordingStoreBatchImportsMultipleFilesAndReportsFailures() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchBatchImportTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var first = ScaleRecording.empty(mode: .shot)
+        first.title = "First import"
+        first.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.05, weight: 0.1)
+        ]
+
+        var second = ScaleRecording.empty(mode: .shot)
+        second.title = "Second import"
+        second.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.05, weight: 0.2)
+        ]
+
+        let store = SavedRecordingStore(directoryURL: directory)
+        let expectation = expectation(description: "batch import completes")
+        let items = [
+            RecordingImportDataItem(
+                data: try SharedRecordingCodec.gzipExportData(from: first, recalculateMetrics: true),
+                fallbackTitle: "First"
+            ),
+            RecordingImportDataItem(data: Data(), fallbackTitle: "Empty"),
+            RecordingImportDataItem(
+                data: try SharedRecordingCodec.gzipExportData(from: second, recalculateMetrics: true),
+                fallbackTitle: "Second"
+            )
+        ]
+
+        store.importRecordingDataBatchInBackground(items) { result in
+            XCTAssertEqual(result.imported.count, 2)
+            XCTAssertEqual(result.failures.count, 1)
+            XCTAssertTrue(result.failures.first?.localizedCaseInsensitiveContains("empty") == true)
+            XCTAssertEqual(store.recordings.count, 2)
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2)
+    }
+
+    func testSavedRecordingStoreBatchImportsFilesSeriallyAndReportsFailures() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScaleBenchURLBatchImportTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        var first = ScaleRecording.empty(mode: .shot)
+        first.title = "First URL import"
+        first.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.05, weight: 0.1)
+        ]
+        var second = ScaleRecording.empty(mode: .shot)
+        second.title = "Second URL import"
+        second.samples = [
+            makeSample(seconds: 0.0, weight: 0.0),
+            makeSample(seconds: 0.05, weight: 0.2)
+        ]
+
+        let firstURL = directory.appendingPathComponent("first.json.gz")
+        let emptyURL = directory.appendingPathComponent("empty.json.gz")
+        let secondURL = directory.appendingPathComponent("second.json.gz")
+        try SharedRecordingCodec.gzipExportData(from: first, recalculateMetrics: true).write(to: firstURL)
+        try Data().write(to: emptyURL)
+        try SharedRecordingCodec.gzipExportData(from: second, recalculateMetrics: true).write(to: secondURL)
+
+        let storeDirectory = directory.appendingPathComponent("library", isDirectory: true)
+        let store = SavedRecordingStore(directoryURL: storeDirectory)
+        let expectation = expectation(description: "URL batch import completes")
+        let items = [
+            RecordingImportURLItem(url: firstURL, fallbackTitle: "First"),
+            RecordingImportURLItem(url: emptyURL, fallbackTitle: "Empty"),
+            RecordingImportURLItem(url: secondURL, fallbackTitle: "Second")
+        ]
+
+        store.importRecordingURLBatchInBackground(items) { result in
+            XCTAssertEqual(result.imported.count, 2)
+            XCTAssertEqual(result.failures.count, 1)
+            XCTAssertTrue(result.failures.first?.localizedCaseInsensitiveContains("empty") == true)
+            XCTAssertEqual(store.recordings.count, 2)
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2)
     }
 
     func testSavedRecordingStoreReplacesDuplicateIDs() throws {
@@ -1365,6 +1493,7 @@ final class ScaleBenchTests: XCTestCase {
         let backupsAfterDelete = try FileManager.default.contentsOfDirectory(at: backupDirectory, includingPropertiesForKeys: nil)
         XCTAssertFalse(backupsAfterDelete.contains { $0.lastPathComponent.hasPrefix(prefix) })
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(saved.id.uuidString).json").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(saved.id.uuidString).json.z").path))
         XCTAssertTrue(store.recordings.isEmpty)
     }
 

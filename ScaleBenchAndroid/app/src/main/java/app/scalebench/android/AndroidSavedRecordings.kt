@@ -684,7 +684,7 @@ internal fun SavedRecordingDetailsDialog(
                     Text("Share Scorecard")
                 }
                 OutlinedButton(onClick = onExport) {
-                    Text("Save JSON...")
+                    Text("Save JSON.gz...")
                 }
                 Button(onClick = onDismiss) {
                     Text("Done")
@@ -789,19 +789,13 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
     return try {
         val recording = store.recordingForAnalysis(summary)
         val analysis = ChartAnalysis.create(recording, recording.metrics)
-        val objectJson = store.recordingObject(recording)
-        val metrics = objectJson.optJSONObject("metrics") ?: JSONObject()
-        val samples = objectJson.optJSONArray("samples")
-        val packets = objectJson.optJSONArray("rawPackets")
-        val batteryEvents = objectJson.optJSONArray("batteryEvents")
-        val firstSample = samples?.optJSONObject(0)
-        val lastSample = samples?.optJSONObject((samples.length() - 1).coerceAtLeast(0))
-        val delivery = metrics.optJSONObject("delivery")
-        val verification = metrics.optJSONObject("protocolVerification")
-        val validity = metrics.optJSONObject("validity")
+        val metrics = recording.metrics
+        val delivery = metrics.delivery
+        val verification = metrics.protocolVerification
+        val validity = metrics.validity
         val scoreValue = when (summary.mode) {
-            RecordingMode.SHOT, RecordingMode.TRANSPORT_STRESS -> delivery?.nullableInt("deliveryScore")
-            RecordingMode.IDLE_STABILITY -> metrics.nullableInt("stabilityScore")
+            RecordingMode.SHOT, RecordingMode.TRANSPORT_STRESS -> delivery?.deliveryScore
+            RecordingMode.IDLE_STABILITY -> metrics.stabilityScore
             RecordingMode.STEP_RESPONSE, RecordingMode.TARE_LATENCY, RecordingMode.BATTERY_STABILITY -> null
         }
         val scoreDisplay = if (scoreValue != null) {
@@ -811,22 +805,19 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
         } else {
             "--"
         }
-        val started = objectJson.optLong("startedAtMillis", 0L)
-        val ended = objectJson.optLong("endedAtMillis", started)
-        val monotonicDuration = if (metrics.isNull("recordingSpanSeconds")) null else metrics.optDouble("recordingSpanSeconds")
-        val sampleCount = samples?.length() ?: summary.sampleCount
-        val rawPacketCount = packets?.length() ?: summary.rawPacketCount
-        val boundaryMissing = validity
-            ?.optJSONArray("reasons")
-            ?.jsonStrings()
-            .orEmpty()
+        val started = recording.startedAtMillis
+        val ended = recording.endedAtMillis ?: started
+        val monotonicDuration = metrics.recordingSpanSeconds
+        val sampleCount = recording.samples.size
+        val rawPacketCount = recording.rawPackets.size
+        val boundaryMissing = validity?.reasons.orEmpty()
             .contains("recordingBoundariesMissing")
-        val hasData = sampleCount > 0 || rawPacketCount > 0 || metrics.optInt("relevantWeightFrameCount", 0) > 0
+        val hasData = sampleCount > 0 || rawPacketCount > 0 || (metrics.relevantWeightFrameCount ?: 0) > 0
         val longGapThresholdMs = analysis.packetTimeline.thresholdMs
         SavedRecordingDetails(
             summary = summary,
             title = summary.title,
-            notes = objectJson.optString("notes", summary.notes ?: ""),
+            notes = recording.notes ?: summary.notes ?: "",
             protocol = summary.protocolKind.displayName,
             mode = summary.mode.displayName,
             started = if (started > 0) java.text.DateFormat.getDateTimeInstance().format(java.util.Date(started)) else "--",
@@ -838,46 +829,47 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
             },
             sampleCount = sampleCount,
             rawPacketCount = rawPacketCount,
-            batteryEventCount = batteryEvents?.length() ?: 0,
+            batteryEventCount = recording.batteryEvents.size,
             scoreTitle = standardScoreTitle(summary.mode),
             score = scoreDisplay,
-            validity = validity?.let { if (it.optBoolean("isValid", false)) "Valid" else "Not valid" } ?: "--",
-            validityReasons = validity?.optJSONArray("reasons")?.jsonStrings()?.joinToString("; ") { validityReasonLabel(it) } ?: "",
+            validity = validity?.let { if (it.isValid) "Valid" else "Not valid" } ?: "--",
+            validityReasons = validity?.reasons?.joinToString("; ") { validityReasonLabel(it) } ?: "",
             scoreExplanationLines = scoreExplanationLines(summary.mode, metrics),
-            coverage = deliveredDisplay(metrics, delivery),
+            coverage = deliveredDisplay(metrics),
             purityTitle = "Usable readings",
-            purity = usableDisplay(metrics, delivery),
-            verification = if (hasData) verification?.let {
+            purity = usableDisplay(metrics),
+            verification = if (hasData) {
                 protocolDetailDisplay(
-                    availableChecks = it.optJSONArray("verifiableClasses")?.length(),
-                    totalChecks = (it.optJSONArray("verifiableClasses")?.length() ?: 0) +
-                        (it.optJSONArray("unverifiableClasses")?.length() ?: 0)
+                    availableChecks = verification?.verifiableClasses?.size,
+                    totalChecks = verification?.let { check ->
+                        check.verifiableClasses.size + check.unverifiableClasses.size
+                    }
                 )
-            } ?: "--" else "--",
-            effectiveRateTitle = if (objectJson.optString("source") == "usbSerial") "Received rate" else "Effective rate",
-            effectiveRate = number(metrics, "effectiveSampleRateHz", "%.1f Hz"),
-            intervalP50 = number(metrics, "packetIntervalP50Milliseconds", "%.0f ms"),
-            intervalP95 = number(metrics, "packetIntervalP95Milliseconds", "%.0f ms"),
-            maxGap = number(metrics, "packetIntervalMaxMilliseconds", "%.0f ms"),
-            longGaps = metrics.optInt("longGapCount", 0).toString(),
-            missingSeq = metrics.optInt("missingSequenceCount", 0).toString(),
-            rejected = metrics.optInt("rejectedPacketCount", 0).toString(),
-            idleNoise = number(metrics, "idleNoisePeakToPeakGrams", "%.2f g p-p"),
-            idleStdDev = number(metrics, "idleNoiseStandardDeviationGrams", "%.3f g"),
-            drift = number(metrics, "driftGramsPerMinute", "%.3f g/min"),
-            firstWeight = weight(firstSample),
-            lastWeight = weight(lastSample),
-            batteryMin = number(metrics, "batteryMinPercent", "%.0f%%"),
-            batteryMax = number(metrics, "batteryMaxPercent", "%.0f%%"),
+            } else "--",
+            effectiveRateTitle = if (recording.source == RecordingSource.USB_SERIAL) "Received rate" else "Effective rate",
+            effectiveRate = number(metrics.effectiveSampleRateHz, "%.1f Hz"),
+            intervalP50 = number(metrics.packetIntervalP50Milliseconds, "%.0f ms"),
+            intervalP95 = number(metrics.packetIntervalP95Milliseconds, "%.0f ms"),
+            maxGap = number(metrics.packetIntervalMaxMilliseconds, "%.0f ms"),
+            longGaps = metrics.longGapCount.toString(),
+            missingSeq = metrics.missingSequenceCount.toString(),
+            rejected = metrics.rejectedPacketCount.toString(),
+            idleNoise = number(metrics.idleNoisePeakToPeakGrams, "%.2f g p-p"),
+            idleStdDev = number(metrics.idleNoiseStandardDeviationGrams, "%.3f g"),
+            drift = number(metrics.driftGramsPerMinute, "%.3f g/min"),
+            firstWeight = weight(recording.samples.firstOrNull()),
+            lastWeight = weight(recording.samples.lastOrNull()),
+            batteryMin = number(metrics.batteryMinPercent, "%.0f%%"),
+            batteryMax = number(metrics.batteryMaxPercent, "%.0f%%"),
             longGapThresholdMs = longGapThresholdMs,
             samplePoints = analysis.weightPoints,
             flowPoints = analysis.flowPoints,
             packetIntervals = analysis.packetTimeline.sampleIntervals.map { it.intervalMs },
-            rejectedPacketIndexes = rejectedPacketIndexes(packets),
+            rejectedPacketIndexes = rejectedPacketIndexes(recording.rawPackets),
             packetTimeline = analysis.packetTimeline,
             problemWindows = analysis.problemWindows,
             transportComparison = AndroidTransportComparison.from(recording),
-            rawPreview = rawPreview(packets),
+            rawPreview = rawPreview(recording.rawPackets),
             canShareScorecard = canShareOfficialScorecard(summary.mode, recording.metrics)
         )
     } catch (error: Exception) {
@@ -930,12 +922,29 @@ internal fun readSavedRecordingDetails(store: SavedRecordingStore, summary: Save
     }
 }
 
+internal fun rejectedPacketIndexes(packets: List<RawScalePacket>): Set<Int> {
+    return packets.mapIndexedNotNull { index, packet ->
+        if (packet.rejectionReason != null) index else null
+    }.toSet()
+}
+
 internal fun rejectedPacketIndexes(packets: org.json.JSONArray?): Set<Int> {
     if (packets == null) return emptySet()
     return (0 until packets.length()).mapNotNull { index ->
         val packet = packets.optJSONObject(index)
         if (packet != null && packet.has("rejectionReason")) index else null
     }.toSet()
+}
+
+private fun deliveredDisplay(metrics: ScaleQualityMetrics): String {
+    val coverage = metrics.delivery?.coverage
+    val served = metrics.servedSlots
+    val total = metrics.slotCount
+    return if (coverage != null && served != null && total != null && total > 0) {
+        "$served/$total (${formatPercent(coverage)})"
+    } else {
+        coverage?.let(::formatPercent) ?: "--"
+    }
 }
 
 private fun deliveredDisplay(metrics: org.json.JSONObject, delivery: org.json.JSONObject?): String {
@@ -949,6 +958,17 @@ private fun deliveredDisplay(metrics: org.json.JSONObject, delivery: org.json.JS
     }
 }
 
+private fun usableDisplay(metrics: ScaleQualityMetrics): String {
+    val purity = metrics.delivery?.purity
+    val usable = metrics.usableSampleCount
+    val total = metrics.relevantWeightFrameCount
+    return if (purity != null && usable != null && total != null && total > 0) {
+        "$usable/$total (${formatPercent(purity)})"
+    } else {
+        purity?.let(::formatPercent) ?: "--"
+    }
+}
+
 private fun usableDisplay(metrics: org.json.JSONObject, delivery: org.json.JSONObject?): String {
     val purity = delivery?.nullableDouble("purity")
     val usable = metrics.nullableInt("usableSampleCount")
@@ -957,5 +977,23 @@ private fun usableDisplay(metrics: org.json.JSONObject, delivery: org.json.JSONO
         "$usable/$total (${formatPercent(purity)})"
     } else {
         purity?.let(::formatPercent) ?: "--"
+    }
+}
+
+private fun number(value: Double?, format: String): String =
+    value?.let { String.format(Locale.US, format, it) } ?: "--"
+
+private fun number(value: Int?, format: String): String =
+    value?.let { String.format(Locale.US, format, it.toDouble()) } ?: "--"
+
+private fun weight(sample: ScaleSample?): String =
+    sample?.let { String.format(Locale.US, "%.2f g", it.weightGrams) } ?: "--"
+
+private fun rawPreview(packets: List<RawScalePacket>): List<String> {
+    return packets.take(5).map { packet ->
+        val role = packet.role?.name ?: "UNKNOWN"
+        val uuid = packet.characteristicUuid ?: "--"
+        val bytes = packet.bytesHex ?: ""
+        "$role · $uuid · ${bytes.take(48)}"
     }
 }

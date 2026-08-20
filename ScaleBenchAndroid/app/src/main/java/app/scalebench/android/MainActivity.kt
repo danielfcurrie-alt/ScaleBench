@@ -86,11 +86,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.zip.GZIPInputStream
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.delay
@@ -161,7 +163,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         createJsonDocument = registerForActivityResult(
-            ActivityResultContracts.CreateDocument("application/json")
+            ActivityResultContracts.CreateDocument("application/octet-stream")
         ) { uri ->
             if (uri == null) {
                 pendingJsonExport = null
@@ -170,10 +172,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         importJsonDocument = registerForActivityResult(
-            ActivityResultContracts.OpenDocument()
-        ) { uri ->
-            if (uri != null) {
-                importRecording(uri)
+            ActivityResultContracts.OpenMultipleDocuments()
+        ) { uris ->
+            if (uris.isNotEmpty()) {
+                importRecordings(uris)
             }
         }
         openFirmwareDocument = registerForActivityResult(
@@ -268,14 +270,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportRecording(recording: ScaleRecording) {
-        val fileName = jsonFileName(recording.defaultTitle(), System.currentTimeMillis())
+        val fileName = compressedJsonFileName(recording.defaultTitle(), System.currentTimeMillis())
         pendingJsonExport = PendingJsonExport.Current(recording, fileName)
         createJsonDocument.launch(fileName)
         appState.invalidate()
     }
 
     private fun exportSavedRecording(summary: SavedRecordingSummary) {
-        val fileName = jsonFileName(summary.title, summary.savedAtMillis)
+        val fileName = compressedJsonFileName(summary.title, summary.savedAtMillis)
         pendingJsonExport = PendingJsonExport.Saved(summary, fileName)
         createJsonDocument.launch(fileName)
     }
@@ -333,12 +335,15 @@ class MainActivity : ComponentActivity() {
         fileWorkExecutor.execute {
             appState.updateFileWorkMessage("Saving ${export.fileName}...")
             try {
-                val bytes = buildJsonExportBytes(export)
                 val output = contentResolver.openOutputStream(uri, "wt")
                     ?: throw IllegalStateException("The selected location could not be opened")
+                val counter = CountingOutputStream(output)
                 output.use {
-                    it.write(bytes)
+                    writeJsonExport(export, counter)
                     it.flush()
+                }
+                if (counter.bytesWritten <= 0L) {
+                    throw IllegalStateException("No data was written")
                 }
                 runOnUiThread {
                     Toast.makeText(this, "Saved ${export.fileName}", Toast.LENGTH_LONG).show()
@@ -353,20 +358,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun buildJsonExportBytes(export: PendingJsonExport): ByteArray {
-        val bytes = when (export) {
-            is PendingJsonExport.Current -> ByteArrayOutputStream().use {
-                JsonExporter.writeRecording(export.recording, it)
-                it.toByteArray()
+    private fun writeJsonExport(export: PendingJsonExport, output: OutputStream) {
+        when (export) {
+            is PendingJsonExport.Current -> JsonExporter.writeRecordingGzip(export.recording, output)
+            is PendingJsonExport.Saved -> savedRecordingStore.writeRecordingGzip(export.summary, output)
+            is PendingJsonExport.UtilityReport -> {
+                val bytes = export.json.toByteArray(Charsets.UTF_8)
+                JSONObject(bytes.toString(Charsets.UTF_8))
+                output.write(bytes)
             }
-            is PendingJsonExport.Saved -> ByteArrayOutputStream().use {
-                savedRecordingStore.writeRecording(export.summary, it)
-                it.toByteArray()
-            }
-            is PendingJsonExport.UtilityReport -> export.json.toByteArray(Charsets.UTF_8)
         }
-        JSONObject(bytes.toString(Charsets.UTF_8))
-        return bytes
+    }
+
+    private class CountingOutputStream(private val wrapped: OutputStream) : OutputStream() {
+        var bytesWritten: Long = 0
+            private set
+
+        override fun write(b: Int) {
+            wrapped.write(b)
+            bytesWritten += 1
+        }
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            wrapped.write(b, off, len)
+            bytesWritten += len.toLong()
+        }
+
+        override fun flush() {
+            wrapped.flush()
+        }
+
+        override fun close() {
+            wrapped.close()
+        }
     }
 
     private fun saveRecording(notes: String): RecordingSaveResult {
@@ -418,22 +442,36 @@ class MainActivity : ComponentActivity() {
         importJsonDocument.launch(arrayOf("application/json", "text/json", "*/*"))
     }
 
-    private fun importRecording(uri: Uri) {
-        val fallbackTitle = displayName(uri)
+    private fun importRecordings(uris: List<Uri>) {
         fileWorkExecutor.execute {
-            appState.updateFileWorkMessage("Importing recording...")
+            val label = if (uris.size == 1) "recording" else "${uris.size} recordings"
+            appState.updateFileWorkMessage("Importing $label...")
+            var imported = 0
+            var firstFailure: String? = null
             try {
-                val input = contentResolver.openInputStream(uri)
-                    ?: throw IllegalStateException("The selected file could not be opened")
-                val json = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                val saved = savedRecordingStore.importRecording(json, fallbackTitle)
-                runOnUiThread {
-                    Toast.makeText(this, "Imported ${saved.title}", Toast.LENGTH_LONG).show()
-                    appState.invalidate()
+                for (uri in uris) {
+                    try {
+                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            ?: throw IllegalStateException("The selected file could not be opened")
+                        val json = recordingJsonText(bytes)
+                        savedRecordingStore.importRecording(json, displayName(uri))
+                        imported += 1
+                    } catch (error: Exception) {
+                        firstFailure = firstFailure ?: "${displayName(uri)}: ${error.message}"
+                    }
                 }
-            } catch (error: Exception) {
                 runOnUiThread {
-                    Toast.makeText(this, "Import failed: ${error.message}", Toast.LENGTH_LONG).show()
+                    val failed = uris.size - imported
+                    val message = when {
+                        imported == 1 && failed == 0 -> "Imported 1 recording"
+                        imported > 1 && failed == 0 -> "Imported $imported recordings"
+                        imported > 0 -> "Imported $imported; $failed failed"
+                        else -> "Import failed: ${firstFailure ?: "No recordings could be imported"}"
+                    }
+                    Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    if (imported > 0) {
+                        appState.invalidate()
+                    }
                 }
             } finally {
                 appState.updateFileWorkMessage(null)
@@ -469,6 +507,24 @@ class MainActivity : ComponentActivity() {
             .ifBlank { "ScaleBench" }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(timestampMillis))
         return "$safeTitle-$stamp.json"
+    }
+
+    private fun compressedJsonFileName(title: String, timestampMillis: Long): String {
+        return jsonFileName(title, timestampMillis) + ".gz"
+    }
+
+    private fun recordingJsonText(bytes: ByteArray): String {
+        return if (isGzip(bytes)) gzipDecodedText(bytes) else bytes.toString(Charsets.UTF_8)
+    }
+
+    private fun gzipDecodedText(bytes: ByteArray): String {
+        return GZIPInputStream(ByteArrayInputStream(bytes)).use { input ->
+            input.readBytes().toString(Charsets.UTF_8)
+        }
+    }
+
+    private fun isGzip(bytes: ByteArray): Boolean {
+        return bytes.size >= 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()
     }
 
     private fun chooseFirmwarePackage() {

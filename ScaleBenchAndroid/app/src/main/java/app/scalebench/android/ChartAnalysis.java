@@ -391,12 +391,15 @@ final class ChartAnalysis {
 
     private static AndroidSignalDiagnostics signalDiagnostics(ScaleRecording recording, List<ScaleSample> samples, ScaleQualityMetrics metrics) {
         if (recording.recordingEndMonotonicSeconds == null) {
-            return new AndroidSignalDiagnostics(null, null, null);
+            return new AndroidSignalDiagnostics(null, null, null, null);
         }
         return new AndroidSignalDiagnostics(
                 flowValidation(samples),
                 clockSkew(recording),
-                packetCoalescing(metrics)
+                packetCoalescing(metrics),
+                metrics == null || metrics.streamQuality == null
+                        ? ScaleQualityAnalyzer.streamQualityDiagnostics(recording)
+                        : metrics.streamQuality
         );
     }
 
@@ -656,19 +659,22 @@ final class AndroidSignalDiagnostics {
     final AndroidFlowValidationDiagnostics flowValidation;
     final AndroidClockSkewDiagnostics clockSkew;
     final AndroidPacketCoalescingDiagnostics packetCoalescing;
+    final AndroidStreamQualityDiagnostics streamQuality;
 
     AndroidSignalDiagnostics(
             AndroidFlowValidationDiagnostics flowValidation,
             AndroidClockSkewDiagnostics clockSkew,
-            AndroidPacketCoalescingDiagnostics packetCoalescing
+            AndroidPacketCoalescingDiagnostics packetCoalescing,
+            AndroidStreamQualityDiagnostics streamQuality
     ) {
         this.flowValidation = flowValidation;
         this.clockSkew = clockSkew;
         this.packetCoalescing = packetCoalescing;
+        this.streamQuality = streamQuality;
     }
 
     boolean isEmpty() {
-        return flowValidation == null && clockSkew == null && packetCoalescing == null;
+        return flowValidation == null && clockSkew == null && packetCoalescing == null && streamQuality == null;
     }
 }
 
@@ -715,6 +721,23 @@ final class AndroidPacketCoalescingDiagnostics {
         this.servedSlotRateHz = servedSlotRateHz;
         this.framesPerServedSlot = framesPerServedSlot;
     }
+}
+
+final class AndroidStreamQualityDiagnostics {
+    int implausibleCount;
+    Double implausibleMeanErrorGrams;
+    Double implausibleStdDevGrams;
+    Double implausibleP95ErrorGrams;
+    Double implausibleMaxErrorGrams;
+    double implausibleRatePerSecond;
+    double longestImplausibleRunMilliseconds;
+    Integer activePourNegativeStepCount;
+    Double activePourNegativeStepTotalGrams;
+    Double activePourAbsStepP95Grams;
+    double duplicateRunMaxMilliseconds;
+    Double freezeThenReleaseMaxGrams;
+    Double effectiveOutputRateHz;
+    boolean truthUnavailable;
 }
 
 final class TimedValue {

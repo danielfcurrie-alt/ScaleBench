@@ -14,7 +14,7 @@
     { "startByte": 15, "endByteExclusive": 16, "label": "Status", "decodedValue": "C3", "semantic": "status" },
     { "startByte": 16, "endByteExclusive": 17, "label": "Quality", "decodedValue": "97%", "semantic": "quality" },
     { "startByte": 17, "endByteExclusive": 18, "label": "Sample rate", "decodedValue": "80 Hz", "semantic": "sampleRate" },
-    { "startByte": 18, "endByteExclusive": 19, "label": "Diagnostics", "decodedValue": "FC", "semantic": "status" },
+    { "startByte": 18, "endByteExclusive": 19, "label": "Diagnostics", "decodedValue": "0xFC · cadence valid, 80 SPS, 10 SPS, quality valid, flow present, extension present", "semantic": "status" },
     { "startByte": 19, "endByteExclusive": 20, "label": "Checksum", "decodedValue": "53", "semantic": "checksum" }
   ]
 }

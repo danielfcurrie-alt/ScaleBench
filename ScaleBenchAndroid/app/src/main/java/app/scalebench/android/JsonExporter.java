@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.GZIPOutputStream;
 
 final class JsonExporter {
     private JsonExporter() {
@@ -21,7 +23,15 @@ final class JsonExporter {
     }
 
     static void writeRecordingForStorage(ScaleRecording recording, File file) throws IOException {
-        writeRecording(recording, file, false);
+        File temporary = temporaryFileFor(file);
+        try {
+            try (OutputStream output = new DeflaterOutputStream(new FileOutputStream(temporary))) {
+                writeRecording(recording, output, false);
+            }
+            replaceAtomically(temporary, file);
+        } finally {
+            Files.deleteIfExists(temporary.toPath());
+        }
     }
 
     private static void writeRecording(ScaleRecording recording, File file, boolean prettyPrinted) throws IOException {
@@ -85,6 +95,12 @@ final class JsonExporter {
 
     static void writeRecording(ScaleRecording recording, OutputStream output) throws IOException {
         writeRecording(recording, output, true);
+    }
+
+    static void writeRecordingGzip(ScaleRecording recording, OutputStream output) throws IOException {
+        try (GZIPOutputStream gzip = new GZIPOutputStream(output)) {
+            writeRecording(recording, gzip, true);
+        }
     }
 
     private static void writeRecording(ScaleRecording recording, OutputStream output, boolean prettyPrinted) throws IOException {
@@ -338,6 +354,25 @@ final class JsonExporter {
             writer.name("observedFrameRateHz").value(packet.observedFrameRateHz);
             writer.name("servedSlotRateHz").value(packet.servedSlotRateHz);
             writer.name("framesPerServedSlot").value(packet.framesPerServedSlot);
+            writer.endObject();
+        }
+        if (diagnostics.streamQuality != null) {
+            AndroidStreamQualityDiagnostics stream = diagnostics.streamQuality;
+            writer.name("streamQuality").beginObject();
+            writer.name("implausibleCount").value(stream.implausibleCount);
+            nullable(writer, "implausibleMeanErrorGrams", stream.implausibleMeanErrorGrams);
+            nullable(writer, "implausibleStdDevGrams", stream.implausibleStdDevGrams);
+            nullable(writer, "implausibleP95ErrorGrams", stream.implausibleP95ErrorGrams);
+            nullable(writer, "implausibleMaxErrorGrams", stream.implausibleMaxErrorGrams);
+            writer.name("implausibleRatePerSecond").value(stream.implausibleRatePerSecond);
+            writer.name("longestImplausibleRunMilliseconds").value(stream.longestImplausibleRunMilliseconds);
+            nullable(writer, "activePourNegativeStepCount", stream.activePourNegativeStepCount);
+            nullable(writer, "activePourNegativeStepTotalGrams", stream.activePourNegativeStepTotalGrams);
+            nullable(writer, "activePourAbsStepP95Grams", stream.activePourAbsStepP95Grams);
+            writer.name("duplicateRunMaxMilliseconds").value(stream.duplicateRunMaxMilliseconds);
+            nullable(writer, "freezeThenReleaseMaxGrams", stream.freezeThenReleaseMaxGrams);
+            nullable(writer, "effectiveOutputRateHz", stream.effectiveOutputRateHz);
+            writer.name("truthUnavailable").value(stream.truthUnavailable);
             writer.endObject();
         }
         writer.endObject();

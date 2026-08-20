@@ -54,6 +54,22 @@
       "framesPerServedSlot": 1.001727,
       "observedFrameRateHz": 19.333333,
       "servedSlotRateHz": 19.3
+    },
+    "streamQuality": {
+      "activePourAbsStepP95Grams": 0.1,
+      "activePourNegativeStepCount": 0,
+      "activePourNegativeStepTotalGrams": 0.0,
+      "duplicateRunMaxMilliseconds": 0.0,
+      "effectiveOutputRateHz": 19.660441,
+      "freezeThenReleaseMaxGrams": null,
+      "implausibleCount": 0,
+      "implausibleMaxErrorGrams": null,
+      "implausibleMeanErrorGrams": null,
+      "implausibleP95ErrorGrams": null,
+      "implausibleRatePerSecond": 0.0,
+      "implausibleStdDevGrams": null,
+      "longestImplausibleRunMilliseconds": 0.0,
+      "truthUnavailable": true
     }
   },
   "signalUnreconstructable": false,

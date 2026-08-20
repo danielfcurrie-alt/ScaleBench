@@ -1,8 +1,14 @@
 import Charts
 import Foundation
+import OSLog
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+
+private let recordingImportLogger = Logger(
+    subsystem: "app.scalebench.ScaleBench",
+    category: "recording-import"
+)
 
 struct ContentView: View {
     @EnvironmentObject private var bluetooth: BluetoothScaleManager
@@ -53,9 +59,17 @@ struct ContentView: View {
 
                 if let importStatusMessage {
                     Section {
-                        Label(importStatusMessage, systemImage: importStatusMessage.hasPrefix("Imported") ? "checkmark.circle" : "tray.and.arrow.down")
-                            .font(.callout)
-                            .foregroundStyle(importStatusMessage.hasPrefix("Import failed") ? .red : .secondary)
+                        HStack(spacing: 10) {
+                            if isImportOperationInProgress {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: importStatusMessage.hasPrefix("Imported") ? "checkmark.circle" : "tray.and.arrow.down")
+                            }
+                            Text(importStatusMessage)
+                        }
+                        .font(.callout)
+                        .foregroundStyle(importStatusMessage.hasPrefix("Import failed") ? .red : .secondary)
                     }
                 }
 
@@ -448,38 +462,26 @@ struct ContentView: View {
             .onAppear {
                 usbSerial.refreshPorts()
             }
-#if targetEnvironment(macCatalyst)
-            .sheet(isPresented: $isImportingRecording) {
-                RecordingImportDocumentPicker(
-                    onPick: { result in
-                        isImportingRecording = false
-                        switch result {
-                        case let .success(selection):
-                            importRecording(from: selection.url, deferredStart: true)
-                        case let .failure(error):
-                            setImportStatus("Import failed: \(error.localizedDescription)")
+            .background {
+                RecordingDocumentPickerPresenter(
+                    isPresented: $isImportingRecording,
+                    contentTypes: Self.recordingImportContentTypes,
+                    allowsMultipleSelection: true,
+                    onPick: { urls in
+                        recordingImportLogger.notice("Picker returned \(urls.count, privacy: .public) recording URL(s)")
+                        guard !urls.isEmpty else {
+                            finishImportOperation(message: "Import failed: No files were selected.")
+                            return
                         }
+                        importRecordings(from: urls)
                     },
                     onCancel: {
-                        isImportingRecording = false
+                        recordingImportLogger.notice("Recording import picker cancelled")
+                        setImportStatus("Import cancelled.", showAlert: false)
                     }
                 )
+                .frame(width: 0, height: 0)
             }
-#else
-            .fileImporter(
-                isPresented: $isImportingRecording,
-                allowedContentTypes: [.json, .data],
-                allowsMultipleSelection: false
-            ) { result in
-                switch result {
-                case let .success(urls):
-                    guard let url = urls.first else { return }
-                    importRecording(from: url)
-                case let .failure(error):
-                    importStatusMessage = error.localizedDescription
-                }
-            }
-#endif
             .alert(
                 "Could Not Complete Command",
                 isPresented: Binding(
@@ -492,10 +494,6 @@ struct ContentView: View {
                 }
             } message: {
                 Text(commandErrorMessage ?? "Unknown error")
-            }
-            .sheet(isPresented: $isImportOperationInProgress) {
-                ImportProgressSheet()
-                    .interactiveDismissDisabled(true)
             }
             .alert(
                 "Import Result",
@@ -512,6 +510,10 @@ struct ContentView: View {
             }
         }
     }
+
+    // Let users pick any file; the importer validates ScaleBench JSON, gzip JSON, and stored JSON.z content.
+    // Catalyst can be picky about compound extensions such as .json.gz when the picker is tightly filtered.
+    private static let recordingImportContentTypes: [UTType] = [.item]
 
     private func startRecordingAndShowTimer() {
         guard bluetooth.isConnectionReady,
@@ -566,7 +568,7 @@ struct ContentView: View {
                 recordingResultSaveStatusMessage = "Saved automatically. Detailed charts and packet analysis are ready in Saved shots."
             case let .failure(error):
                 let reason = savedStore.lastErrorMessage ?? error.localizedDescription
-                recordingResultSaveStatusMessage = "Automatic save failed: \(reason) Use Export JSON below to keep this recording."
+                recordingResultSaveStatusMessage = "Automatic save failed: \(reason) Use Export JSON.gz below to keep this recording."
             }
         }
     }
@@ -625,51 +627,120 @@ struct ContentView: View {
     }
 
     private func importRecording(from url: URL, deferredStart: Bool = false) {
-        func startImport() {
-            savedStore.importRecordingInBackground(from: url) { result in
-                let message: String
-                switch result {
-                case let .success(saved):
-                    message = importSuccessMessage(for: saved)
-                case let .failure(error):
-                    message = "Import failed: \(error.localizedDescription)"
-                }
-                isImportOperationInProgress = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    setImportStatus(message)
-                }
-            }
-        }
-
-        let showProgressAndStartImport = {
-            isImportOperationInProgress = true
-            setImportStatus("Importing \(url.lastPathComponent)…", showAlert: false)
-            startImport()
-        }
-
         if deferredStart {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: showProgressAndStartImport)
+            importRecordings(from: [url])
         } else {
-            showProgressAndStartImport()
+            importRecordings(from: [url])
         }
     }
 
     private func importRecordingData(_ data: Data, fallbackTitle: String) {
-        isImportOperationInProgress = true
-        setImportStatus("Importing \(fallbackTitle)…", showAlert: false)
-        savedStore.importRecordingDataInBackground(data, fallbackTitle: fallbackTitle) { result in
-            isImportOperationInProgress = false
-            switch result {
-            case let .success(saved):
-                setImportStatus(importSuccessMessage(for: saved))
-            case let .failure(error):
-                setImportStatus("Import failed: \(error.localizedDescription)")
-            }
+        importRecordingDataItems([RecordingImportDataItem(data: data, fallbackTitle: fallbackTitle)])
+    }
+
+    private func importRecordings(from urls: [URL]) {
+        guard !urls.isEmpty else {
+            finishImportOperation(message: "Import failed: No files were selected.")
+            return
         }
+        recordingImportLogger.notice("Starting read for \(urls.count, privacy: .public) recording file(s)")
+        isImportOperationInProgress = true
+        let label = urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files"
+        setImportStatus("Reading \(label)…", showAlert: false)
+
+        let scopedURLs = urls.map { url in
+            (url: url, didStartAccessing: url.startAccessingSecurityScopedResource())
+        }
+
+        let items = scopedURLs.map {
+            RecordingImportURLItem(
+                url: $0.url,
+                fallbackTitle: Self.importFallbackTitle(for: $0.url)
+            )
+        }
+        savedStore.importRecordingURLBatchInBackground(items) { result in
+            for scoped in scopedURLs where scoped.didStartAccessing {
+                scoped.url.stopAccessingSecurityScopedResource()
+            }
+            finishImportBatch(result)
+        }
+    }
+
+    private func importRecordingDataItems(
+        _ items: [RecordingImportDataItem],
+        readFailures: [String] = []
+    ) {
+        if !isImportOperationInProgress {
+            isImportOperationInProgress = true
+            let label = items.count == 1 ? items[0].fallbackTitle : "\(items.count) files"
+            setImportStatus("Importing \(label)…", showAlert: false)
+        }
+
+        guard !items.isEmpty else {
+            let reason = readFailures.first ?? "No files were selected."
+            finishImportOperation(message: "Import failed: \(reason)")
+            return
+        }
+
+        savedStore.importRecordingDataBatchInBackground(items) { result in
+            finishImportBatch(result, additionalFailures: readFailures)
+        }
+    }
+
+    private func finishImportBatch(
+        _ result: RecordingImportBatchResult,
+        additionalFailures: [String] = []
+    ) {
+        let importedCount = result.imported.count
+        let allFailures = additionalFailures + result.failures
+        let failureCount = allFailures.count
+        let message: String
+
+        if importedCount == 1 && failureCount == 0, let saved = result.imported.first {
+            message = importSuccessMessage(for: saved)
+        } else if importedCount > 0 && failureCount == 0 {
+            message = "Imported \(importedCount) recordings."
+        } else if importedCount > 0 {
+            message = "Imported \(importedCount) recordings; \(failureCount) failed. \(Self.importFailureSummary(allFailures))"
+        } else {
+            let reason = allFailures.first ?? "No recordings could be imported."
+            message = "Import failed: \(reason)"
+        }
+        finishImportOperation(message: message, importedCount: importedCount)
+    }
+
+    fileprivate static func importFallbackTitle(for url: URL) -> String {
+        var name = url.lastPathComponent
+        for suffix in [".json.gz", ".json.z", ".json"] where name.hasSuffix(suffix) {
+            name.removeLast(suffix.count)
+            break
+        }
+        return "Imported \(name)"
     }
 
     private func importSuccessMessage(for saved: SavedScaleRecording) -> String {
         "Imported \(saved.title) (\(saved.recording.samples.count) samples, \(saved.recording.rawPackets.count) packets)."
+    }
+
+    private static func importFailureSummary(_ failures: [String]) -> String {
+        let preview = failures.prefix(3).joined(separator: " ")
+        guard failures.count > 3 else { return preview }
+        return "\(preview) …and \(failures.count - 3) more."
+    }
+
+    private func finishImportOperation(message: String, importedCount: Int = 0) {
+        if importedCount > 0 {
+            isRecordingsExpanded = true
+            recordingSearchText = ""
+        }
+        isImportOperationInProgress = false
+        importStatusMessage = message
+
+        // Present after the progress sheet has had a run-loop turn to dismiss.
+        // Showing an alert in the same state update as sheet dismissal is lossy on Catalyst.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            importAlertMessage = message
+        }
     }
 
     private func setImportStatus(_ message: String, showAlert: Bool = true) {
@@ -709,24 +780,6 @@ private struct AppCommandRequestModifier: ViewModifier {
             .onChange(of: commands.resetRequestID) { _, _ in
                 reset()
             }
-    }
-}
-
-private struct ImportProgressSheet: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Importing recording")
-                .font(.title3.bold())
-            Text("Large recordings can take a moment while ScaleBench reads the JSON, recalculates the score, and prepares charts.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-        }
-        .padding(32)
-        .presentationDetents([.height(240)])
     }
 }
 
@@ -801,58 +854,147 @@ private struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-#if targetEnvironment(macCatalyst)
-private struct RecordingImportSelection {
-    let url: URL
-}
-
-private struct RecordingImportDocumentPicker: UIViewControllerRepresentable {
-    let onPick: (Result<RecordingImportSelection, Error>) -> Void
+private struct RecordingDocumentPickerPresenter: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
+    let contentTypes: [UTType]
+    let allowsMultipleSelection: Bool
+    let onPick: ([URL]) -> Void
     let onCancel: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick, onCancel: onCancel)
-    }
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [.json, .data],
-            asCopy: true
+        Coordinator(
+            isPresented: $isPresented,
+            contentTypes: contentTypes,
+            allowsMultipleSelection: allowsMultipleSelection,
+            onPick: onPick,
+            onCancel: onCancel
         )
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        picker.shouldShowFileExtensions = true
-        return picker
     }
 
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIViewController,
+        context: Context
+    ) {
+        context.coordinator.update(
+            isPresented: $isPresented,
+            contentTypes: contentTypes,
+            allowsMultipleSelection: allowsMultipleSelection,
+            onPick: onPick,
+            onCancel: onCancel
+        )
+        context.coordinator.setPresented(isPresented, from: uiViewController)
+    }
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: (Result<RecordingImportSelection, Error>) -> Void
-        let onCancel: () -> Void
+        private var isPresented: Binding<Bool>
+        private var contentTypes: [UTType]
+        private var allowsMultipleSelection: Bool
+        private var onPick: ([URL]) -> Void
+        private var onCancel: () -> Void
+        private weak var picker: UIDocumentPickerViewController?
+        private var presentationScheduled = false
 
         init(
-            onPick: @escaping (Result<RecordingImportSelection, Error>) -> Void,
+            isPresented: Binding<Bool>,
+            contentTypes: [UTType],
+            allowsMultipleSelection: Bool,
+            onPick: @escaping ([URL]) -> Void,
             onCancel: @escaping () -> Void
         ) {
+            self.isPresented = isPresented
+            self.contentTypes = contentTypes
+            self.allowsMultipleSelection = allowsMultipleSelection
             self.onPick = onPick
             self.onCancel = onCancel
         }
 
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else {
-                onCancel()
-                return
+        func update(
+            isPresented: Binding<Bool>,
+            contentTypes: [UTType],
+            allowsMultipleSelection: Bool,
+            onPick: @escaping ([URL]) -> Void,
+            onCancel: @escaping () -> Void
+        ) {
+            self.isPresented = isPresented
+            self.contentTypes = contentTypes
+            self.allowsMultipleSelection = allowsMultipleSelection
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func setPresented(_ shouldPresent: Bool, from presenter: UIViewController) {
+            if shouldPresent {
+                guard picker == nil, !presentationScheduled else { return }
+                presentationScheduled = true
+                presentWhenAttached(from: presenter, remainingAttempts: 20)
+            } else if let picker {
+                picker.dismiss(animated: true)
+                self.picker = nil
+                presentationScheduled = false
             }
-            onPick(.success(RecordingImportSelection(url: url)))
+        }
+
+        private func presentWhenAttached(
+            from presenter: UIViewController,
+            remainingAttempts: Int
+        ) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak presenter] in
+                guard let self, let presenter else { return }
+                guard self.isPresented.wrappedValue, self.picker == nil else {
+                    self.presentationScheduled = false
+                    return
+                }
+                guard presenter.viewIfLoaded?.window != nil else {
+                    if remainingAttempts > 0 {
+                        self.presentWhenAttached(
+                            from: presenter,
+                            remainingAttempts: remainingAttempts - 1
+                        )
+                    } else {
+                        self.presentationScheduled = false
+                        self.onCancel()
+                        self.isPresented.wrappedValue = false
+                    }
+                    return
+                }
+
+                let picker = UIDocumentPickerViewController(
+                    forOpeningContentTypes: self.contentTypes,
+                    asCopy: true
+                )
+                picker.delegate = self
+                picker.allowsMultipleSelection = self.allowsMultipleSelection
+                picker.shouldShowFileExtensions = true
+                self.picker = picker
+                self.presentationScheduled = false
+                presenter.present(picker, animated: true)
+            }
+        }
+
+        func documentPicker(
+            _ controller: UIDocumentPickerViewController,
+            didPickDocumentsAt urls: [URL]
+        ) {
+            recordingImportLogger.notice("UIDocumentPicker delegate received \(urls.count, privacy: .public) URL(s)")
+            onPick(urls)
+            isPresented.wrappedValue = false
+            picker = nil
+            presentationScheduled = false
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            recordingImportLogger.notice("UIDocumentPicker delegate received cancellation")
             onCancel()
+            isPresented.wrappedValue = false
+            picker = nil
+            presentationScheduled = false
         }
     }
 }
-#endif
 
 private enum ScaleBenchGlass {
     // Rollback switch for the Liquid Glass trial.
@@ -1086,7 +1228,7 @@ private struct RecordingLibraryControls: View {
     @ViewBuilder
     private var libraryButtons: some View {
         Button(action: importJSON) {
-            Label("Import JSON", systemImage: "tray.and.arrow.down")
+            Label("Import Recording", systemImage: "tray.and.arrow.down")
         }
         .buttonStyle(.bordered)
 
@@ -2486,7 +2628,7 @@ private struct RecordingResultsView: View {
                         jsonURL = exportJSON(recording)
                         errorMessage = jsonURL == nil ? "JSON export failed." : nil
                     } label: {
-                        Label("Export JSON", systemImage: "square.and.arrow.up")
+                        Label("Export JSON.gz", systemImage: "square.and.arrow.up")
                     }
 
                     Button {
@@ -2577,7 +2719,7 @@ private struct SavedRecordingDetailView: View {
                         exportErrorMessage = error.localizedDescription
                     }
                 } label: {
-                    Label("Export JSON", systemImage: "square.and.arrow.up")
+                    Label("Export JSON.gz", systemImage: "square.and.arrow.up")
                 }
 
                 Button {
@@ -3221,6 +3363,36 @@ private struct SignalDiagnosticsSection: View {
                     value: String(format: "%.2fx", packet.framesPerServedSlot)
                 )
                 Text("Average weight frames received in each occupied 50 ms scoring slot. Values above 1 mean extra updates arrived together or faster than 20 Hz.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let stream = diagnostics.streamQuality {
+                if let rate = stream.effectiveOutputRateHz {
+                    MetricRow(title: "Effective output rate", value: String(format: "%.1f Hz", rate))
+                }
+                if stream.implausibleCount > 0 {
+                    MetricRow(title: "Impossible readings", value: "\(stream.implausibleCount)")
+                    if let p95 = stream.implausibleP95ErrorGrams {
+                        MetricRow(title: "Typical bad-reading size", value: String(format: "%.2f g p95", p95))
+                    }
+                    if let max = stream.implausibleMaxErrorGrams {
+                        MetricRow(title: "Largest impossible jump", value: String(format: "%.2f g", max))
+                    }
+                }
+                if let negativeCount = stream.activePourNegativeStepCount, negativeCount > 0 {
+                    MetricRow(title: "Backward pour steps", value: "\(negativeCount)")
+                    if let total = stream.activePourNegativeStepTotalGrams {
+                        MetricRow(title: "Backward pour motion", value: String(format: "%.2f g", total))
+                    }
+                }
+                if stream.duplicateRunMaxMilliseconds > 0 {
+                    MetricRow(title: "Longest frozen reading", value: formatMilliseconds(stream.duplicateRunMaxMilliseconds))
+                    if let release = stream.freezeThenReleaseMaxGrams {
+                        MetricRow(title: "Worst freeze release", value: String(format: "%.2f g", release))
+                    }
+                }
+                Text("These are stream-quality checks, not calibration or physical accuracy measurements.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -4561,7 +4733,7 @@ private struct RecordingActionButtons: View {
             .scaleBenchProminentButtonStyle()
             .disabled(!canRecord && !isRecording)
 
-        Button("Export JSON", action: export)
+        Button("Export JSON.gz", action: export)
             .buttonStyle(.bordered)
             .disabled(!canExport)
     }
@@ -4938,6 +5110,7 @@ private func validityReasonLabel(_ reason: String) -> String {
     case "stepFinalFrameCountBelowMinimum": "Too few final-window frames for Step Response"
     case "disconnectDuringRecording": "The scale disconnected during the recording"
     case "appLeftForeground": "ScaleBench left the foreground during the recording"
+    case "framesOutOfChronologicalOrder": "Recording packets are not in capture order"
     case "unknownMode": "The recording mode is unknown"
     default: reason
     }

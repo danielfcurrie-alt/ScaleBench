@@ -95,9 +95,9 @@ Use the visualizer to understand why a recording scored well or poorly.
 - **Packet cadence** shows arrival intervals and gap behavior.
 - **Scorecard** shows coverage, purity, protocol detail, validity, and frame-class counts.
 - **Packet inspector** lists packets by time and event. Tap one to see selectable raw hex; matching colors connect byte ranges to parser-decoded fields.
-- **Signal diagnostics** compare a scale's reported flow with weight change measured across a centered 1-second window, estimate drift for genuine free-running BooKoo and WMB+ clocks, and show how many weight frames occupy each 50 ms scoring slot.
+- **Signal diagnostics** compare a scale's reported flow with weight change measured across a centered 1-second window, estimate drift for genuine free-running BooKoo and WMB+ clocks, show how many weight frames occupy each 50 ms scoring slot, and summarize impossible readings, backward pour steps, frozen readings, and freeze-then-release jumps.
 
-Signal diagnostics, color, and emphasis do not add or remove score points. Decent's shot timer is intentionally not treated as a free-running device clock. The official numbers always come from Standard v1.
+Signal diagnostics, color, and emphasis do not add or remove score points. They describe stream quality, not physical truth or calibration accuracy. Decent's shot timer is intentionally not treated as a free-running device clock. The official numbers always come from Standard v1.
 
 ## Exports
 

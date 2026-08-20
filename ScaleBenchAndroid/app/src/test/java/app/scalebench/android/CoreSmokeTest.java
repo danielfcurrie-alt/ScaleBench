@@ -32,6 +32,7 @@ public final class CoreSmokeTest {
         testSharedRecordingImportDecoder();
         testSharedRecordingImportRejectsInvalidContractValues();
         testAndroidRecordingExportUsesSharedEnumNames();
+        testAndroidRecordingGzipExportRoundTrips();
         testOfficialScorecardPayload();
         testBackupDeletionByRecordingId();
         testCorruptRecordingRecoversFromNewestReadableBackup();
@@ -562,6 +563,30 @@ public final class CoreSmokeTest {
         }
     }
 
+    private static void testAndroidRecordingGzipExportRoundTrips() {
+        try {
+            ScaleRecording recording = shotRecording(20, 30);
+            materializeRawPackets(recording);
+
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            JsonExporter.writeRecordingGzip(recording, output);
+
+            String json;
+            try (java.util.zip.GZIPInputStream gzip = new java.util.zip.GZIPInputStream(
+                    new java.io.ByteArrayInputStream(output.toByteArray())
+            )) {
+                json = new String(gzip.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+
+            ScaleRecording decoded = SavedRecordingStore.decodeSharedRecording(json);
+            check(recording.id.equals(decoded.id), "gzip export preserves recording id");
+            check(decoded.samples.size() == recording.samples.size(), "gzip export preserves samples");
+            check(decoded.rawPackets.size() == recording.rawPackets.size(), "gzip export preserves packets");
+        } catch (Exception error) {
+            throw new AssertionError("Android gzip export round trip failed: " + error.getMessage(), error);
+        }
+    }
+
     private static void testOfficialScorecardPayload() {
         ScaleRecording recording = SampleRecordingFactory.examples().get(0).recording;
         OfficialScorecardPayload payload = OfficialScorecardPayload.make(recording, 1_785_600_005_000L);
@@ -631,11 +656,11 @@ public final class CoreSmokeTest {
         try {
             directory = java.nio.file.Files.createTempDirectory("scalebench-android-recovery-");
             java.nio.file.Path backups = java.nio.file.Files.createDirectories(directory.resolve(".backups"));
-            java.io.File recordingFile = directory.resolve("recording-recording.json").toFile();
+            java.io.File recordingFile = directory.resolve("recording-recording.json.z").toFile();
             ScaleRecording recording = shotRecording(20, 30);
             materializeRawPackets(recording);
             java.io.File validBackup = backups.resolve(recordingFile.getName() + ".2.bak").toFile();
-            JsonExporter.writeRecording(recording, validBackup);
+            JsonExporter.writeRecordingForStorage(recording, validBackup);
             java.nio.file.Files.write(
                     recordingFile.toPath(),
                     "{ broken".getBytes(java.nio.charset.StandardCharsets.UTF_8)
@@ -645,12 +670,13 @@ public final class CoreSmokeTest {
 
             check(recovered != null, "corrupt recording backup recovery");
             check(recording.id.equals(recovered.id), "backup recovery preserves recording id");
-            ScaleRecording restoredPrimary = SavedRecordingStore.decodeSharedRecording(
-                    new String(
-                            java.nio.file.Files.readAllBytes(recordingFile.toPath()),
-                            java.nio.charset.StandardCharsets.UTF_8
-                    )
-            );
+            String restoredJson;
+            try (java.util.zip.InflaterInputStream input = new java.util.zip.InflaterInputStream(
+                    new java.io.FileInputStream(recordingFile)
+            )) {
+                restoredJson = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+            ScaleRecording restoredPrimary = SavedRecordingStore.decodeSharedRecording(restoredJson);
             check(recording.id.equals(restoredPrimary.id), "backup recovery restores primary file");
         } catch (Exception error) {
             throw new AssertionError("Recording backup recovery failed: " + error.getMessage(), error);

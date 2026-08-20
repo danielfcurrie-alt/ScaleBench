@@ -13,6 +13,7 @@ enum ScaleQualityAnalyzer {
     private static let idleSettlingSeconds = 5.0
     private static let stepBaselineWindowSeconds = 2.0
     private static let stepFinalWindowSeconds = 2.0
+    private static let defaultDeviceClockModulus: UInt64 = 1 << 24
 
     private enum FrameClass: String, CaseIterable {
         case usable
@@ -105,7 +106,8 @@ enum ScaleQualityAnalyzer {
             recordingEnd: recordingEnd,
             boundariesPresent: boundariesPresent,
             samples: usableSamples,
-            events: recording.events
+            events: recording.events,
+            framesChronological: framesAreChronological(boundedFrames)
         )
         let coverage = coverageAndPurity(
             frames: classified.frames,
@@ -214,6 +216,12 @@ enum ScaleQualityAnalyzer {
         metrics.idleAnalysedSampleCount = idle?.analysedSampleCount
         metrics.idleResolutionGrams = idle?.resolutionGrams
         metrics.stepResponse = step
+        metrics.streamQuality = streamQualityDiagnostics(
+            recording: recording,
+            classified: classified,
+            recordingStart: recordingStart,
+            recordingEnd: recordingEnd
+        )
         return metrics
     }
 
@@ -234,6 +242,74 @@ enum ScaleQualityAnalyzer {
             mode: recording.mode,
             capabilities: protocolCapabilities
         ).evidenceByPacketID
+    }
+
+    static func streamQualityDiagnostics(_ recording: ScaleRecording) -> StreamQualityDiagnostics? {
+        let allFrames = scoringFrames(recording)
+        let explicitStart = recording.recordingStartMonotonicSeconds
+        let explicitEnd = recording.recordingEndMonotonicSeconds
+        let frameTimes = allFrames.map(\.monotonicSeconds)
+        let recordingStart = explicitStart ?? frameTimes.min() ?? 0
+        let recordingEnd = explicitEnd ?? frameTimes.max() ?? recordingStart
+        guard recordingEnd > recordingStart else { return nil }
+        let boundedFrames = allFrames.filter {
+            $0.monotonicSeconds >= recordingStart && $0.monotonicSeconds < recordingEnd
+        }
+        let protocolCapabilities = recording.protocolCapabilities
+            ?? inferredProtocolCapabilities(recording: recording, frames: boundedFrames)
+        let classified = classifyFrames(
+            boundedFrames,
+            mode: recording.mode,
+            capabilities: protocolCapabilities
+        )
+        return streamQualityDiagnostics(
+            recording: recording,
+            classified: classified,
+            recordingStart: recordingStart,
+            recordingEnd: recordingEnd
+        )
+    }
+
+    private static func streamQualityDiagnostics(
+        recording: ScaleRecording,
+        classified: ClassifiedFrames,
+        recordingStart: Double,
+        recordingEnd: Double
+    ) -> StreamQualityDiagnostics? {
+        guard !classified.frames.isEmpty, recordingEnd > recordingStart else { return nil }
+        let spanSeconds = recordingEnd - recordingStart
+        let implausibleCount = classified.classes.filter { $0 == .implausible }.count
+        let implausibleErrors = zip(classified.frames.indices, classified.classes).compactMap { index, frameClass -> Double? in
+            guard frameClass == .implausible else { return nil }
+            return implausibleError(at: index, frames: classified.frames, classes: classified.classes)
+        }
+        let parseableFrames = classified.frames.filter {
+            !$0.parseFailed && $0.weightGrams?.isFinite == true
+        }
+        let parseableSpan = parseableFramesSampleSpan(parseableFrames)
+        let negative = activePourNegativeSteps(
+            frames: parseableFrames,
+            mode: recording.mode,
+            resolution: classified.resolutionGrams
+        )
+        let duplicate = duplicateRunDiagnostics(frames: classified.frames, classes: classified.classes)
+
+        return StreamQualityDiagnostics(
+            implausibleCount: implausibleCount,
+            implausibleMeanErrorGrams: rounded6(mean(implausibleErrors)),
+            implausibleStdDevGrams: rounded6(standardDeviation(implausibleErrors)),
+            implausibleP95ErrorGrams: rounded6(percentile(implausibleErrors.sorted(), 0.95)),
+            implausibleMaxErrorGrams: rounded6(implausibleErrors.max()),
+            implausibleRatePerSecond: rounded6(Double(implausibleCount) / spanSeconds) ?? 0,
+            longestImplausibleRunMilliseconds: rounded6(longestRunMilliseconds(classes: classified.classes, frames: classified.frames, matching: .implausible)) ?? 0,
+            activePourNegativeStepCount: negative?.count,
+            activePourNegativeStepTotalGrams: rounded6(negative?.totalGrams),
+            activePourAbsStepP95Grams: rounded6(negative?.absStepP95Grams),
+            duplicateRunMaxMilliseconds: rounded6(duplicate.maxRunMilliseconds) ?? 0,
+            freezeThenReleaseMaxGrams: rounded6(duplicate.freezeThenReleaseMaxGrams),
+            effectiveOutputRateHz: parseableSpan > 0 ? rounded6(Double(parseableFrames.count) / parseableSpan) : nil,
+            truthUnavailable: true
+        )
     }
 
     static func sampleIntervalsMilliseconds(_ samples: [ScaleSample]) -> [Double] {
@@ -470,6 +546,7 @@ enum ScaleQualityAnalyzer {
         var sequenceHighWater: UInt64?
         var clockHighWater: UInt64?
         let sequenceModulus = capabilities.sequenceModulus ?? 256
+        let deviceClockModulus = capabilities.deviceClockModulus ?? defaultDeviceClockModulus
         let verifiesFreshness = capabilities.hasDeviceClock
             && capabilities.deviceClockSemantics == .freeRunning
         let checksImpulse = mode == .shot || mode == .idleStability
@@ -530,7 +607,7 @@ enum ScaleQualityAnalyzer {
                forwardDelta(
                    previous: clockHighWater,
                    current: clock,
-                   modulus: capabilities.deviceClockModulus
+                   modulus: deviceClockModulus
                ) == nil {
                 classes[index] = .stale
                 addEvidence("Stale reading: device clock did not advance.", frame: frame, into: &evidenceByPacketID)
@@ -644,6 +721,164 @@ enum ScaleQualityAnalyzer {
         return weight
     }
 
+    private static func implausibleError(
+        at index: Int,
+        frames: [ScoringFrame],
+        classes: [FrameClass]
+    ) -> Double? {
+        guard frames.indices.contains(index), let weight = parseableWeight(frames[index]) else { return nil }
+        let previousIndex = nearestUsableIndex(before: index, frames: frames, classes: classes)
+        let nextIndex = nearestUsableIndex(after: index, frames: frames, classes: classes)
+        if let previousIndex, let nextIndex,
+           let previousWeight = frames[previousIndex].weightGrams,
+           let nextWeight = frames[nextIndex].weightGrams {
+            let previousTime = frames[previousIndex].monotonicSeconds
+            let nextTime = frames[nextIndex].monotonicSeconds
+            guard nextTime > previousTime else { return abs(weight - previousWeight) }
+            let progress = (frames[index].monotonicSeconds - previousTime) / (nextTime - previousTime)
+            let expected = previousWeight + (nextWeight - previousWeight) * progress
+            return abs(weight - expected)
+        }
+        if let previousIndex, let previousWeight = frames[previousIndex].weightGrams { return abs(weight - previousWeight) }
+        if let nextIndex, let nextWeight = frames[nextIndex].weightGrams { return abs(weight - nextWeight) }
+        return nil
+    }
+
+    private static func nearestUsableIndex(
+        before index: Int,
+        frames: [ScoringFrame],
+        classes: [FrameClass]
+    ) -> Int? {
+        guard index > 0 else { return nil }
+        for candidate in stride(from: index - 1, through: 0, by: -1)
+        where classes.indices.contains(candidate) && classes[candidate] == .usable && frames[candidate].weightGrams != nil {
+            return candidate
+        }
+        return nil
+    }
+
+    private static func nearestUsableIndex(
+        after index: Int,
+        frames: [ScoringFrame],
+        classes: [FrameClass]
+    ) -> Int? {
+        guard index + 1 < frames.count else { return nil }
+        for candidate in (index + 1)..<frames.count
+        where classes.indices.contains(candidate) && classes[candidate] == .usable && frames[candidate].weightGrams != nil {
+            return candidate
+        }
+        return nil
+    }
+
+    private static func parseableFramesSampleSpan(_ frames: [ScoringFrame]) -> Double {
+        guard frames.count >= 2,
+              let first = frames.first,
+              let last = frames.last else { return 0 }
+        return max(0, last.monotonicSeconds - first.monotonicSeconds)
+    }
+
+    private static func activePourNegativeSteps(
+        frames: [ScoringFrame],
+        mode: RecordingMode,
+        resolution: Double
+    ) -> (count: Int, totalGrams: Double, absStepP95Grams: Double?)? {
+        guard mode == .shot, frames.count >= 2 else { return nil }
+        let activeFrames = activePourFrames(frames: frames, resolution: resolution)
+        guard activeFrames.count >= 2 else { return (0, 0, nil) }
+        let tolerance = duplicateTolerance(forResolution: resolution)
+        var count = 0
+        var total = 0.0
+        var absSteps: [Double] = []
+        for (previous, current) in activeFrames.adjacentPairs() {
+            guard let previousWeight = previous.weightGrams,
+                  let currentWeight = current.weightGrams else { continue }
+            let delta = currentWeight - previousWeight
+            absSteps.append(abs(delta))
+            if delta < -tolerance {
+                count += 1
+                total += abs(delta)
+            }
+        }
+        return (count, total, percentile(absSteps.sorted(), 0.95))
+    }
+
+    private static func activePourFrames(frames: [ScoringFrame], resolution: Double) -> [ScoringFrame] {
+        let onsetThreshold = max(1.0, resolution * 10)
+        var baseline = frames.first?.weightGrams ?? 0
+        var startIndex: Int?
+        for index in frames.indices {
+            guard let weight = frames[index].weightGrams else { continue }
+            baseline = min(baseline, weight)
+            if weight - baseline >= onsetThreshold {
+                startIndex = max(0, index - 1)
+                break
+            }
+        }
+        guard let startIndex else { return [] }
+        var endIndex = startIndex
+        var maxWeight = -Double.infinity
+        for index in startIndex..<frames.count {
+            guard let weight = frames[index].weightGrams else { continue }
+            if weight >= maxWeight {
+                maxWeight = weight
+                endIndex = index
+            }
+        }
+        guard endIndex > startIndex else { return [] }
+        return Array(frames[startIndex...endIndex])
+    }
+
+    private static func duplicateRunDiagnostics(
+        frames: [ScoringFrame],
+        classes: [FrameClass]
+    ) -> (maxRunMilliseconds: Double, freezeThenReleaseMaxGrams: Double?) {
+        var runStartTime: Double?
+        var heldWeight: Double?
+        var maxRun = 0.0
+        var maxRelease: Double?
+
+        for index in frames.indices {
+            if classes[index] == .duplicate {
+                if runStartTime == nil {
+                    runStartTime = index > 0 ? frames[index - 1].monotonicSeconds : frames[index].monotonicSeconds
+                    heldWeight = index > 0 ? frames[index - 1].weightGrams : frames[index].weightGrams
+                }
+                if let runStartTime {
+                    maxRun = max(maxRun, frames[index].monotonicSeconds - runStartTime)
+                }
+                continue
+            }
+
+            if let heldWeight, let currentWeight = frames[index].weightGrams {
+                maxRelease = max(maxRelease ?? 0, abs(currentWeight - heldWeight))
+            }
+            runStartTime = nil
+            heldWeight = nil
+        }
+
+        return (maxRun * 1_000, maxRelease)
+    }
+
+    private static func longestRunMilliseconds(
+        classes: [FrameClass],
+        frames: [ScoringFrame],
+        matching target: FrameClass
+    ) -> Double {
+        var runStart: Double?
+        var maxRun = 0.0
+        for index in classes.indices {
+            if classes[index] == target {
+                if runStart == nil { runStart = frames[index].monotonicSeconds }
+                if let runStart {
+                    maxRun = max(maxRun, frames[index].monotonicSeconds - runStart)
+                }
+            } else {
+                runStart = nil
+            }
+        }
+        return maxRun * 1_000
+    }
+
     private static func duplicateTolerance(forResolution resolution: Double) -> Double {
         max(minimumDuplicateToleranceGrams, resolution * 0.25)
     }
@@ -743,7 +978,8 @@ enum ScaleQualityAnalyzer {
         recordingEnd: Double,
         boundariesPresent: Bool,
         samples: [ScaleSample],
-        events: [ScaleRecordingEvent]
+        events: [ScaleRecordingEvent],
+        framesChronological: Bool
     ) -> ScoringValidity {
         let gate: (minimumSeconds: Double, minimumUsable: Int, disconnectInvalidates: Bool)
         switch mode {
@@ -756,6 +992,7 @@ enum ScaleQualityAnalyzer {
         }
         var reasons: [String] = []
         if !boundariesPresent { reasons.append("recordingBoundariesMissing") }
+        if !framesChronological { reasons.append("framesOutOfChronologicalOrder") }
         if max(0, recordingEnd - recordingStart) < gate.minimumSeconds {
             reasons.append("durationBelowMinimum")
         }
@@ -787,6 +1024,17 @@ enum ScaleQualityAnalyzer {
             reasons.append("appLeftForeground")
         }
         return ScoringValidity(isValid: reasons.isEmpty, reasons: reasons)
+    }
+
+    private static func framesAreChronological(_ frames: [ScoringFrame]) -> Bool {
+        var previous: Double?
+        for frame in frames {
+            if let previous, frame.monotonicSeconds < previous {
+                return false
+            }
+            previous = frame.monotonicSeconds
+        }
+        return true
     }
 
     private static func idleStability(samples: [ScaleSample], recordingStart: Double) -> IdleResult? {
@@ -970,6 +1218,17 @@ enum ScaleQualityAnalyzer {
 
     private static func rounded6(_ value: Double?) -> Double? {
         value.map { ($0 * 1_000_000).rounded(.toNearestOrAwayFromZero) / 1_000_000 }
+    }
+
+    private static func mean(_ values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
+    }
+
+    private static func standardDeviation(_ values: [Double]) -> Double? {
+        guard !values.isEmpty, let average = mean(values) else { return nil }
+        let variance = values.reduce(0.0) { $0 + pow($1 - average, 2) } / Double(values.count)
+        return sqrt(variance)
     }
 
     private static func average(_ values: [Int]) -> Double? {

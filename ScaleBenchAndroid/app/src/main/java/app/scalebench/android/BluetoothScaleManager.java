@@ -129,6 +129,14 @@ final class BluetoothScaleManager {
         return currentRecording;
     }
 
+    ScaleRecording currentRecordingSnapshot() {
+        return liveAnalysisSnapshot(currentRecording);
+    }
+
+    void updateCurrentRecordingNotes(String notes) {
+        currentRecording.notes = notes == null ? "" : notes;
+    }
+
     String completedRecordingId() {
         return completedRecording == null ? null : completedRecording.id;
     }
@@ -684,11 +692,19 @@ final class BluetoothScaleManager {
     private static ScaleRecording liveAnalysisSnapshot(ScaleRecording source) {
         ScaleRecording snapshot = ScaleRecording.empty(source.mode);
         snapshot.id = source.id;
+        snapshot.appVersion = source.appVersion;
+        snapshot.appBuild = source.appBuild;
+        snapshot.platform = source.platform;
+        snapshot.source = source.source;
+        snapshot.protocolName = source.protocolName;
+        snapshot.serialBaud = source.serialBaud;
+        snapshot.title = source.title;
         snapshot.device = source.device;
         snapshot.startedAtMillis = source.startedAtMillis;
         snapshot.endedAtMillis = source.endedAtMillis;
         snapshot.recordingStartMonotonicSeconds = source.recordingStartMonotonicSeconds;
         snapshot.recordingEndMonotonicSeconds = source.recordingEndMonotonicSeconds;
+        snapshot.notes = source.notes;
         snapshot.rawPackets.addAll(source.rawPackets);
         snapshot.samples.addAll(source.samples);
         snapshot.batteryEvents.addAll(source.batteryEvents);
@@ -697,6 +713,7 @@ final class BluetoothScaleManager {
         snapshot.protocolCapabilities = copyProtocolCapabilities(source.protocolCapabilities);
         snapshot.link = source.link;
         snapshot.scoringProfile = source.scoringProfile;
+        snapshot.metrics = source.metrics;
         return snapshot;
     }
 

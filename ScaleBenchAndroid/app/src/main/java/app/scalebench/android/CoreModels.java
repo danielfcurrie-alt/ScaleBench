@@ -366,6 +366,7 @@ final class ScaleQualityMetrics {
     Integer idleAnalysedSampleCount;
     Double idleResolutionGrams;
     StepResponseMetrics stepResponse;
+    AndroidStreamQualityDiagnostics streamQuality;
 
     static ScaleQualityMetrics empty() {
         return new ScaleQualityMetrics();

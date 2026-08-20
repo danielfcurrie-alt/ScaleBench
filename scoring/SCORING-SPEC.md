@@ -42,6 +42,8 @@ A recording presented for scoring contains:
 
 Frames outside `[recordingStartMonotonicSeconds, recordingEndMonotonicSeconds)` are excluded. If either boundary is absent, first/last frame times may be used for diagnostics only; validity includes `recordingBoundariesMissing` and no official score is produced.
 
+Frames MUST appear in non-decreasing `monotonicSeconds` order after source-specific timing normalization. A recording with any frame earlier than the preceding bounded frame is invalid with `framesOutOfChronologicalOrder`; diagnostics may still be shown, but no official score is produced. Implementations MUST NOT sort frames before this check because capture order is part of the evidence.
+
 ### 2.1 Frames
 
 Scoring operates on **frames**, not parsed samples. The distinction matters: a frame that failed its checksum never becomes a sample, and if the score only ever sees samples it can never charge for it.
@@ -73,7 +75,7 @@ Scoring operates on **frames**, not parsed samples. The distinction matters: a f
 }
 ```
 
-Drives §4 and §7. `deviceClockSemantics` is `freeRunning`, `shotTimer`, or `none`. Only a free-running clock may classify freshness. A shot timer such as Decent's is exported but never used for stale detection. If capabilities are omitted, sequence and clock presence may be inferred for diagnostics; `hasChecksum` defaults to false.
+Drives §4 and §7. `deviceClockSemantics` is `freeRunning`, `shotTimer`, or `none`. Only a free-running clock may classify freshness. A shot timer such as Decent's is exported but never used for stale detection. If capabilities are omitted, sequence and clock presence may be inferred for diagnostics; `hasChecksum` defaults to false. If a free-running device clock is present but `deviceClockModulus` is absent, stale classification MUST default to `2^24`, matching the device-clock skew diagnostic default.
 
 ### 2.3 The host clock
 
@@ -371,7 +373,7 @@ This percentage is observability coverage, not a statistical confidence level an
 
 Below gate: report every metric, set the score to `null`, populate `validity.reasons`, refuse to render an official scorecard.
 
-Reason codes: `recordingBoundariesMissing`, `durationBelowMinimum`, `usableFrameCountBelowMinimum`, `idleAnalysedFrameCountBelowMinimum`, `stepBaselineFrameCountBelowMinimum`, `stepFinalFrameCountBelowMinimum`, `disconnectDuringRecording`, `appLeftForeground`, `unknownMode`.
+Reason codes: `recordingBoundariesMissing`, `framesOutOfChronologicalOrder`, `durationBelowMinimum`, `usableFrameCountBelowMinimum`, `idleAnalysedFrameCountBelowMinimum`, `stepBaselineFrameCountBelowMinimum`, `stepFinalFrameCountBelowMinimum`, `disconnectDuringRecording`, `appLeftForeground`, `unknownMode`.
 
 **Why a disconnect gates rather than scores.** In a 20 s foreground recording at arm's length the base rate of disconnects is near zero, so a disconnect component would read 100 for almost every recording — carrying no information and compressing the range, which is the defect being removed from the old metadata and dynamic-stability terms. Link reliability is real but it is a **fleet statistic**: report `disconnectsPerConnectedHour` accumulated across all recordings for a scale model, never folded into a score. `transportStress` is exempt because provoking disconnects is the point of the mode.
 
@@ -389,7 +391,7 @@ Plus, from the protocol layer: sequence-derived loss, device-vs-host clock skew 
 
 ### 9.1 Shared signal-diagnostic contract
 
-Reported-flow validation, device-clock skew, and packet coalescing are normative diagnostics but are never score inputs. They MUST NOT change validity, Delivery, Idle Stability, or Step Response results. They are calculated only for a completed recording with an explicit `recordingEndMonotonicSeconds`; otherwise all three are unavailable.
+Reported-flow validation, device-clock skew, packet coalescing, and stream-quality diagnostics are normative diagnostics but are never score inputs. They MUST NOT change validity, Delivery, Idle Stability, or Step Response results. They are calculated only for a completed recording with an explicit `recordingEndMonotonicSeconds`; otherwise these diagnostics are unavailable.
 
 The input sample stream is parser-accepted weight samples, including samples later classified as duplicate, stale, out of order, or implausible by the scorer. Discard samples with non-finite monotonic time or weight. Sort by monotonic time while preserving input order for ties; flow validation keeps only the first sample at a repeated time. Golden-vector decimal outputs are rounded to six places and platform conformance uses an absolute tolerance of `1e-6`.
 
@@ -413,6 +415,18 @@ Require at least ten accepted timestamp pairs spanning at least five host second
 ### 9.4 Packet coalescing
 
 Packet coalescing is available only when Delivery applies and both coverage and frame rate exist with coverage greater than zero. Use the scorer's published six-decimal `coverage` and `frameRateHz` values. Define `servedSlotRateHz = coverage * 20` and `framesPerServedSlot = frameRateHz / servedSlotRateHz`. Report frame rate, served-slot rate, and the ratio. A ratio above `1` means multiple weight frames arrived per occupied 50 ms slot; it does not by itself distinguish true higher-rate delivery from callback batching.
+
+### 9.5 Stream-quality diagnostics
+
+Stream-quality diagnostics explain the presentation stream a user saw during a recording. They are not truth or calibration measurements: without a second reference scale, ScaleBench can only say whether the captured stream is internally plausible. Therefore `truthUnavailable` is always `true`.
+
+Use the same bounded scorer frames and frame classes used for Delivery. `implausibleCount` is the count of frames classified as implausible. For each implausible frame with weight, find the nearest usable weighted frame before it and the nearest usable weighted frame after it. If both exist, linearly interpolate the expected weight between those two usable frames at the implausible frame's timestamp and calculate `implausibleErrorGrams = abs(weight - expectedWeight)`. If only one usable neighbor exists, calculate the error against that neighbor. If no usable neighbor exists, the local error is `null`. Report mean, population standard deviation, p95, and max of measurable errors. `implausibleRatePerSecond = implausibleCount / recordingSpanSeconds`. `longestImplausibleRunMilliseconds` is the longest contiguous implausible run from first to last frame timestamp in that run.
+
+For Shot / Pour only, report active-pour backward motion from parseable weight frames sorted by time. The active-pour window starts at the frame immediately before the first frame whose weight has risen by at least `max(1.0 g, resolutionGrams * 10)` above the running minimum. It ends at the highest-weight frame after that start. Ignore backward steps within the duplicate tolerance. Report `activePourNegativeStepCount`, `activePourNegativeStepTotalGrams`, and `activePourAbsStepP95Grams`; for other modes these fields are `null`.
+
+Duplicate-run diagnostics use frames classified as duplicate. `duplicateRunMaxMilliseconds` is the longest duplicate run from the timestamp immediately before the run to the last duplicate frame. `freezeThenReleaseMaxGrams` is the largest absolute difference between the held pre-run weight and the first parseable non-duplicate frame after a duplicate run, or `null` if no release can be measured.
+
+`effectiveOutputRateHz` is parseable weight frames divided by the first-to-last parseable-frame span. It is a signal-output rate, not proof of physical sensor accuracy. Golden-vector decimal outputs are rounded to six places and checked by platform conformance with `1e-6` tolerance.
 
 ---
 

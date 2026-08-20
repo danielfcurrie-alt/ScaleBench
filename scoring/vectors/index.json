@@ -378,6 +378,17 @@
     {
       "coverage": 1.0,
       "deliveryScore": 100,
+      "description": "A free-running 24-bit device clock wraps, but the recording omits deviceClockModulus. Classification must default to 2^24 instead of treating every post-wrap frame as stale.",
+      "frameCount": 601,
+      "idleStabilityScore": null,
+      "isValid": true,
+      "mode": "shot",
+      "purity": 1.0,
+      "vectorId": "shot-device-clock-default-wrap"
+    },
+    {
+      "coverage": 1.0,
+      "deliveryScore": 100,
       "description": "A repeating shot timer is diagnostic data, not a free-running freshness clock.",
       "frameCount": 601,
       "idleStabilityScore": null,
@@ -429,6 +440,17 @@
       "mode": "shot",
       "purity": 1.0,
       "vectorId": "shot-missing-boundaries-invalid"
+    },
+    {
+      "coverage": 1.0,
+      "deliveryScore": null,
+      "description": "A reversed capture-order stream is physically impossible as evidence. Coverage is order-independent, so validity must catch the non-chronological frame order and withhold an official score.",
+      "frameCount": 601,
+      "idleStabilityScore": null,
+      "isValid": false,
+      "mode": "shot",
+      "purity": 1.0,
+      "vectorId": "shot-reversed-frame-order-invalid"
     }
   ]
 }

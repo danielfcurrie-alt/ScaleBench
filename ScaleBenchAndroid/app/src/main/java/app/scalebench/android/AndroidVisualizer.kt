@@ -693,6 +693,39 @@ internal fun SignalDiagnosticsSection(diagnostics: AndroidSignalDiagnostics) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            diagnostics.streamQuality?.let { stream ->
+                stream.effectiveOutputRateHz?.let { rate ->
+                    SwiftMetricRow("Effective output rate", String.format(Locale.US, "%.1f Hz", rate))
+                }
+                if (stream.implausibleCount > 0) {
+                    SwiftMetricRow("Impossible readings", stream.implausibleCount.toString())
+                    stream.implausibleP95ErrorGrams?.let { p95 ->
+                        SwiftMetricRow("Typical bad-reading size", String.format(Locale.US, "%.2f g p95", p95))
+                    }
+                    stream.implausibleMaxErrorGrams?.let { max ->
+                        SwiftMetricRow("Largest impossible jump", String.format(Locale.US, "%.2f g", max))
+                    }
+                }
+                val negativeCount = stream.activePourNegativeStepCount ?: 0
+                if (negativeCount > 0) {
+                    SwiftMetricRow("Backward pour steps", negativeCount.toString())
+                    stream.activePourNegativeStepTotalGrams?.let { total ->
+                        SwiftMetricRow("Backward pour motion", String.format(Locale.US, "%.2f g", total))
+                    }
+                }
+                if (stream.duplicateRunMaxMilliseconds > 0.0) {
+                    SwiftMetricRow("Longest frozen reading", formatCompactMilliseconds(stream.duplicateRunMaxMilliseconds))
+                    stream.freezeThenReleaseMaxGrams?.let { release ->
+                        SwiftMetricRow("Worst freeze release", String.format(Locale.US, "%.2f g", release))
+                    }
+                }
+                Text(
+                    "These are stream-quality checks, not calibration or physical accuracy measurements.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

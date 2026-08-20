@@ -337,6 +337,39 @@ final class GoldenVectorSmokeTest {
             close(analysis.signalDiagnostics.packetCoalescing.framesPerServedSlot,
                     nullableDouble(coalescing.get("framesPerServedSlot")), vector + " coalescing ratio");
         }
+        Map<String, Object> streamQuality = mapOrNull(signals.get("streamQuality"));
+        if (streamQuality == null) {
+            check(analysis.signalDiagnostics.streamQuality == null, vector + " stream quality absent");
+        } else {
+            check(analysis.signalDiagnostics.streamQuality != null, vector + " stream quality present");
+            AndroidStreamQualityDiagnostics stream = analysis.signalDiagnostics.streamQuality;
+            close(stream.implausibleCount, nullableInt(streamQuality.get("implausibleCount")), vector + " stream implausible count");
+            close(stream.implausibleMeanErrorGrams,
+                    nullableDouble(streamQuality.get("implausibleMeanErrorGrams")), vector + " stream implausible mean");
+            close(stream.implausibleStdDevGrams,
+                    nullableDouble(streamQuality.get("implausibleStdDevGrams")), vector + " stream implausible std dev");
+            close(stream.implausibleP95ErrorGrams,
+                    nullableDouble(streamQuality.get("implausibleP95ErrorGrams")), vector + " stream implausible p95");
+            close(stream.implausibleMaxErrorGrams,
+                    nullableDouble(streamQuality.get("implausibleMaxErrorGrams")), vector + " stream implausible max");
+            close(stream.implausibleRatePerSecond,
+                    nullableDouble(streamQuality.get("implausibleRatePerSecond")), vector + " stream implausible rate");
+            close(stream.longestImplausibleRunMilliseconds,
+                    nullableDouble(streamQuality.get("longestImplausibleRunMilliseconds")), vector + " stream implausible run");
+            close(stream.activePourNegativeStepCount,
+                    nullableInt(streamQuality.get("activePourNegativeStepCount")), vector + " stream negative steps");
+            close(stream.activePourNegativeStepTotalGrams,
+                    nullableDouble(streamQuality.get("activePourNegativeStepTotalGrams")), vector + " stream negative total");
+            close(stream.activePourAbsStepP95Grams,
+                    nullableDouble(streamQuality.get("activePourAbsStepP95Grams")), vector + " stream abs step p95");
+            close(stream.duplicateRunMaxMilliseconds,
+                    nullableDouble(streamQuality.get("duplicateRunMaxMilliseconds")), vector + " stream duplicate run");
+            close(stream.freezeThenReleaseMaxGrams,
+                    nullableDouble(streamQuality.get("freezeThenReleaseMaxGrams")), vector + " stream freeze release");
+            close(stream.effectiveOutputRateHz,
+                    nullableDouble(streamQuality.get("effectiveOutputRateHz")), vector + " stream effective output rate");
+            check(stream.truthUnavailable == bool(streamQuality.get("truthUnavailable")), vector + " stream truth flag");
+        }
 
         Map<String, Object> idle = mapOrNull(expected.get("idle"));
         close(metrics.stabilityScore, idle == null ? null : nullableInt(idle.get("idleStabilityScore")), vector + " idle score");

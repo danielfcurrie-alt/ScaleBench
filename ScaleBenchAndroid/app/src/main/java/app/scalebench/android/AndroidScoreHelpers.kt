@@ -496,6 +496,7 @@ internal fun validityReasonLabel(reason: String): String = when (reason) {
     "stepFinalFrameCountBelowMinimum" -> "Too few final-window frames for Step Response"
     "disconnectDuringRecording" -> "The scale disconnected during the recording"
     "appLeftForeground" -> "ScaleBench left the foreground during the recording"
+    "framesOutOfChronologicalOrder" -> "Recording packets are not in capture order"
     "unknownMode" -> "The recording mode is unknown"
     else -> reason
 }

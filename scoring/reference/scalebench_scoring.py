@@ -295,8 +295,7 @@ def classify_frames(frames, mode, capabilities=None):
     last_device_ms = None
     sequence_modulus = int(capabilities.get("sequenceModulus", 256))
     clock_modulus = capabilities.get("deviceClockModulus")
-    if clock_modulus is not None:
-        clock_modulus = int(clock_modulus)
+    clock_modulus = DEFAULT_DEVICE_CLOCK_MODULUS if clock_modulus is None else int(clock_modulus)
     has_clock = bool(capabilities.get("hasDeviceClock")) or any(
         f.get("deviceTimestampMs") is not None for f in weight_frames
     )
@@ -768,14 +767,207 @@ def packet_coalescing(delivery_applicable, coverage, frame_rate_hz):
     }
 
 
-def signal_diagnostics(recording, delivery_applicable, coverage, frame_rate_hz):
+def mean(values):
+    return sum(values) / len(values) if values else None
+
+
+def population_stddev(values):
+    avg = mean(values)
+    if avg is None:
+        return None
+    return math.sqrt(sum((value - avg) ** 2 for value in values) / len(values))
+
+
+def implausible_error(index, frames, classes):
+    weight = parseable_weight(frames[index])
+    if weight is None:
+        return None
+    previous_index = nearest_usable_index_before(index, frames, classes)
+    next_index = nearest_usable_index_after(index, frames, classes)
+    if previous_index is not None and next_index is not None:
+        previous_weight = frames[previous_index].get("weightGrams")
+        next_weight = frames[next_index].get("weightGrams")
+        if previous_weight is not None and next_weight is not None:
+            previous_time = frames[previous_index]["monotonicSeconds"]
+            next_time = frames[next_index]["monotonicSeconds"]
+            if next_time <= previous_time:
+                return abs(weight - previous_weight)
+            progress = (frames[index]["monotonicSeconds"] - previous_time) / (next_time - previous_time)
+            expected = previous_weight + (next_weight - previous_weight) * progress
+            return abs(weight - expected)
+    if previous_index is not None and frames[previous_index].get("weightGrams") is not None:
+        return abs(weight - frames[previous_index]["weightGrams"])
+    if next_index is not None and frames[next_index].get("weightGrams") is not None:
+        return abs(weight - frames[next_index]["weightGrams"])
+    return None
+
+
+def nearest_usable_index_before(index, frames, classes):
+    for candidate in range(index - 1, -1, -1):
+        if candidate < len(classes) and classes[candidate] == "usable" and frames[candidate].get("weightGrams") is not None:
+            return candidate
+    return None
+
+
+def nearest_usable_index_after(index, frames, classes):
+    for candidate in range(index + 1, len(frames)):
+        if candidate < len(classes) and classes[candidate] == "usable" and frames[candidate].get("weightGrams") is not None:
+            return candidate
+    return None
+
+
+def parseable_span(frames):
+    if len(frames) < 2:
+        return 0.0
+    return max(0.0, frames[-1]["monotonicSeconds"] - frames[0]["monotonicSeconds"])
+
+
+def active_pour_negative_steps(frames, mode, resolution):
+    if mode != "shot" or len(frames) < 2:
+        return None
+    active_frames = active_pour_frames(frames, resolution)
+    if len(active_frames) < 2:
+        return {"count": 0, "totalGrams": 0.0, "absStepP95Grams": None}
+    tolerance = duplicate_tolerance(resolution)
+    count = 0
+    total = 0.0
+    abs_steps = []
+    for previous, current in zip(active_frames, active_frames[1:]):
+        previous_weight = previous.get("weightGrams")
+        current_weight = current.get("weightGrams")
+        if previous_weight is None or current_weight is None:
+            continue
+        delta = current_weight - previous_weight
+        abs_steps.append(abs(delta))
+        if delta < -tolerance:
+            count += 1
+            total += abs(delta)
+    return {
+        "count": count,
+        "totalGrams": total,
+        "absStepP95Grams": percentile(sorted(abs_steps), 0.95),
+    }
+
+
+def active_pour_frames(frames, resolution):
+    onset_threshold = max(1.0, resolution * 10.0)
+    baseline = frames[0].get("weightGrams") or 0.0
+    start_index = None
+    for index, frame in enumerate(frames):
+        weight = frame.get("weightGrams")
+        if weight is None:
+            continue
+        baseline = min(baseline, weight)
+        if weight - baseline >= onset_threshold:
+            start_index = max(0, index - 1)
+            break
+    if start_index is None:
+        return []
+    end_index = start_index
+    max_weight = -math.inf
+    for index in range(start_index, len(frames)):
+        weight = frames[index].get("weightGrams")
+        if weight is None:
+            continue
+        if weight >= max_weight:
+            max_weight = weight
+            end_index = index
+    if end_index <= start_index:
+        return []
+    return frames[start_index:end_index + 1]
+
+
+def duplicate_run_diagnostics(frames, classes):
+    run_start = None
+    held_weight = None
+    max_run = 0.0
+    max_release = None
+    for index, cls in enumerate(classes):
+        if cls == "duplicate":
+            if run_start is None:
+                previous = max(0, index - 1)
+                run_start = frames[previous]["monotonicSeconds"]
+                held_weight = frames[previous].get("weightGrams")
+            max_run = max(max_run, frames[index]["monotonicSeconds"] - run_start)
+            continue
+        if held_weight is not None and frames[index].get("weightGrams") is not None:
+            release = abs(frames[index]["weightGrams"] - held_weight)
+            max_release = release if max_release is None else max(max_release, release)
+        run_start = None
+        held_weight = None
+    return {
+        "duplicateRunMaxMilliseconds": max_run * 1000.0,
+        "freezeThenReleaseMaxGrams": max_release,
+    }
+
+
+def longest_class_run_ms(classes, frames, target):
+    run_start = None
+    max_run = 0.0
+    for index, cls in enumerate(classes):
+        if cls == target:
+            if run_start is None:
+                run_start = frames[index]["monotonicSeconds"]
+            max_run = max(max_run, frames[index]["monotonicSeconds"] - run_start)
+        else:
+            run_start = None
+    return max_run * 1000.0
+
+
+def stream_quality_diagnostics(recording, weight_frames, classes, recording_start, recording_end, resolution):
+    if recording_end <= recording_start or not weight_frames:
+        return None
+    span = recording_end - recording_start
+    implausible_errors = [
+        error for index, cls in enumerate(classes)
+        if cls == "implausible"
+        for error in [implausible_error(index, weight_frames, classes)]
+        if error is not None
+    ]
+    implausible_count = sum(1 for cls in classes if cls == "implausible")
+    parseable_frames = [
+        frame for frame in weight_frames
+        if parseable_weight(frame) is not None
+    ]
+    negative = active_pour_negative_steps(parseable_frames, recording.get("mode"), resolution)
+    duplicate = duplicate_run_diagnostics(weight_frames, classes)
+    parseable_sample_span = parseable_span(parseable_frames)
+    return {
+        "implausibleCount": implausible_count,
+        "implausibleMeanErrorGrams": r6(mean(implausible_errors)),
+        "implausibleStdDevGrams": r6(population_stddev(implausible_errors)),
+        "implausibleP95ErrorGrams": r6(percentile(sorted(implausible_errors), 0.95)),
+        "implausibleMaxErrorGrams": r6(max(implausible_errors) if implausible_errors else None),
+        "implausibleRatePerSecond": r6(implausible_count / span),
+        "longestImplausibleRunMilliseconds": r6(longest_class_run_ms(classes, weight_frames, "implausible")),
+        "activePourNegativeStepCount": None if negative is None else negative["count"],
+        "activePourNegativeStepTotalGrams": None if negative is None else r6(negative["totalGrams"]),
+        "activePourAbsStepP95Grams": None if negative is None else r6(negative["absStepP95Grams"]),
+        "duplicateRunMaxMilliseconds": r6(duplicate["duplicateRunMaxMilliseconds"]),
+        "freezeThenReleaseMaxGrams": r6(duplicate["freezeThenReleaseMaxGrams"]),
+        "effectiveOutputRateHz": r6(len(parseable_frames) / parseable_sample_span) if parseable_sample_span > 0 else None,
+        "truthUnavailable": True,
+    }
+
+
+def signal_diagnostics(recording, delivery_applicable, coverage, frame_rate_hz,
+                       weight_frames=None, classes=None, recording_start=None,
+                       recording_end=None, resolution=None):
     if recording.get("recordingEndMonotonicSeconds") is None:
-        return {"flowValidation": None, "clockSkew": None, "packetCoalescing": None}
+        return {"flowValidation": None, "clockSkew": None, "packetCoalescing": None, "streamQuality": None}
     samples = parsed_samples(recording)
     return {
         "flowValidation": flow_validation(samples),
         "clockSkew": clock_skew(recording, samples),
         "packetCoalescing": packet_coalescing(delivery_applicable, coverage, frame_rate_hz),
+        "streamQuality": stream_quality_diagnostics(
+            recording,
+            weight_frames or [],
+            classes or [],
+            recording_start or 0.0,
+            recording_end or 0.0,
+            resolution or MIN_RESOLUTION_G,
+        ),
     }
 
 
@@ -783,13 +975,35 @@ def signal_diagnostics(recording, delivery_applicable, coverage, frame_rate_hz):
 # Validity
 # ---------------------------------------------------------------------------
 
-def evaluate_validity(mode, recording_start, recording_end, boundaries_present, samples, events):
+def frames_are_chronological(frames):
+    previous = None
+    for frame in frames:
+        timestamp = frame.get("monotonicSeconds")
+        if timestamp is None:
+            continue
+        if previous is not None and timestamp < previous:
+            return False
+        previous = timestamp
+    return True
+
+
+def evaluate_validity(
+    mode,
+    recording_start,
+    recording_end,
+    boundaries_present,
+    samples,
+    events,
+    chronological,
+):
     gate = GATES.get(mode)
     if gate is None:
         return {"isValid": False, "reasons": ["unknownMode"]}
     reasons = []
     if not boundaries_present:
         reasons.append("recordingBoundariesMissing")
+    if not chronological:
+        reasons.append("framesOutOfChronologicalOrder")
     span_s = max(0.0, recording_end - recording_start) \
         if recording_start is not None and recording_end is not None else 0.0
     if span_s < gate["min_seconds"]:
@@ -859,7 +1073,13 @@ def analyze(recording):
     samples = [{"monotonicSeconds": f["monotonicSeconds"], "weightGrams": f["weightGrams"]}
                for i, f in enumerate(weight_frames) if classes[i] == "usable"]
     validity = evaluate_validity(
-        mode, recording_start, recording_end, boundaries_present, samples, events
+        mode,
+        recording_start,
+        recording_end,
+        boundaries_present,
+        samples,
+        events,
+        frames_are_chronological(bounded_frames),
     )
 
     is_delivery_mode = mode in ("shot", "transportStress")
@@ -929,6 +1149,11 @@ def analyze(recording):
             is_delivery_mode,
             r6(coverage),
             r6(frame_rate_hz),
+            weight_frames,
+            classes,
+            recording_start,
+            recording_end,
+            resolution,
         ),
     }
 

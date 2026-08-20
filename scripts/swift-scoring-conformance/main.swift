@@ -134,9 +134,27 @@ private struct ExpectedResult: Decodable {
             let framesPerServedSlot: Double
         }
 
+        struct StreamQuality: Decodable {
+            let implausibleCount: Int
+            let implausibleMeanErrorGrams: Double?
+            let implausibleStdDevGrams: Double?
+            let implausibleP95ErrorGrams: Double?
+            let implausibleMaxErrorGrams: Double?
+            let implausibleRatePerSecond: Double
+            let longestImplausibleRunMilliseconds: Double
+            let activePourNegativeStepCount: Int?
+            let activePourNegativeStepTotalGrams: Double?
+            let activePourAbsStepP95Grams: Double?
+            let duplicateRunMaxMilliseconds: Double
+            let freezeThenReleaseMaxGrams: Double?
+            let effectiveOutputRateHz: Double?
+            let truthUnavailable: Bool
+        }
+
         let flowValidation: FlowValidation?
         let clockSkew: ClockSkew?
         let packetCoalescing: PacketCoalescing?
+        let streamQuality: StreamQuality?
     }
 
     let scoringModelVersion: String
@@ -359,6 +377,25 @@ private func compare(
         expectDouble(analysis.signalDiagnostics.packetCoalescing?.framesPerServedSlot, Optional(expectedPacket.framesPerServedSlot), path("signalDiagnostics.packetCoalescing.framesPerServedSlot"))
     } else {
         expect(analysis.signalDiagnostics.packetCoalescing, nil, path("signalDiagnostics.packetCoalescing"))
+    }
+    if let expectedStream = expectedSignals.streamQuality {
+        let actual = analysis.signalDiagnostics.streamQuality
+        expect(actual?.implausibleCount, Optional(expectedStream.implausibleCount), path("signalDiagnostics.streamQuality.implausibleCount"))
+        expectDouble(actual?.implausibleMeanErrorGrams, expectedStream.implausibleMeanErrorGrams, path("signalDiagnostics.streamQuality.implausibleMeanErrorGrams"))
+        expectDouble(actual?.implausibleStdDevGrams, expectedStream.implausibleStdDevGrams, path("signalDiagnostics.streamQuality.implausibleStdDevGrams"))
+        expectDouble(actual?.implausibleP95ErrorGrams, expectedStream.implausibleP95ErrorGrams, path("signalDiagnostics.streamQuality.implausibleP95ErrorGrams"))
+        expectDouble(actual?.implausibleMaxErrorGrams, expectedStream.implausibleMaxErrorGrams, path("signalDiagnostics.streamQuality.implausibleMaxErrorGrams"))
+        expectDouble(actual?.implausibleRatePerSecond, Optional(expectedStream.implausibleRatePerSecond), path("signalDiagnostics.streamQuality.implausibleRatePerSecond"))
+        expectDouble(actual?.longestImplausibleRunMilliseconds, Optional(expectedStream.longestImplausibleRunMilliseconds), path("signalDiagnostics.streamQuality.longestImplausibleRunMilliseconds"))
+        expect(actual?.activePourNegativeStepCount, expectedStream.activePourNegativeStepCount, path("signalDiagnostics.streamQuality.activePourNegativeStepCount"))
+        expectDouble(actual?.activePourNegativeStepTotalGrams, expectedStream.activePourNegativeStepTotalGrams, path("signalDiagnostics.streamQuality.activePourNegativeStepTotalGrams"))
+        expectDouble(actual?.activePourAbsStepP95Grams, expectedStream.activePourAbsStepP95Grams, path("signalDiagnostics.streamQuality.activePourAbsStepP95Grams"))
+        expectDouble(actual?.duplicateRunMaxMilliseconds, Optional(expectedStream.duplicateRunMaxMilliseconds), path("signalDiagnostics.streamQuality.duplicateRunMaxMilliseconds"))
+        expectDouble(actual?.freezeThenReleaseMaxGrams, expectedStream.freezeThenReleaseMaxGrams, path("signalDiagnostics.streamQuality.freezeThenReleaseMaxGrams"))
+        expectDouble(actual?.effectiveOutputRateHz, expectedStream.effectiveOutputRateHz, path("signalDiagnostics.streamQuality.effectiveOutputRateHz"))
+        expect(actual?.truthUnavailable, Optional(expectedStream.truthUnavailable), path("signalDiagnostics.streamQuality.truthUnavailable"))
+    } else {
+        expect(analysis.signalDiagnostics.streamQuality, nil, path("signalDiagnostics.streamQuality"))
     }
 
     if let idle = expected.idle {

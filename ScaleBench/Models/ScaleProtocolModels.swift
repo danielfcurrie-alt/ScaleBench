@@ -1122,6 +1122,7 @@ struct ScaleQualityMetrics: Codable, Equatable {
     var idleAnalysedSampleCount: Int? = nil
     var idleResolutionGrams: Double? = nil
     var stepResponse: StepResponseMetrics? = nil
+    var streamQuality: StreamQualityDiagnostics? = nil
 
     static let empty = ScaleQualityMetrics(
         overallScore: nil,

@@ -50,7 +50,8 @@
   "signalDiagnostics": {
     "clockSkew": null,
     "flowValidation": null,
-    "packetCoalescing": null
+    "packetCoalescing": null,
+    "streamQuality": null
   },
   "signalUnreconstructable": false,
   "validity": {

@@ -386,6 +386,18 @@ def build():
                                           "deviceClockSemantics": "freeRunning",
                                           "deviceClockModulus": 16777216}}))
 
+    f = stream(20, 30, pour)
+    timestamp_start = (1 << 24) - 500
+    for i, x in enumerate(f):
+        x["deviceTimestampMs"] = (timestamp_start + i * 50) % (1 << 24)
+    V.append(("shot-device-clock-default-wrap",
+              "A free-running 24-bit device clock wraps, but the recording omits "
+              "deviceClockModulus. Classification must default to 2^24 instead of "
+              "treating every post-wrap frame as stale.",
+              {"mode": "shot", "deviceKind": "bookoo", "frames": f, "events": [],
+               "protocolCapabilities": {"hasDeviceClock": True,
+                                          "deviceClockSemantics": "freeRunning"}}))
+
     V.append(("shot-timer-is-not-device-clock",
               "A repeating shot timer is diagnostic data, not a free-running freshness clock.",
               {"mode": "shot",
@@ -428,6 +440,12 @@ def build():
               "score without authoritative recording boundaries.",
               {"mode": "shot", "frames": stream(20, 30, pour), "events": [],
                "omitRecordingBoundaries": True}))
+
+    V.append(("shot-reversed-frame-order-invalid",
+              "A reversed capture-order stream is physically impossible as evidence. "
+              "Coverage is order-independent, so validity must catch the non-chronological "
+              "frame order and withhold an official score.",
+              {"mode": "shot", "frames": list(reversed(stream(20, 30, pour))), "events": []}))
 
     return V
 

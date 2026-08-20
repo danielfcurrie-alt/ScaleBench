@@ -147,7 +147,7 @@ If a user already has saved recordings, examples are not inserted automatically,
 
 Saved detail screens include charts, score explanation, deduction evidence, protocol comparison context, and raw packet inspection. Selectable, color-keyed hex connects raw byte ranges to parser-decoded fields such as weight, timestamp, flow, battery, sequence, and checksum.
 
-The shared chart-analysis model also reports three non-scoring signal diagnostics when the source data supports them: median reported-flow error and timing against a centered 1-second weight derivative; free-running device-clock drift for BooKoo-family and WMB+ packets; and average weight frames per occupied 50 ms scoring slot. Decent's shot timer is deliberately excluded from clock-drift analysis.
+The shared chart-analysis model also reports non-scoring signal diagnostics when the source data supports them: median reported-flow error and timing against a centered 1-second weight derivative; free-running device-clock drift for BooKoo-family and WMB+ packets; average weight frames per occupied 50 ms scoring slot; impossible-reading severity; backward pour steps; frozen-reading duration; and freeze-then-release size. These explain stream quality, not physical truth or calibration accuracy. Decent's shot timer is deliberately excluded from clock-drift analysis.
 
 ## Device Utility
 

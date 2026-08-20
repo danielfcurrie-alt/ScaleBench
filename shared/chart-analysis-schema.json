@@ -131,7 +131,8 @@
       "properties": {
         "flowValidation": { "$ref": "#/$defs/flowValidation" },
         "clockSkew": { "$ref": "#/$defs/clockSkew" },
-        "packetCoalescing": { "$ref": "#/$defs/packetCoalescing" }
+        "packetCoalescing": { "$ref": "#/$defs/packetCoalescing" },
+        "streamQuality": { "$ref": "#/$defs/streamQuality" }
       }
     },
     "flowValidation": {
@@ -162,6 +163,33 @@
         "observedFrameRateHz": { "type": "number", "minimum": 0 },
         "servedSlotRateHz": { "type": "number", "exclusiveMinimum": 0 },
         "framesPerServedSlot": { "type": "number", "minimum": 0 }
+      }
+    },
+    "streamQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "implausibleCount",
+        "implausibleRatePerSecond",
+        "longestImplausibleRunMilliseconds",
+        "duplicateRunMaxMilliseconds",
+        "truthUnavailable"
+      ],
+      "properties": {
+        "implausibleCount": { "type": "integer", "minimum": 0 },
+        "implausibleMeanErrorGrams": { "type": ["number", "null"], "minimum": 0 },
+        "implausibleStdDevGrams": { "type": ["number", "null"], "minimum": 0 },
+        "implausibleP95ErrorGrams": { "type": ["number", "null"], "minimum": 0 },
+        "implausibleMaxErrorGrams": { "type": ["number", "null"], "minimum": 0 },
+        "implausibleRatePerSecond": { "type": "number", "minimum": 0 },
+        "longestImplausibleRunMilliseconds": { "type": "number", "minimum": 0 },
+        "activePourNegativeStepCount": { "type": ["integer", "null"], "minimum": 0 },
+        "activePourNegativeStepTotalGrams": { "type": ["number", "null"], "minimum": 0 },
+        "activePourAbsStepP95Grams": { "type": ["number", "null"], "minimum": 0 },
+        "duplicateRunMaxMilliseconds": { "type": "number", "minimum": 0 },
+        "freezeThenReleaseMaxGrams": { "type": ["number", "null"], "minimum": 0 },
+        "effectiveOutputRateHz": { "type": ["number", "null"], "minimum": 0 },
+        "truthUnavailable": { "type": "boolean" }
       }
     },
     "severity": {

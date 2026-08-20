@@ -8,7 +8,7 @@ enum RecordingExporter {
         finalized.endedAt = finalized.endedAt ?? Date()
         finalized.metrics = ScaleQualityAnalyzer.analyze(finalized)
 
-        let data = try SharedRecordingCodec.exportData(from: finalized, recalculateMetrics: false)
+        let data = try SharedRecordingCodec.gzipExportData(from: finalized, recalculateMetrics: false)
         let timestamp = ISO8601DateFormatter()
             .string(from: finalized.startedAt)
             .replacingOccurrences(of: ":", with: "-")
@@ -16,10 +16,25 @@ enum RecordingExporter {
             .replacingOccurrences(of: " ", with: "-")
             .replacingOccurrences(of: "/", with: "-") ?? "scale"
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ScaleBench-\(safeName)-\(timestamp).json")
+            .appendingPathComponent("ScaleBench-\(safeName)-\(timestamp).json.gz")
         try data.write(to: url, options: [.atomic])
         return url
     }
+}
+
+struct RecordingImportDataItem {
+    let data: Data
+    let fallbackTitle: String
+}
+
+struct RecordingImportURLItem {
+    let url: URL
+    let fallbackTitle: String
+}
+
+struct RecordingImportBatchResult {
+    let imported: [SavedScaleRecording]
+    let failures: [String]
 }
 
 final class SavedRecordingStore: ObservableObject {
@@ -148,7 +163,7 @@ final class SavedRecordingStore: ObservableObject {
                 at: directoryURL,
                 includingPropertiesForKeys: [.isRegularFileKey]
             )
-            .filter { $0.pathExtension == "json" }
+            .filter { Self.isRecordingStorageFile($0) }
 
             var failedFileCount = 0
             let decoded = recordingFiles
@@ -186,6 +201,10 @@ final class SavedRecordingStore: ObservableObject {
             let url = fileURL(for: saved.id)
             if fileManager.fileExists(atPath: url.path) {
                 try fileManager.removeItem(at: url)
+            }
+            let legacyURL = legacyFileURL(for: saved.id)
+            if fileManager.fileExists(atPath: legacyURL.path) {
+                try fileManager.removeItem(at: legacyURL)
             }
             recordings.removeAll { $0.id == saved.id }
             lastErrorMessage = nil
@@ -289,6 +308,86 @@ final class SavedRecordingStore: ObservableObject {
         }
     }
 
+    func importRecordingDataBatchInBackground(
+        _ items: [RecordingImportDataItem],
+        completion: @escaping (RecordingImportBatchResult) -> Void
+    ) {
+        guard !items.isEmpty else {
+            completion(RecordingImportBatchResult(imported: [], failures: ["No files were selected."]))
+            return
+        }
+
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            var imported: [SavedScaleRecording] = []
+            var failures: [String] = []
+
+            for item in items {
+                do {
+                    let saved = try Self.preparedImportedRecording(
+                        from: item.data,
+                        fallbackTitle: item.fallbackTitle
+                    )
+                    try self.persistPreparedRecording(saved)
+                    imported.append(saved)
+                } catch {
+                    failures.append("\(item.fallbackTitle): \(error.localizedDescription)")
+                }
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                for saved in imported {
+                    self.insertPreparedRecording(saved)
+                }
+                self.lastErrorMessage = failures.isEmpty
+                    ? nil
+                    : "Import failed for \(failures.count) file(s)."
+                completion(RecordingImportBatchResult(imported: imported, failures: failures))
+            }
+        }
+    }
+
+    func importRecordingURLBatchInBackground(
+        _ items: [RecordingImportURLItem],
+        completion: @escaping (RecordingImportBatchResult) -> Void
+    ) {
+        guard !items.isEmpty else {
+            completion(RecordingImportBatchResult(imported: [], failures: ["No files were selected."]))
+            return
+        }
+
+        workQueue.async { [weak self] in
+            guard let self else { return }
+            var imported: [SavedScaleRecording] = []
+            var failures: [String] = []
+
+            for item in items {
+                do {
+                    let saved = try Self.preparedImportedRecording(
+                        from: item.url,
+                        fallbackTitle: item.fallbackTitle
+                    )
+                    try self.persistPreparedRecording(saved)
+                    imported.append(saved)
+                } catch {
+                    failures.append("\(item.fallbackTitle): \(error.localizedDescription)")
+                }
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                for saved in imported {
+                    self.insertPreparedRecording(saved)
+                }
+                self.lastErrorMessage = failures.isEmpty
+                    ? nil
+                    : "Import failed for \(failures.count) file(s)."
+                completion(RecordingImportBatchResult(imported: imported, failures: failures))
+            }
+        }
+    }
+
     func loadExampleRecordings() {
         for example in SampleRecordingFactory.examples where !recordings.contains(where: { $0.title == example.title }) {
             save(recording: example.recording, notes: example.notes, title: example.title)
@@ -301,6 +400,10 @@ final class SavedRecordingStore: ObservableObject {
     }
 
     private func fileURL(for id: UUID) -> URL {
+        directoryURL.appendingPathComponent("\(id.uuidString).json.z")
+    }
+
+    private func legacyFileURL(for id: UUID) -> URL {
         directoryURL.appendingPathComponent("\(id.uuidString).json")
     }
 
@@ -341,16 +444,17 @@ final class SavedRecordingStore: ObservableObject {
         ) else {
             return false
         }
-        return files.contains { $0.pathExtension == "json" }
+        return files.contains(where: Self.isRecordingStorageFile)
     }
 
     private func backupExistingFileIfNeeded(at url: URL) throws {
         guard fileManager.fileExists(atPath: url.path) else { return }
         try fileManager.createDirectory(at: backupDirectoryURL, withIntermediateDirectories: true)
         let timestamp = Int(Date().timeIntervalSince1970 * 1_000)
+        let recordingID = url.lastPathComponent.split(separator: ".", maxSplits: 1).first.map(String.init)
+            ?? url.deletingPathExtension().lastPathComponent
         let backupURL = backupDirectoryURL
-            .appendingPathComponent("\(url.deletingPathExtension().lastPathComponent)-\(timestamp)")
-            .appendingPathExtension(url.pathExtension)
+            .appendingPathComponent("\(recordingID)-\(timestamp).bak")
         if fileManager.fileExists(atPath: backupURL.path) {
             try fileManager.removeItem(at: backupURL)
         }
@@ -359,12 +463,12 @@ final class SavedRecordingStore: ObservableObject {
 
     private func deleteBackupFiles(for id: UUID) throws {
         guard fileManager.fileExists(atPath: backupDirectoryURL.path) else { return }
-        let prefix = "\(id.uuidString)-"
+        let prefixes = ["\(id.uuidString)-", "\(id.uuidString).json-"]
         let backups = try fileManager.contentsOfDirectory(
             at: backupDirectoryURL,
             includingPropertiesForKeys: [.isRegularFileKey]
         )
-        for backup in backups where backup.lastPathComponent.hasPrefix(prefix) {
+        for backup in backups where prefixes.contains(where: { backup.lastPathComponent.hasPrefix($0) }) {
             try fileManager.removeItem(at: backup)
         }
     }
@@ -403,6 +507,11 @@ final class SavedRecordingStore: ObservableObject {
         )
     }
 
+    private static func preparedImportedRecording(from url: URL, fallbackTitle: String) throws -> SavedScaleRecording {
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        return try preparedImportedRecording(from: data, fallbackTitle: fallbackTitle)
+    }
+
     private func importPreparedRecordingInBackground(
         _ data: Data,
         fallbackTitle: String,
@@ -422,10 +531,15 @@ final class SavedRecordingStore: ObservableObject {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let url = fileURL(for: saved.id)
         try backupExistingFileIfNeeded(at: url)
+        try backupExistingFileIfNeeded(at: legacyFileURL(for: saved.id))
         try SharedRecordingCodec.storageData(
             from: saved.recording,
             recalculateMetrics: false
         ).write(to: url, options: [.atomic])
+        let legacyURL = legacyFileURL(for: saved.id)
+        if fileManager.fileExists(atPath: legacyURL.path) {
+            try fileManager.removeItem(at: legacyURL)
+        }
     }
 
     private func insertPreparedRecording(_ saved: SavedScaleRecording) {
@@ -438,6 +552,11 @@ final class SavedRecordingStore: ObservableObject {
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let recording = try? SharedRecordingCodec.decodeRecording(from: data) else { return nil }
         return savedRecording(from: recording, savedAt: savedAt(for: url))
+    }
+
+    private static func isRecordingStorageFile(_ url: URL) -> Bool {
+        let name = url.lastPathComponent
+        return name.hasSuffix(".json") || name.hasSuffix(".json.z") || name.hasSuffix(".json.gz")
     }
 
     private static func defaultDirectoryURL(fileManager: FileManager) -> URL {

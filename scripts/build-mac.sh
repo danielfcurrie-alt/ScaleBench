@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DERIVED_DATA="$HOME/Library/Developer/Xcode/DerivedData/ScaleBench-LocalBuild"
+DERIVED_DATA="$HOME/Library/Developer/Xcode/DerivedData/ScaleBench-Mac-LocalBuild"
 APP_PATH="$DERIVED_DATA/Build/Products/Debug-maccatalyst/ScaleBench.app"
 DESKTOP_APP="$HOME/Desktop/ScaleBench.app"
 LOCAL_CONFIG="$HOME/.config/scalebench/apple-build.env"

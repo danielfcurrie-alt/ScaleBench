@@ -21,6 +21,7 @@ final class ScaleQualityAnalyzer {
     private static final double IDLE_SETTLING_SECONDS = 5.0;
     private static final double STEP_BASELINE_WINDOW_SECONDS = 2.0;
     private static final double STEP_FINAL_WINDOW_SECONDS = 2.0;
+    private static final long DEFAULT_DEVICE_CLOCK_MODULUS = 1L << 24;
 
     private enum FrameClass {
         USABLE, PARSE_FAILURE, OUT_OF_ORDER, STALE, DUPLICATE, IMPLAUSIBLE
@@ -50,6 +51,17 @@ final class ScaleQualityAnalyzer {
         List<ScoringFrame> frames;
         List<FrameClass> classes;
         double resolutionGrams;
+    }
+
+    private static final class NegativeStepDiagnostics {
+        int count;
+        double totalGrams;
+        Double absStepP95Grams;
+    }
+
+    private static final class DuplicateRunDiagnostics {
+        double maxRunMilliseconds;
+        Double freezeThenReleaseMaxGrams;
     }
 
     private static final class CoverageResult {
@@ -108,7 +120,13 @@ final class ScaleQualityAnalyzer {
         }
 
         ScoringValidity validity = evaluateValidity(
-                recording.mode, recordingStart, recordingEnd, boundariesPresent, usableSamples, recording.events
+                recording.mode,
+                recordingStart,
+                recordingEnd,
+                boundariesPresent,
+                usableSamples,
+                recording.events,
+                framesAreChronological(boundedFrames)
         );
         CoverageResult coverage = coverageAndPurity(
                 classified.frames, classified.classes, recordingStart, recordingEnd, usbDroppedFrameCount
@@ -227,6 +245,7 @@ final class ScaleQualityAnalyzer {
         metrics.idleAnalysedSampleCount = idle == null ? null : idle.analysedSampleCount;
         metrics.idleResolutionGrams = idle == null ? null : idle.resolutionGrams;
         metrics.stepResponse = step;
+        metrics.streamQuality = streamQualityDiagnostics(recording, classified, recordingStart, recordingEnd);
         return metrics;
     }
 
@@ -239,6 +258,75 @@ final class ScaleQualityAnalyzer {
         }
         Double typicalInterval = percentile(intervals, 0.50);
         return longGapThresholdMilliseconds(typicalInterval, profile);
+    }
+
+    static AndroidStreamQualityDiagnostics streamQualityDiagnostics(ScaleRecording recording) {
+        List<ScoringFrame> allFrames = scoringFrames(recording);
+        Double explicitStart = recording.recordingStartMonotonicSeconds;
+        Double explicitEnd = recording.recordingEndMonotonicSeconds;
+        double recordingStart = explicitStart != null ? explicitStart : minimumFrameTime(allFrames, 0.0);
+        double recordingEnd = explicitEnd != null ? explicitEnd : maximumFrameTime(allFrames, recordingStart);
+        if (recordingEnd <= recordingStart) return null;
+
+        List<ScoringFrame> boundedFrames = new ArrayList<>();
+        for (ScoringFrame frame : allFrames) {
+            if (frame.monotonicSeconds >= recordingStart && frame.monotonicSeconds < recordingEnd) {
+                boundedFrames.add(frame);
+            }
+        }
+        ProtocolScoringCapabilities capabilities = recording.protocolCapabilities != null
+                ? recording.protocolCapabilities
+                : inferredProtocolCapabilities(recording, boundedFrames);
+        ClassifiedFrames classified = classifyFrames(boundedFrames, recording.mode, capabilities);
+        return streamQualityDiagnostics(recording, classified, recordingStart, recordingEnd);
+    }
+
+    private static AndroidStreamQualityDiagnostics streamQualityDiagnostics(
+            ScaleRecording recording,
+            ClassifiedFrames classified,
+            double recordingStart,
+            double recordingEnd
+    ) {
+        if (classified.frames.isEmpty() || recordingEnd <= recordingStart) return null;
+        double spanSeconds = recordingEnd - recordingStart;
+        int implausibleCount = 0;
+        List<Double> implausibleErrors = new ArrayList<>();
+        for (int index = 0; index < classified.frames.size(); index++) {
+            if (classified.classes.get(index) != FrameClass.IMPLAUSIBLE) continue;
+            implausibleCount++;
+            Double error = implausibleError(index, classified.frames, classified.classes);
+            if (error != null) implausibleErrors.add(error);
+        }
+        Collections.sort(implausibleErrors);
+
+        List<ScoringFrame> parseableFrames = new ArrayList<>();
+        for (ScoringFrame frame : classified.frames) {
+            if (!frame.parseFailed && finite(frame.weightGrams)) parseableFrames.add(frame);
+        }
+        double parseableSpan = parseableFramesSampleSpan(parseableFrames);
+        NegativeStepDiagnostics negative = activePourNegativeSteps(
+                parseableFrames, recording.mode, classified.resolutionGrams
+        );
+        DuplicateRunDiagnostics duplicate = duplicateRunDiagnostics(classified.frames, classified.classes);
+
+        AndroidStreamQualityDiagnostics result = new AndroidStreamQualityDiagnostics();
+        result.implausibleCount = implausibleCount;
+        result.implausibleMeanErrorGrams = rounded6(mean(implausibleErrors));
+        result.implausibleStdDevGrams = rounded6(standardDeviation(implausibleErrors));
+        result.implausibleP95ErrorGrams = rounded6(percentile(implausibleErrors, 0.95));
+        result.implausibleMaxErrorGrams = rounded6(implausibleErrors.isEmpty() ? null : implausibleErrors.get(implausibleErrors.size() - 1));
+        result.implausibleRatePerSecond = rounded6(implausibleCount / spanSeconds);
+        result.longestImplausibleRunMilliseconds = rounded6(longestRunMilliseconds(
+                classified.classes, classified.frames, FrameClass.IMPLAUSIBLE
+        ));
+        result.activePourNegativeStepCount = negative == null ? null : negative.count;
+        result.activePourNegativeStepTotalGrams = negative == null ? null : rounded6(negative.totalGrams);
+        result.activePourAbsStepP95Grams = negative == null ? null : rounded6(negative.absStepP95Grams);
+        result.duplicateRunMaxMilliseconds = rounded6(duplicate.maxRunMilliseconds);
+        result.freezeThenReleaseMaxGrams = rounded6(duplicate.freezeThenReleaseMaxGrams);
+        result.effectiveOutputRateHz = parseableSpan > 0 ? rounded6(parseableFrames.size() / parseableSpan) : null;
+        result.truthUnavailable = true;
+        return result;
     }
 
     private static double longGapThresholdMilliseconds(Double typicalInterval, ScoringProfile profile) {
@@ -515,6 +603,8 @@ final class ScaleQualityAnalyzer {
         Long sequenceHighWater = null;
         Long clockHighWater = null;
         long sequenceModulus = capabilities.sequenceModulus == null ? 256 : capabilities.sequenceModulus;
+        long deviceClockModulus = capabilities.deviceClockModulus == null
+                ? DEFAULT_DEVICE_CLOCK_MODULUS : capabilities.deviceClockModulus;
         boolean verifiesFreshness = capabilities.hasDeviceClock
                 && capabilities.deviceClockSemantics == DeviceClockSemantics.FREE_RUNNING;
         boolean checksImpulse = mode == RecordingMode.SHOT || mode == RecordingMode.IDLE_STABILITY;
@@ -533,8 +623,7 @@ final class ScaleQualityAnalyzer {
                 continue;
             }
             if (verifiesFreshness && frame.deviceTimestampMilliseconds != null && clockHighWater != null
-                    && forwardDelta(clockHighWater, frame.deviceTimestampMilliseconds,
-                    capabilities.deviceClockModulus) == null) {
+                    && forwardDelta(clockHighWater, frame.deviceTimestampMilliseconds, deviceClockModulus) == null) {
                 classes.set(i, FrameClass.STALE);
                 continue;
             }
@@ -610,6 +699,166 @@ final class ScaleQualityAnalyzer {
 
     private static Double parseableWeight(ScoringFrame frame) {
         return !frame.parseFailed && finite(frame.weightGrams) ? frame.weightGrams : null;
+    }
+
+    private static Double implausibleError(int index, List<ScoringFrame> frames, List<FrameClass> classes) {
+        if (index < 0 || index >= frames.size()) return null;
+        Double weight = parseableWeight(frames.get(index));
+        if (weight == null) return null;
+        Integer previousIndex = nearestUsableIndexBefore(index, frames, classes);
+        Integer nextIndex = nearestUsableIndexAfter(index, frames, classes);
+        if (previousIndex != null && nextIndex != null) {
+            Double previousWeight = frames.get(previousIndex).weightGrams;
+            Double nextWeight = frames.get(nextIndex).weightGrams;
+            if (previousWeight != null && nextWeight != null) {
+                double previousTime = frames.get(previousIndex).monotonicSeconds;
+                double nextTime = frames.get(nextIndex).monotonicSeconds;
+                if (nextTime <= previousTime) return Math.abs(weight - previousWeight);
+                double progress = (frames.get(index).monotonicSeconds - previousTime) / (nextTime - previousTime);
+                double expected = previousWeight + (nextWeight - previousWeight) * progress;
+                return Math.abs(weight - expected);
+            }
+        }
+        if (previousIndex != null && frames.get(previousIndex).weightGrams != null) {
+            return Math.abs(weight - frames.get(previousIndex).weightGrams);
+        }
+        if (nextIndex != null && frames.get(nextIndex).weightGrams != null) {
+            return Math.abs(weight - frames.get(nextIndex).weightGrams);
+        }
+        return null;
+    }
+
+    private static Integer nearestUsableIndexBefore(int index, List<ScoringFrame> frames, List<FrameClass> classes) {
+        for (int candidate = index - 1; candidate >= 0; candidate--) {
+            if (candidate < classes.size()
+                    && classes.get(candidate) == FrameClass.USABLE
+                    && frames.get(candidate).weightGrams != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static Integer nearestUsableIndexAfter(int index, List<ScoringFrame> frames, List<FrameClass> classes) {
+        for (int candidate = index + 1; candidate < frames.size(); candidate++) {
+            if (candidate < classes.size()
+                    && classes.get(candidate) == FrameClass.USABLE
+                    && frames.get(candidate).weightGrams != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static double parseableFramesSampleSpan(List<ScoringFrame> frames) {
+        if (frames.size() < 2) return 0.0;
+        return Math.max(0.0, frames.get(frames.size() - 1).monotonicSeconds - frames.get(0).monotonicSeconds);
+    }
+
+    private static NegativeStepDiagnostics activePourNegativeSteps(
+            List<ScoringFrame> frames,
+            RecordingMode mode,
+            double resolution
+    ) {
+        if (mode != RecordingMode.SHOT || frames.size() < 2) return null;
+        List<ScoringFrame> activeFrames = activePourFrames(frames, resolution);
+        if (activeFrames.size() < 2) return new NegativeStepDiagnostics();
+        double tolerance = duplicateTolerance(resolution);
+        NegativeStepDiagnostics result = new NegativeStepDiagnostics();
+        List<Double> absSteps = new ArrayList<>();
+        for (int index = 1; index < activeFrames.size(); index++) {
+            Double previousWeight = activeFrames.get(index - 1).weightGrams;
+            Double currentWeight = activeFrames.get(index).weightGrams;
+            if (previousWeight == null || currentWeight == null) continue;
+            double delta = currentWeight - previousWeight;
+            absSteps.add(Math.abs(delta));
+            if (delta < -tolerance) {
+                result.count++;
+                result.totalGrams += Math.abs(delta);
+            }
+        }
+        Collections.sort(absSteps);
+        result.absStepP95Grams = percentile(absSteps, 0.95);
+        return result;
+    }
+
+    private static List<ScoringFrame> activePourFrames(List<ScoringFrame> frames, double resolution) {
+        double onsetThreshold = Math.max(1.0, resolution * 10.0);
+        double baseline = frames.get(0).weightGrams == null ? 0.0 : frames.get(0).weightGrams;
+        Integer startIndex = null;
+        for (int index = 0; index < frames.size(); index++) {
+            Double weight = frames.get(index).weightGrams;
+            if (weight == null) continue;
+            baseline = Math.min(baseline, weight);
+            if (weight - baseline >= onsetThreshold) {
+                startIndex = Math.max(0, index - 1);
+                break;
+            }
+        }
+        if (startIndex == null) return new ArrayList<>();
+        int endIndex = startIndex;
+        double maxWeight = Double.NEGATIVE_INFINITY;
+        for (int index = startIndex; index < frames.size(); index++) {
+            Double weight = frames.get(index).weightGrams;
+            if (weight == null) continue;
+            if (weight >= maxWeight) {
+                maxWeight = weight;
+                endIndex = index;
+            }
+        }
+        if (endIndex <= startIndex) return new ArrayList<>();
+        return new ArrayList<>(frames.subList(startIndex, endIndex + 1));
+    }
+
+    private static DuplicateRunDiagnostics duplicateRunDiagnostics(
+            List<ScoringFrame> frames,
+            List<FrameClass> classes
+    ) {
+        DuplicateRunDiagnostics result = new DuplicateRunDiagnostics();
+        Double runStartTime = null;
+        Double heldWeight = null;
+        for (int index = 0; index < frames.size(); index++) {
+            if (classes.get(index) == FrameClass.DUPLICATE) {
+                if (runStartTime == null) {
+                    int previous = Math.max(0, index - 1);
+                    runStartTime = frames.get(previous).monotonicSeconds;
+                    heldWeight = frames.get(previous).weightGrams;
+                }
+                result.maxRunMilliseconds = Math.max(
+                        result.maxRunMilliseconds,
+                        (frames.get(index).monotonicSeconds - runStartTime) * 1000.0
+                );
+                continue;
+            }
+
+            if (heldWeight != null && frames.get(index).weightGrams != null) {
+                double release = Math.abs(frames.get(index).weightGrams - heldWeight);
+                result.freezeThenReleaseMaxGrams = result.freezeThenReleaseMaxGrams == null
+                        ? release
+                        : Math.max(result.freezeThenReleaseMaxGrams, release);
+            }
+            runStartTime = null;
+            heldWeight = null;
+        }
+        return result;
+    }
+
+    private static double longestRunMilliseconds(
+            List<FrameClass> classes,
+            List<ScoringFrame> frames,
+            FrameClass target
+    ) {
+        Double runStart = null;
+        double maxRun = 0.0;
+        for (int index = 0; index < classes.size(); index++) {
+            if (classes.get(index) == target) {
+                if (runStart == null) runStart = frames.get(index).monotonicSeconds;
+                maxRun = Math.max(maxRun, frames.get(index).monotonicSeconds - runStart);
+            } else {
+                runStart = null;
+            }
+        }
+        return maxRun * 1000.0;
     }
 
     private static double duplicateTolerance(double resolution) {
@@ -728,7 +977,8 @@ final class ScaleQualityAnalyzer {
             double recordingEnd,
             boolean boundariesPresent,
             List<SamplePoint> samples,
-            List<ScaleRecordingEvent> events
+            List<ScaleRecordingEvent> events,
+            boolean framesChronological
     ) {
         double minimumSeconds;
         int minimumUsable;
@@ -744,6 +994,7 @@ final class ScaleQualityAnalyzer {
         }
         ScoringValidity result = new ScoringValidity();
         if (!boundariesPresent) result.reasons.add("recordingBoundariesMissing");
+        if (!framesChronological) result.reasons.add("framesOutOfChronologicalOrder");
         if (Math.max(0, recordingEnd - recordingStart) < minimumSeconds) {
             result.reasons.add("durationBelowMinimum");
         }
@@ -787,6 +1038,17 @@ final class ScaleQualityAnalyzer {
         }
         result.isValid = result.reasons.isEmpty();
         return result;
+    }
+
+    private static boolean framesAreChronological(List<ScoringFrame> frames) {
+        Double previous = null;
+        for (ScoringFrame frame : frames) {
+            if (previous != null && frame.monotonicSeconds < previous) {
+                return false;
+            }
+            previous = frame.monotonicSeconds;
+        }
+        return true;
     }
 
     private static IdleResult idleStability(List<SamplePoint> samples, double recordingStart) {
@@ -1017,6 +1279,21 @@ final class ScaleQualityAnalyzer {
         double scaled = value * 1_000_000.0;
         double rounded = scaled >= 0 ? Math.floor(scaled + 0.5) : Math.ceil(scaled - 0.5);
         return rounded / 1_000_000.0;
+    }
+
+    private static Double mean(List<Double> values) {
+        if (values.isEmpty()) return null;
+        double total = 0.0;
+        for (double value : values) total += value;
+        return total / values.size();
+    }
+
+    private static Double standardDeviation(List<Double> values) {
+        Double average = mean(values);
+        if (average == null) return null;
+        double variance = 0.0;
+        for (double value : values) variance += Math.pow(value - average, 2.0);
+        return Math.sqrt(variance / values.size());
     }
 
     private static Double average(List<Integer> values) {

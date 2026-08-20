@@ -1,49 +1,49 @@
 {
   "delivery": {
     "applicable": true,
-    "coverage": 0.003333,
-    "deliveryScore": 0,
-    "purity": 0.000833,
+    "coverage": 1.0,
+    "deliveryScore": null,
+    "purity": 1.0,
     "purityIsUpperBound": true
   },
   "diagnostics": {
     "disconnectCount": 0,
-    "estimatedResolutionGrams": 37.5,
+    "estimatedResolutionGrams": 0.1,
     "excludedFrames": 1,
-    "frameRateHz": 80.0,
-    "intervalMaxMs": 12.5,
-    "intervalP50Ms": 12.5,
-    "longestUnservedRunMs": 29900.0,
+    "frameRateHz": 20.0,
+    "intervalMaxMs": -50.0,
+    "intervalP50Ms": -50.0,
+    "longestUnservedRunMs": 0.0,
     "recordingBoundaryInferred": false,
-    "relevantWeightFrames": 2400,
-    "robustCoefficientOfVariation": 0.0,
-    "servedSlots": 2,
+    "relevantWeightFrames": 600,
+    "robustCoefficientOfVariation": null,
+    "servedSlots": 600,
     "slotCount": 600,
     "spanSeconds": 30.0,
-    "usableRateHz": 0.066694,
-    "usableSampleCount": 2
+    "usableRateHz": null,
+    "usableSampleCount": 600
   },
   "frameClassification": {
     "duplicate": 0,
-    "implausible": 2398,
+    "implausible": 0,
     "outOfOrder": 0,
     "parseFailure": 0,
     "stale": 0,
-    "usable": 2
+    "usable": 600
   },
   "mode": "shot",
   "protocolVerification": {
     "purityIsUpperBound": true,
     "unverifiableClasses": [
       "outOfOrder",
+      "parseFailure",
       "stale"
     ],
     "verifiableClasses": [
       "duplicate",
-      "implausible",
-      "parseFailure"
+      "implausible"
     ],
-    "verificationCoveragePercent": 60
+    "verificationCoveragePercent": 40
   },
   "scoringModelVersion": "standard-1.0.0",
   "scoringProfileName": "ScaleBench Standard v1",
@@ -51,30 +51,32 @@
     "clockSkew": null,
     "flowValidation": null,
     "packetCoalescing": {
-      "framesPerServedSlot": 1200.120012,
-      "observedFrameRateHz": 80.0,
-      "servedSlotRateHz": 0.06666
+      "framesPerServedSlot": 1.0,
+      "observedFrameRateHz": 20.0,
+      "servedSlotRateHz": 20.0
     },
     "streamQuality": {
       "activePourAbsStepP95Grams": null,
       "activePourNegativeStepCount": 0,
       "activePourNegativeStepTotalGrams": 0.0,
       "duplicateRunMaxMilliseconds": 0.0,
-      "effectiveOutputRateHz": 80.033347,
+      "effectiveOutputRateHz": null,
       "freezeThenReleaseMaxGrams": null,
-      "implausibleCount": 2398,
-      "implausibleMaxErrorGrams": 78.959566,
-      "implausibleMeanErrorGrams": 30.556056,
-      "implausibleP95ErrorGrams": 60.526886,
-      "implausibleRatePerSecond": 79.933333,
-      "implausibleStdDevGrams": 17.461332,
-      "longestImplausibleRunMilliseconds": 29962.5,
+      "implausibleCount": 0,
+      "implausibleMaxErrorGrams": null,
+      "implausibleMeanErrorGrams": null,
+      "implausibleP95ErrorGrams": null,
+      "implausibleRatePerSecond": 0.0,
+      "implausibleStdDevGrams": null,
+      "longestImplausibleRunMilliseconds": 0.0,
       "truthUnavailable": true
     }
   },
-  "signalUnreconstructable": true,
+  "signalUnreconstructable": false,
   "validity": {
-    "isValid": true,
-    "reasons": []
+    "isValid": false,
+    "reasons": [
+      "framesOutOfChronologicalOrder"
+    ]
   }
 }

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.InflaterInputStream;
 
 final class SavedRecordingStore {
     private static final String PREFS_NAME = "scalebench-recordings";
@@ -75,7 +76,7 @@ final class SavedRecordingStore {
         summary.title = title == null || title.trim().isEmpty() ? recording.defaultTitle() : title.trim();
         recording.title = summary.title;
         summary.notes = recording.notes;
-        summary.recordingFileName = summary.id + "-recording.json";
+        summary.recordingFileName = storageRecordingFileName(summary.id);
         summary.protocolKind = protocolKind(recording);
         summary.mode = recording.mode;
         summary.platform = recording.platform;
@@ -94,8 +95,11 @@ final class SavedRecordingStore {
 
         File recordingFile = new File(directory, summary.recordingFileName);
         backupExistingFileIfNeeded(recordingFile);
+        File legacyRecordingFile = legacyRecordingFile(summary.id);
+        backupExistingFileIfNeeded(legacyRecordingFile);
         JsonExporter.writeRecordingForStorage(recording, recordingFile);
         writeSummary(summary);
+        deleteQuietly(legacyRecordingFile);
         replaceSummary(summary);
         sort();
         lastErrorMessage = null;
@@ -116,6 +120,8 @@ final class SavedRecordingStore {
         deleteBackupFiles(directory, summary.id);
         deleteQuietly(new File(directory, summary.id + ".summary.json"));
         deleteQuietly(new File(directory, summary.recordingFileName));
+        deleteQuietly(new File(directory, storageRecordingFileName(summary.id)));
+        deleteQuietly(legacyRecordingFile(summary.id));
         recordings.removeIf(saved -> saved.id.equals(summary.id));
         lastErrorMessage = null;
     }
@@ -134,6 +140,10 @@ final class SavedRecordingStore {
         JsonExporter.writeRecording(recalculatedRecording(summary), output);
     }
 
+    synchronized void writeRecordingGzip(SavedRecordingSummary summary, OutputStream output) throws Exception {
+        JsonExporter.writeRecordingGzip(recalculatedRecording(summary), output);
+    }
+
     synchronized ScaleRecording recordingForAnalysis(SavedRecordingSummary summary) throws Exception {
         return recalculatedRecording(summary);
     }
@@ -143,9 +153,16 @@ final class SavedRecordingStore {
         String title = recording.title == null || recording.title.trim().isEmpty()
                 ? "Imported " + (fallbackTitle == null || fallbackTitle.trim().isEmpty()
                 ? recording.defaultTitle()
-                : fallbackTitle.replaceFirst("\\.json$", ""))
+                : importTitleFromFileName(fallbackTitle))
                 : recording.title.trim();
         return save(recording, recording.notes, title);
+    }
+
+    private static String importTitleFromFileName(String fallbackTitle) {
+        return fallbackTitle
+                .replaceFirst("\\.json\\.gz$", "")
+                .replaceFirst("\\.json\\.z$", "")
+                .replaceFirst("\\.json$", "");
     }
 
     static ScaleRecording decodeSharedRecording(String json) throws Exception {
@@ -194,7 +211,7 @@ final class SavedRecordingStore {
         if (!directory.exists()) return 0;
         cleanupPendingWrites();
         File[] files = directory.listFiles((dir, name) ->
-                name.endsWith(".json") && !name.endsWith(".summary.json")
+                isRecordingStorageFile(name)
         );
         if (files == null) return 0;
 
@@ -302,7 +319,7 @@ final class SavedRecordingStore {
         summary.savedAtMillis = object.getLong("savedAtMillis");
         summary.title = object.optString("title", "Untitled Recording");
         summary.notes = object.optString("notes", "");
-        summary.recordingFileName = object.optString("recordingFileName", summary.id + "-recording.json");
+        summary.recordingFileName = object.optString("recordingFileName", storageRecordingFileName(summary.id));
         summary.protocolKind = ScaleKind.valueOf(object.optString("protocolKind", ScaleKind.UNKNOWN.name()));
         summary.mode = RecordingMode.valueOf(object.optString("mode", RecordingMode.SHOT.name()));
         summary.platform = object.optString("platform", "unknown");
@@ -895,9 +912,26 @@ final class SavedRecordingStore {
     private boolean hasAnyRecordingFiles() {
         if (!directory.exists()) return false;
         File[] files = directory.listFiles((dir, name) ->
-                name.endsWith(".json") || name.endsWith(".summary.json")
+                isRecordingStorageFile(name) || name.endsWith(".summary.json")
         );
         return files != null && files.length > 0;
+    }
+
+    private static String storageRecordingFileName(String id) {
+        return id + "-recording.json.z";
+    }
+
+    private static String legacyRecordingFileName(String id) {
+        return id + "-recording.json";
+    }
+
+    private File legacyRecordingFile(String id) {
+        return new File(directory, legacyRecordingFileName(id));
+    }
+
+    private static boolean isRecordingStorageFile(String name) {
+        return !name.endsWith(".summary.json")
+                && (name.endsWith(".json") || name.endsWith(".json.z"));
     }
 
     private static RecordingMode parseMode(String value) {
@@ -1065,15 +1099,34 @@ final class SavedRecordingStore {
     }
 
     private static String readText(File file) throws Exception {
-        try (FileInputStream input = new FileInputStream(file)) {
-            byte[] bytes = new byte[(int) file.length()];
-            int offset = 0;
-            while (offset < bytes.length) {
-                int read = input.read(bytes, offset, bytes.length - offset);
-                if (read < 0) break;
-                offset += read;
+        try (java.io.BufferedInputStream input = new java.io.BufferedInputStream(new FileInputStream(file));
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            input.mark(2);
+            int first = input.read();
+            int second = input.read();
+            input.reset();
+
+            java.io.InputStream source;
+            if (first == 0x1f && second == 0x8b) {
+                source = new java.util.zip.GZIPInputStream(input);
+            } else if (isZlibHeader(first, second)) {
+                source = new InflaterInputStream(input);
+            } else {
+                source = input;
             }
-            return new String(bytes, 0, offset, StandardCharsets.UTF_8);
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = source.read(buffer)) >= 0) {
+                if (read > 0) {
+                    output.write(buffer, 0, read);
+                }
+            }
+            return output.toString(StandardCharsets.UTF_8.name());
         }
+    }
+
+    private static boolean isZlibHeader(int first, int second) {
+        if (first < 0 || second < 0 || (first & 0x0f) != 8) return false;
+        return ((first << 8) + second) % 31 == 0;
     }
 }

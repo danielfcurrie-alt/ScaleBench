@@ -70,8 +70,8 @@
         { "type": "bullet", "text": "Packet cadence shows arrival intervals and gap behavior." },
         { "type": "bullet", "text": "Scorecard shows coverage, purity, protocol detail, validity, and frame-class counts." },
         { "type": "bullet", "text": "Packet inspector lists packets by time and event. Tap one to see selectable raw hex; matching colors connect byte ranges to parser-decoded fields." },
-        { "type": "bullet", "text": "Signal diagnostics compare a scale's reported flow with smoothed weight change, estimate drift for genuine free-running BooKoo and WMB+ clocks, and show how many weight frames occupy each 50 ms scoring slot." },
-        { "type": "text", "text": "Signal diagnostics explain behavior but do not add or remove score points. Decent's shot timer is intentionally not treated as a free-running device clock." },
+        { "type": "bullet", "text": "Signal diagnostics compare a scale's reported flow with smoothed weight change, estimate drift for genuine free-running BooKoo and WMB+ clocks, show how many weight frames occupy each 50 ms scoring slot, and summarize impossible readings, backward pour steps, frozen readings, and freeze-then-release jumps." },
+        { "type": "text", "text": "Signal diagnostics explain stream quality but do not add or remove score points. They are not physical truth or calibration measurements. Decent's shot timer is intentionally not treated as a free-running device clock." },
         { "type": "text", "text": "Color and emphasis are diagnostic, not a separate score. The official numbers always come from Standard v1." }
       ]
     },

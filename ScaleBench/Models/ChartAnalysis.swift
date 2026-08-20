@@ -37,9 +37,13 @@ struct SignalDiagnostics: Codable, Equatable {
     var flowValidation: FlowValidationDiagnostics?
     var clockSkew: ClockSkewDiagnostics?
     var packetCoalescing: PacketCoalescingDiagnostics?
+    var streamQuality: StreamQualityDiagnostics?
 
     var isEmpty: Bool {
-        flowValidation == nil && clockSkew == nil && packetCoalescing == nil
+        flowValidation == nil
+            && clockSkew == nil
+            && packetCoalescing == nil
+            && streamQuality == nil
     }
 }
 
@@ -59,6 +63,23 @@ struct PacketCoalescingDiagnostics: Codable, Equatable {
     var observedFrameRateHz: Double
     var servedSlotRateHz: Double
     var framesPerServedSlot: Double
+}
+
+struct StreamQualityDiagnostics: Codable, Equatable {
+    var implausibleCount: Int
+    var implausibleMeanErrorGrams: Double?
+    var implausibleStdDevGrams: Double?
+    var implausibleP95ErrorGrams: Double?
+    var implausibleMaxErrorGrams: Double?
+    var implausibleRatePerSecond: Double
+    var longestImplausibleRunMilliseconds: Double
+    var activePourNegativeStepCount: Int?
+    var activePourNegativeStepTotalGrams: Double?
+    var activePourAbsStepP95Grams: Double?
+    var duplicateRunMaxMilliseconds: Double
+    var freezeThenReleaseMaxGrams: Double?
+    var effectiveOutputRateHz: Double?
+    var truthUnavailable: Bool
 }
 
 struct ChartProblemWindow: Identifiable, Equatable {
@@ -587,12 +608,13 @@ private func formatAnalysisMilliseconds(_ value: Double?) -> String {
 
 private func makeSignalDiagnostics(recording: ScaleRecording, samples: [ScaleSample], metrics: ScaleQualityMetrics) -> SignalDiagnostics {
     guard recording.recordingEndMonotonicSeconds != nil else {
-        return SignalDiagnostics(flowValidation: nil, clockSkew: nil, packetCoalescing: nil)
+        return SignalDiagnostics(flowValidation: nil, clockSkew: nil, packetCoalescing: nil, streamQuality: nil)
     }
     return SignalDiagnostics(
         flowValidation: flowValidation(samples: samples),
         clockSkew: clockSkew(recording: recording),
-        packetCoalescing: packetCoalescing(metrics: metrics)
+        packetCoalescing: packetCoalescing(metrics: metrics),
+        streamQuality: metrics.streamQuality ?? ScaleQualityAnalyzer.streamQualityDiagnostics(recording)
     )
 }
 
