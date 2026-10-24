@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scalebench.app/schemas/chart-analysis-schema.json",
+  "title": "ScaleBench Chart Analysis",
+  "description": "Shared chart-analysis contract used by native iOS/macOS and Android renderers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "weightPoints",
+    "flowPoints",
+    "packetTimeline",
+    "problemWindows",
+    "deductionBreakdown",
+    "signalDiagnostics"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "weightPoints": { "type": "array", "items": { "$ref": "#/$defs/chartPoint" } },
+    "flowPoints": { "type": "array", "items": { "$ref": "#/$defs/chartPoint" } },
+    "packetTimeline": { "$ref": "#/$defs/packetTimeline" },
+    "problemWindows": { "type": "array", "items": { "$ref": "#/$defs/problemWindow" } },
+    "deductionBreakdown": { "type": "array", "items": { "$ref": "#/$defs/deduction" } },
+    "signalDiagnostics": { "$ref": "#/$defs/signalDiagnostics" }
+  },
+  "$defs": {
+    "chartPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seconds", "value"],
+      "properties": {
+        "seconds": { "type": "number" },
+        "value": { "type": "number" }
+      }
+    },
+    "packetTimeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "sampleIntervals", "scoringGaps", "longGapThresholdMilliseconds", "durationSeconds"],
+      "properties": {
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/packetTimelineEntry" } },
+        "sampleIntervals": { "type": "array", "items": { "$ref": "#/$defs/sampleInterval" } },
+        "scoringGaps": { "type": "array", "items": { "$ref": "#/$defs/scoringGap" } },
+        "longGapThresholdMilliseconds": { "type": "number", "minimum": 0 },
+        "durationSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "packetTimelineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "relativeSeconds", "role", "bytesHex", "severity", "lane", "evidence", "fields"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "relativeSeconds": { "type": "number", "minimum": 0 },
+        "previousRelativeSeconds": { "type": ["number", "null"], "minimum": 0 },
+        "intervalMilliseconds": { "type": ["number", "null"], "minimum": 0 },
+        "role": { "$ref": "recording-schema.json#/$defs/packetRole" },
+        "bytesHex": {
+          "type": "string",
+          "pattern": "^([0-9A-F]{2}( [0-9A-F]{2})*)?$"
+        },
+        "rejectionReason": {
+          "anyOf": [
+            { "$ref": "recording-schema.json#/$defs/parseRejectionReason" },
+            { "type": "null" }
+          ]
+        },
+        "sequence": { "type": ["integer", "null"], "minimum": 0, "maximum": 255 },
+        "weightGrams": { "type": ["number", "null"] },
+        "severity": { "$ref": "#/$defs/severity" },
+        "lane": { "$ref": "#/$defs/lane" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "packet-fields-schema.json#/$defs/field" }
+        }
+      }
+    },
+    "sampleInterval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "previousRelativeSeconds", "relativeSeconds", "intervalMilliseconds", "severity"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "previousRelativeSeconds": { "type": "number", "minimum": 0 },
+        "relativeSeconds": { "type": "number", "minimum": 0 },
+        "intervalMilliseconds": { "type": "number", "minimum": 0 },
+        "severity": { "$ref": "#/$defs/severity" }
+      }
+    },
+    "scoringGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "startRelativeSeconds", "endRelativeSeconds", "intervalMilliseconds"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "startRelativeSeconds": { "type": "number", "minimum": 0 },
+        "endRelativeSeconds": { "type": "number", "minimum": 0 },
+        "intervalMilliseconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "problemWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "category", "severity", "startSeconds", "endSeconds"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "$ref": "#/$defs/problemCategory" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "startSeconds": { "type": "number", "minimum": 0 },
+        "endSeconds": { "type": "number", "minimum": 0 },
+        "relatedPacketIndex": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "deduction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "title", "detail", "severity"],
+      "properties": {
+        "category": { "$ref": "#/$defs/problemCategory" },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "pointsLost": { "type": ["integer", "null"], "minimum": 0 },
+        "severity": { "$ref": "#/$defs/severity" }
+      }
+    },
+    "signalDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "flowValidation": { "$ref": "#/$defs/flowValidation" },
+        "clockSkew": { "$ref": "#/$defs/clockSkew" },
+        "packetCoalescing": { "$ref": "#/$defs/packetCoalescing" }
+      }
+    },
+    "flowValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "medianAbsoluteErrorGramsPerSecond"],
+      "properties": {
+        "sampleCount": { "type": "integer", "minimum": 1 },
+        "medianAbsoluteErrorGramsPerSecond": { "type": "number", "minimum": 0 },
+        "lagMilliseconds": { "type": ["number", "null"] },
+        "correlation": { "type": ["number", "null"], "minimum": -1, "maximum": 1 }
+      }
+    },
+    "clockSkew": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "skewPartsPerMillion"],
+      "properties": {
+        "sampleCount": { "type": "integer", "minimum": 1 },
+        "skewPartsPerMillion": { "type": "number" }
+      }
+    },
+    "packetCoalescing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observedFrameRateHz", "servedSlotRateHz", "framesPerServedSlot"],
+      "properties": {
+        "observedFrameRateHz": { "type": "number", "minimum": 0 },
+        "servedSlotRateHz": { "type": "number", "exclusiveMinimum": 0 },
+        "framesPerServedSlot": { "type": "number", "minimum": 0 }
+      }
+    },
+    "severity": {
+      "enum": ["normal", "info", "warning", "penalty"]
+    },
+    "lane": {
+      "enum": ["weight", "metadata", "control", "penalty", "unknown"]
+    },
+    "problemCategory": {
+      "enum": ["gap", "parseFailure", "outOfOrder", "staleClock", "duplicate", "implausible", "disconnect", "validity", "diagnostic"]
+    }
+  }
+}

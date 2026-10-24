@@ -1,0 +1,17 @@
+DerivedData/
+.codex-derived/
+.DS_Store
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+build/
+.build/
+*.ipa
+*.xcarchive
+*.jks
+*.keystore
+*.p12
+keystore.properties
+__pycache__/
+*.pyc

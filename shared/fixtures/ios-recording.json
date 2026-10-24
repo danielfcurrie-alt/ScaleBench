@@ -1,0 +1,166 @@
+{
+  "appBuild": "fixture",
+  "appName": "ScaleBench",
+  "appVersion": "fixture",
+  "batteryEvents": [
+    {
+      "arrivalTimeMillis": 1785600000003,
+      "monotonicSeconds": 0.003,
+      "percent": 86,
+      "scaleKind": "weighMyBruPlus"
+    }
+  ],
+  "device": {
+    "advertisedServices": [
+      "0000FFF0-0000-1000-8000-00805F9B34FB"
+    ],
+    "identifier": "11111111-1111-1111-1111-111111111111",
+    "kind": "weighMyBruPlus",
+    "name": "Fixture iOS WMB+"
+  },
+  "id": "11111111-aaaa-4aaa-8aaa-111111111111",
+  "endedAtMillis": 1785600000300,
+  "events": [],
+  "link": {
+    "negotiatedMtu": null,
+    "requestedConnectionPriority": null,
+    "requestedMtu": null
+  },
+  "metrics": {
+    "duplicateOrOutOfOrderTimestampCount": 0,
+    "effectiveSampleRateHz": 10,
+    "firmwareBumpCount": 1,
+    "longGapCount": 0,
+    "metadataScore": null,
+    "missingSequenceCount": 0,
+    "overallScore": 100,
+    "packetIntervalMaxMilliseconds": 100,
+    "packetIntervalP50Milliseconds": 100,
+    "packetIntervalP95Milliseconds": 100,
+    "rejectedPacketCount": 0,
+    "scoringModelVersion": "standard-1.0.0",
+    "scoringProfileName": "ScaleBench Standard v1",
+    "stabilityScore": null,
+    "transportScore": null,
+    "validity": {
+      "isValid": true,
+      "reasons": []
+    }
+  },
+  "mode": "shot",
+  "notes": "Fixture exported by the shared iOS recording payload.",
+  "platform": "ios",
+  "title": "Fixture iOS WMB+ Shot",
+  "protocolCapabilities": {
+    "deviceClockModulus": 16777216,
+    "deviceClockSemantics": "freeRunning",
+    "hasChecksum": true,
+    "hasDeviceClock": true,
+    "hasSequence": true,
+    "sequenceModulus": 256
+  },
+  "rawPackets": [
+    {
+      "arrivalTimeMillis": 1785600000000,
+      "bytesHex": "03 0B 00",
+      "characteristicUUID": "FFF1",
+      "deviceTimestampMilliseconds": 0,
+      "monotonicSeconds": 0,
+      "role": "weight",
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 0,
+      "weightGrams": 0,
+      "fields": [
+        { "startByte": 0, "endByteExclusive": 2, "label": "Header", "decodedValue": "03 0B", "semantic": "header" }
+      ]
+    },
+    {
+      "arrivalTimeMillis": 1785600000100,
+      "bytesHex": "03 0B 01",
+      "characteristicUUID": "FFF1",
+      "deviceTimestampMilliseconds": 100,
+      "monotonicSeconds": 0.1,
+      "role": "weight",
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 1,
+      "weightGrams": 1.2
+    },
+    {
+      "arrivalTimeMillis": 1785600000200,
+      "bytesHex": "03 0B 02",
+      "characteristicUUID": "FFF1",
+      "deviceTimestampMilliseconds": 200,
+      "monotonicSeconds": 0.2,
+      "role": "weight",
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 2,
+      "weightGrams": 2.4
+    }
+  ],
+  "recordingEndMonotonicSeconds": 0.3,
+  "recordingStartMonotonicSeconds": 0,
+  "samples": [
+    {
+      "arrivalTimeMillis": 1785600000000,
+      "batteryPercent": 86,
+      "detectedSampleRateHz": 10,
+      "diagnosticFlags": {
+        "cadenceValid": true,
+        "detected10SPS": true,
+        "detected80SPS": false,
+        "extensionPresent": true,
+        "flowPresent": true,
+        "longGapSeen": false,
+        "qualityValid": true,
+        "recentBump": true
+      },
+      "deviceTimestampMilliseconds": 0,
+      "firmwareQualityScore": 96,
+      "flowGramsPerSecond": 0,
+      "monotonicSeconds": 0,
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 0,
+      "statusFlags": {
+        "atomicTareStartPending": false,
+        "batteryCritical": false,
+        "batteryLow": false,
+        "batteryPresent": true,
+        "displayPresent": true,
+        "hx711Connected": true,
+        "tarePending": false,
+        "timerRunning": true
+      },
+      "weightGrams": 0
+    },
+    {
+      "arrivalTimeMillis": 1785600000100,
+      "batteryPercent": 86,
+      "detectedSampleRateHz": 10,
+      "deviceTimestampMilliseconds": 100,
+      "firmwareQualityScore": 96,
+      "flowGramsPerSecond": 1.1,
+      "monotonicSeconds": 0.1,
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 1,
+      "weightGrams": 1.2
+    },
+    {
+      "arrivalTimeMillis": 1785600000200,
+      "batteryPercent": 86,
+      "detectedSampleRateHz": 10,
+      "deviceTimestampMilliseconds": 200,
+      "firmwareQualityScore": 96,
+      "flowGramsPerSecond": 1.2,
+      "monotonicSeconds": 0.2,
+      "scaleKind": "weighMyBruPlus",
+      "sequence": 2,
+      "weightGrams": 2.4
+    }
+  ],
+  "schemaVersion": 6,
+  "scoringModelVersion": "standard-1.0.0",
+  "scoringProfile": {
+    "name": "ScaleBench Standard v1"
+  },
+  "startedAtMillis": 1785600000000
+}

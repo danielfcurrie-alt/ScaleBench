@@ -1,0 +1,25 @@
+{
+  "description": "A 60 s span with only three usable frames must not earn an Idle score.",
+  "events": [],
+  "frames": [
+    {
+      "kind": "weight",
+      "monotonicSeconds": 0.0,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 6.0,
+      "weightGrams": 0.0
+    },
+    {
+      "kind": "weight",
+      "monotonicSeconds": 59.9,
+      "weightGrams": 0.0
+    }
+  ],
+  "mode": "idleStability",
+  "recordingEndMonotonicSeconds": 60.0,
+  "recordingStartMonotonicSeconds": 0.0,
+  "vectorId": "idle-three-frames-invalid"
+}
